@@ -6,7 +6,7 @@
 
 Meld een vermoedelijke kwetsbaarheid **niet** via een openbare issue of pull request.
 
-Gebruik in plaats daarvan het beveiligde meldkanaal van GitHub: **Security → Report a vulnerability** (private vulnerability reporting) in deze repository.
+Gebruik in plaats daarvan het beveiligde meldkanaal van deze repository: **Security → Report a vulnerability**. Is dat kanaal in jouw situatie niet beschikbaar, neem dan rechtstreeks contact op met de beheerder van de repository (`WimLee115`) en vraag om een vertrouwelijk kanaal voordat je details deelt.
 
 Vermeld in de melding:
 
