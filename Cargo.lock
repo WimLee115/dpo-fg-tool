@@ -450,6 +450,7 @@ dependencies = [
  "dpofg-terms",
  "ed25519-dalek",
  "hex",
+ "rand",
  "serde",
  "serde_json",
  "thiserror",
