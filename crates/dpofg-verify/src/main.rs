@@ -152,9 +152,11 @@ fn dossier(manifestpad: &PathBuf, stukkenmap: Option<PathBuf>) -> Result<bool> {
     let mut stukken = Vec::new();
     for stuk in &m.stukken {
         let pad = map.join(&stuk.naam);
-        match std::fs::read(&pad) {
-            Ok(inhoud) => stukken.push((stuk.naam.clone(), inhoud)),
-            Err(_) => {} // wordt hieronder als ontbrekend gemeld
+        // Een stuk dat niet te lezen is, wordt hieronder als ontbrekend gemeld;
+        // stilzwijgend overslaan zou het verschil verdoezelen tussen een stuk
+        // dat er niet is en een stuk dat er wel is maar niet klopt.
+        if let Ok(inhoud) = std::fs::read(&pad) {
+            stukken.push((stuk.naam.clone(), inhoud));
         }
     }
 

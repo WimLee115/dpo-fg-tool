@@ -125,7 +125,7 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
             super::actor(),
             nu,
             "dossier",
-            &o.map.display().to_string(),
+            o.map.display().to_string(),
             "algemeen",
             format!("dossier samengesteld voor {}", o.bestemd_voor),
         ),

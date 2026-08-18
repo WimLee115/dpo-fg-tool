@@ -63,6 +63,8 @@ Het wachtwoord wordt nooit als argument aangenomen: het wordt gevraagd, of gelez
 
 ## Stand van zaken
 
+Een uitgebreid overzicht van wat er werkt, wat er niet werkt en waar de grenzen liggen staat in [`STAND.md`](STAND.md).
+
 De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt later; de opdrachtregel is bewust eerst gebouwd, omdat die afdwingt dat de logica in de lagen eronder zit en niet in een scherm.
 
 | Onderdeel | Stand |
