@@ -1,0 +1,21 @@
+[package]
+name = "dpofg-verify"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Losse verificatiebinary voor toezichthouders"
+
+[dependencies]
+dpofg-audit.workspace = true
+dpofg-report.workspace = true
+ed25519-dalek.workspace = true
+blake3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+hex.workspace = true

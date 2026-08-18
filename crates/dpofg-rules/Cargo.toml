@@ -1,0 +1,17 @@
+[package]
+name = "dpofg-rules"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Continu draaiende controleregels over de gegevensverzameling"
+
+[dependencies]
+dpofg-domain.workspace = true
+dpofg-terms.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true

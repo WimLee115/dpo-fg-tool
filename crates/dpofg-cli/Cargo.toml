@@ -1,0 +1,29 @@
+[package]
+name = "dpofg-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Bedieningsschil voor dpo-fg-tool"
+
+[dependencies]
+dpofg-crypto.workspace = true
+dpofg-audit.workspace = true
+dpofg-domain.workspace = true
+dpofg-store.workspace = true
+dpofg-terms.workspace = true
+dpofg-content.workspace = true
+dpofg-rules.workspace = true
+dpofg-report.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+uuid.workspace = true
+hex.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
