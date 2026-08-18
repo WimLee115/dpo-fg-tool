@@ -27,6 +27,12 @@ Bijlage A — Vaste waarschuwingsteksten
 Bijlage B — Beslispunten met een vaste datum
 Bijlage C — Verwerking van de kritische review
 
+**Afzonderlijke ontwerphoofdstukken**
+
+- [FOUTBESTENDIGHEID.md](FOUTBESTENDIGHEID.md) — foutbestendig ontwerp: de ontwerpladder, foutbestendiging per werkproces, interactiepatronen, ingebouwde kennis, 123 continu draaiende controleregels en de meetnormen
+- [PLATFORMONDERSTEUNING.md](PLATFORMONDERSTEUNING.md) — Linux, macOS en Windows: ondergrenzen, webviewverschillen, sleutelopslag, hardwaretokens, bestandslocaties, ondertekening, distributie en de testmatrix
+- [REVIEW.md](REVIEW.md) — de juridische en beveiligingstoetsing waarop deze herziening berust
+
 ---
 
 ## 1. Aanleiding, doel en bindende afbakening
@@ -69,6 +75,8 @@ Concreet betekent dit drie beloften:
 | P8 | De tool moet zichzelf kunnen verantwoorden | Meegeleverd: dreigingsmodel, hardeningshandleiding, DPIA op de tool, formaatspecificatie, kwetsbaarhedenbeleid |
 | P9 | Wat de tool niet goed kan, doet zij niet | Zie §12 en de versobering in §9 |
 | P10 | Alles is exporteerbaar zonder de tool | Open formaatspecificatie, gepubliceerd schema, volledige export in JSON plus bestanden plus manifest |
+| P11 | De gebruiker kan de fout niet maken | Waar een fout onmogelijk gemaakt kan worden, wordt hij onmogelijk gemaakt — niet gesignaleerd. Waarschuwen is de zwakste maatregel, niet de eerste. Volledig uitgewerkt in [FOUTBESTENDIGHEID.md](FOUTBESTENDIGHEID.md) |
+| P12 | Drie platforms, één gedrag | Linux, macOS en Windows zijn gelijkwaardige doelplatforms. Een functie die op één platform niet veilig werkt, bestaat op geen enkel platform. Uitgewerkt in [PLATFORMONDERSTEUNING.md](PLATFORMONDERSTEUNING.md) |
 
 ### 1.4 Wat er in deze herziening is veranderd
 

@@ -35,7 +35,18 @@ De tool ondersteunt het volledige werkproces van de FG en de security officer:
 - Beheersmaatregelen en bewijsvoering, gekoppeld aan gangbare normenkaders
 - Rapportage aan directie, bestuur en toezichthouder
 
-De volledige uitwerking staat in [`docs/PLAN.md`](docs/PLAN.md).
+Daarbij geldt één eis boven alle andere: **de gebruiker moet de fout niet kunnen maken.** Waar een fout onmogelijk gemaakt kan worden, wordt hij onmogelijk gemaakt — waarschuwen is de laatste maatregel, niet de eerste.
+
+De tool draait op **Linux, macOS en Windows** als gelijkwaardige platforms.
+
+## Documentatie
+
+| Document | Inhoud |
+|---|---|
+| [`docs/PLAN.md`](docs/PLAN.md) | Het projectplan: afbakening, wettelijk kader, modules, architectuur, datamodel, compliance-mapping, roadmap en risico's |
+| [`docs/FOUTBESTENDIGHEID.md`](docs/FOUTBESTENDIGHEID.md) | Foutbestendig ontwerp: de ontwerpladder, foutbestendiging per werkproces, interactiepatronen en 123 continu draaiende controleregels |
+| [`docs/PLATFORMONDERSTEUNING.md`](docs/PLATFORMONDERSTEUNING.md) | Linux, macOS en Windows: sleutelopslag, hardwaretokens, ondertekening, distributie en de testmatrix |
+| [`docs/REVIEW.md`](docs/REVIEW.md) | De juridische en beveiligingstoetsing waarop het plan berust |
 
 ## Status
 
