@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     aead::{self, Binding, Gegevenssleutel, Envelop, SLEUTEL_LENGTE},
-    kdf::{self, Hoofdsleutel, KdfParameters, Zout, ZOUT_LENGTE},
+    kdf::{self, KdfParameters, Zout, ZOUT_LENGTE},
     CryptoFout, Geheim, Resultaat, Wachtwoordzin,
 };
 

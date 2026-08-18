@@ -22,3 +22,8 @@ blake3.workspace = true
 thiserror.workspace = true
 hex.workspace = true
 zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+rusqlite.workspace = true
+dpofg-audit.workspace = true
