@@ -437,7 +437,7 @@ impl Volledig for Verwerking {
                     uit.push(Ontbrekend::blokkerend(
                         "verwerking.wettelijke_bepaling",
                         "wijs de wettelijke bepaling aan waarop deze grondslag berust",
-                        &format!("{}, en art. 6 lid 3 AVG", g.grondslagverwijzing()),
+                        format!("{}, en art. 6 lid 3 AVG", g.grondslagverwijzing()),
                     ));
                 }
                 if g.vereist_belangenafweging() && self.belangenafweging_id.is_none() {
@@ -470,7 +470,7 @@ impl Volledig for Verwerking {
                     uit.push(Ontbrekend::blokkerend(
                         "verwerking.uitzondering_nationale_bepaling",
                         "wijs de bepaling uit het nationale recht aan die deze uitzondering draagt",
-                        &format!("{}, uitgewerkt in de UAVG", u.grondslagverwijzing()),
+                        format!("{}, uitgewerkt in de UAVG", u.grondslagverwijzing()),
                     ));
                 }
                 _ => {}
@@ -499,7 +499,7 @@ impl Volledig for Verwerking {
         {
             uit.push(Ontbrekend::blokkerend(
                 "verwerking.verwerkersovereenkomsten",
-                &format!(
+                format!(
                     "leg voor alle {} verwerkers een verwerkersovereenkomst vast; er {} nu {} gekoppeld",
                     self.aantal_verwerkers(),
                     if self.verwerkersovereenkomsten.len() == 1 { "is" } else { "zijn" },
@@ -515,7 +515,7 @@ impl Volledig for Verwerking {
         {
             uit.push(Ontbrekend::blokkerend(
                 "verwerking.doorgiften",
-                &format!(
+                format!(
                     "leg voor alle {} ontvangers buiten de EER het doorgifte-instrument vast",
                     self.aantal_ontvangers_buiten_eer()
                 ),
@@ -548,7 +548,7 @@ impl Volledig for Verwerking {
         if self.dpia_waarschijnlijk_verplicht() && self.dpia_id.is_none() {
             uit.push(Ontbrekend::signalerend(
                 "verwerking.dpia",
-                &format!(
+                format!(
                     "deze verwerking raakt {} van de criteria voor een effectbeoordeling; \
                      voer de toets uit of leg gemotiveerd vast waarom die niet nodig is",
                     self.getelde_dpia_criteria().len()
@@ -562,7 +562,7 @@ impl Volledig for Verwerking {
             if !o.is_geverifieerd() {
                 uit.push(Ontbrekend::signalerend(
                     "verwerking.verificatie_overname",
-                    &format!(
+                    format!(
                         "deze regel is overgenomen uit {} en nog niet geverifieerd",
                         o.bron
                     ),

@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 description = "Bedieningsschil voor dpo-fg-tool"
 
+[[bin]]
+name = "dpofg"
+path = "src/main.rs"
+
 [dependencies]
 dpofg-crypto.workspace = true
 dpofg-audit.workspace = true
@@ -27,3 +31,8 @@ uuid.workspace = true
 hex.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+rpassword.workspace = true
+comfy-table.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

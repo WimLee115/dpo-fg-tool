@@ -13,6 +13,7 @@ dpofg-crypto.workspace = true
 dpofg-audit.workspace = true
 dpofg-domain.workspace = true
 ed25519-dalek.workspace = true
+rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
