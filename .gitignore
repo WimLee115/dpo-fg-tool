@@ -1,0 +1,102 @@
+# ---------------------------------------------------------------------------
+# dpo-fg-tool — genegeerde bestanden
+# Uitgangspunt: nooit sleutels, gebruikersdata of gegenereerde artefacten in git.
+# ---------------------------------------------------------------------------
+
+# --- Geheimen en sleutelmateriaal (nooit committen) ---
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.asc
+*.gpg
+*.age
+secrets/
+.secrets/
+.env
+.env.*
+!.env.example
+
+# --- Lokale kluis, databases en gebruikersdata ---
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+vault/
+data/
+userdata/
+backups/
+exports/
+evidence/
+attachments/
+
+# --- Rust / Tauri ---
+/target/
+**/target/
+Cargo.lock.bak
+src-tauri/target/
+src-tauri/gen/
+
+# --- Node / frontend ---
+node_modules/
+dist/
+dist-ssr/
+build/
+.vite/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+
+# --- Python (hulpscripts) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# --- Test- en analyse-output ---
+coverage/
+.coverage
+htmlcov/
+*.lcov
+test-results/
+playwright-report/
+.nyc_output/
+
+# --- Builds en releases ---
+release/
+out/
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.dmg
+*.exe
+!scripts/**/*.exe
+
+# --- Editors en besturingssystemen ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs en tijdelijke bestanden ---
+*.log
+logs/
+tmp/
+.tmp/
+*.tmp
+*.bak
+*.orig
+*.rej
