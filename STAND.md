@@ -77,7 +77,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | | |
 |---|---|
 | Rust-code | ~9.800 regels, zonder commentaar en lege regels |
-| Tests | 319 testfuncties |
+| Tests | 319 testfuncties, 323 uitgevoerde tests |
 | Documentatie | ~4.600 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
