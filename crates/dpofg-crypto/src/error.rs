@@ -31,15 +31,13 @@ impl fmt::Display for CryptoFout {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Sleutelafleiding(m) => write!(f, "sleutelafleiding mislukt: {m}"),
-            Self::Ontsleuteling => write!(
-                f,
-                "ontsleutelen mislukt: onjuiste sleutel of gewijzigde gegevens"
-            ),
+            Self::Ontsleuteling => {
+                write!(f, "ontsleutelen mislukt: onjuiste sleutel of gewijzigde gegevens")
+            }
             Self::Versleuteling => write!(f, "versleutelen mislukt"),
-            Self::OngeldigeLengte { veld, verwacht, gekregen } => write!(
-                f,
-                "veld '{veld}' heeft lengte {gekregen}, verwacht {verwacht}"
-            ),
+            Self::OngeldigeLengte { veld, verwacht, gekregen } => {
+                write!(f, "veld '{veld}' heeft lengte {gekregen}, verwacht {verwacht}")
+            }
             Self::OngeldigFormaat(m) => write!(f, "ongeldig formaat: {m}"),
             Self::OnbekendeVersie(v) => write!(f, "onbekende formaatversie: {v}"),
             Self::Willekeurbron => write!(f, "willekeurbron niet beschikbaar"),

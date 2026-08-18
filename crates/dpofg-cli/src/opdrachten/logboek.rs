@@ -61,7 +61,11 @@ fn toon(kluis: &dpofg_store::Kluis, aantal: usize, onderwerp: Option<String>) ->
             r.gebeurtenis.tijdstip.format("%d-%m %H:%M").to_string(),
             format!("{:?}", r.gebeurtenis.handeling),
             r.gebeurtenis.actor.naam.clone(),
-            format!("{}/{}", r.gebeurtenis.onderwerp_soort, &r.gebeurtenis.onderwerp_id[..r.gebeurtenis.onderwerp_id.len().min(8)]),
+            format!(
+                "{}/{}",
+                r.gebeurtenis.onderwerp_soort,
+                &r.gebeurtenis.onderwerp_id[..r.gebeurtenis.onderwerp_id.len().min(8)]
+            ),
             r.gebeurtenis.omschrijving.clone(),
         ]);
     }

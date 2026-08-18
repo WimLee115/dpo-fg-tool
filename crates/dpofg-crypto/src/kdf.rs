@@ -61,8 +61,7 @@ impl KdfParameters {
 
     /// Uitsluitend voor geautomatiseerde tests. Biedt geen bescherming.
     #[doc(hidden)]
-    pub const TEST_ONVEILIG: Self =
-        Self { geheugen_kib: 8 * 1024, iteraties: 1, parallellisme: 1 };
+    pub const TEST_ONVEILIG: Self = Self { geheugen_kib: 8 * 1024, iteraties: 1, parallellisme: 1 };
 
     /// Controleert of de parameters binnen de door Argon2 toegestane grenzen
     /// vallen en niet onder de ondergrens van dit product duiken.
@@ -201,7 +200,8 @@ mod tests {
     fn ander_zout_geeft_andere_sleutel() {
         let w = Wachtwoordzin::nieuw("een voldoende lange wachtwoordzin");
         let a = leid_hoofdsleutel_af(&w, &ZOUT, KdfParameters::TEST_ONVEILIG).unwrap();
-        let b = leid_hoofdsleutel_af(&w, &[7u8; ZOUT_LENGTE], KdfParameters::TEST_ONVEILIG).unwrap();
+        let b =
+            leid_hoofdsleutel_af(&w, &[7u8; ZOUT_LENGTE], KdfParameters::TEST_ONVEILIG).unwrap();
         assert_ne!(a, b);
     }
 
@@ -265,10 +265,7 @@ mod tests {
         use Wachtwoordsterkte::*;
         assert_eq!(beoordeel_wachtwoord(&Wachtwoordzin::nieuw("kort")), Onbruikbaar);
         assert_eq!(beoordeel_wachtwoord(&Wachtwoordzin::nieuw("aaaaaaaaaaaa")), Zwak);
-        assert_eq!(
-            beoordeel_wachtwoord(&Wachtwoordzin::nieuw("paard batterij niet")),
-            Redelijk
-        );
+        assert_eq!(beoordeel_wachtwoord(&Wachtwoordzin::nieuw("paard batterij niet")), Redelijk);
         assert_eq!(
             beoordeel_wachtwoord(&Wachtwoordzin::nieuw("paard batterij niet vastzetten")),
             Sterk

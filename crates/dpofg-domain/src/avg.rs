@@ -79,10 +79,16 @@ impl Grondslag {
         match self {
             Self::Toestemming => "toestemming van de betrokkene",
             Self::Overeenkomst => "noodzakelijk voor de uitvoering van een overeenkomst",
-            Self::WettelijkeVerplichting => "noodzakelijk om te voldoen aan een wettelijke verplichting",
+            Self::WettelijkeVerplichting => {
+                "noodzakelijk om te voldoen aan een wettelijke verplichting"
+            }
             Self::VitaalBelang => "noodzakelijk ter bescherming van vitale belangen",
-            Self::AlgemeenBelang => "noodzakelijk voor een taak van algemeen belang of openbaar gezag",
-            Self::GerechtvaardigdBelang => "noodzakelijk voor de behartiging van een gerechtvaardigd belang",
+            Self::AlgemeenBelang => {
+                "noodzakelijk voor een taak van algemeen belang of openbaar gezag"
+            }
+            Self::GerechtvaardigdBelang => {
+                "noodzakelijk voor de behartiging van een gerechtvaardigd belang"
+            }
         }
     }
 
@@ -159,7 +165,9 @@ impl BijzondereCategorie {
                 "biometrische gegevens met het oog op unieke identificatie"
             }
             Self::Gezondheidsgegevens => "gegevens over gezondheid",
-            Self::SeksueelGedragOfGerichtheid => "gegevens over seksueel gedrag of seksuele gerichtheid",
+            Self::SeksueelGedragOfGerichtheid => {
+                "gegevens over seksueel gedrag of seksuele gerichtheid"
+            }
         }
     }
 

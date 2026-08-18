@@ -157,9 +157,8 @@ impl Kluis {
         let mut compartimenten = BTreeMap::new();
         {
             let mut stmt = conn.prepare("SELECT naam, hoofd_json FROM compartiment")?;
-            let rijen = stmt.query_map([], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })?;
+            let rijen =
+                stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
             for rij in rijen {
                 let (naam, json) = rij?;
                 compartimenten.insert(naam, serde_json::from_str::<Compartimenthoofd>(&json)?);
@@ -168,14 +167,8 @@ impl Kluis {
 
         let ketenstand = lees_ketenstand(&conn)?;
 
-        let mut kluis = Self {
-            conn,
-            pad,
-            sleutels,
-            ontgrendeld: BTreeMap::new(),
-            compartimenten,
-            ketenstand,
-        };
+        let mut kluis =
+            Self { conn, pad, sleutels, ontgrendeld: BTreeMap::new(), compartimenten, ketenstand };
 
         kluis.log(
             Gebeurtenis::nieuw(
@@ -333,15 +326,8 @@ impl Kluis {
         )?;
 
         // In dezelfde transactie de logboekregel.
-        let gebeurtenis = Gebeurtenis::nieuw(
-            handeling,
-            actor.clone(),
-            nu,
-            soort,
-            id,
-            compartiment,
-            omschrijving,
-        );
+        let gebeurtenis =
+            Gebeurtenis::nieuw(handeling, actor.clone(), nu, soort, id, compartiment, omschrijving);
         let (regel, nieuwe_stand) = keten_aan(&self.ketenstand, gebeurtenis)?;
         schrijf_logboekregel(&tx, &regel)?;
 
@@ -401,9 +387,8 @@ impl Kluis {
 
     /// Alle versies van een record, van oud naar nieuw.
     pub fn versies(&self, id: &str) -> Resultaat<Vec<u32>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT versie FROM recordversie WHERE id = ?1 ORDER BY versie")?;
+        let mut stmt =
+            self.conn.prepare("SELECT versie FROM recordversie WHERE id = ?1 ORDER BY versie")?;
         let rijen = stmt.query_map(params![id], |r| r.get::<_, u32>(0))?;
         Ok(rijen.collect::<std::result::Result<Vec<_>, _>>()?)
     }
@@ -496,8 +481,7 @@ impl Kluis {
 
     /// Leest alle logboekregels.
     pub fn logboek(&self) -> Resultaat<Vec<Ketenregel>> {
-        let mut stmt =
-            self.conn.prepare("SELECT regel_json FROM logboek ORDER BY volgnummer")?;
+        let mut stmt = self.conn.prepare("SELECT regel_json FROM logboek ORDER BY volgnummer")?;
         let rijen = stmt.query_map([], |r| r.get::<_, String>(0))?;
         let mut uit = Vec::new();
         for rij in rijen {
@@ -540,11 +524,9 @@ impl Kluis {
     pub fn laatste_anker(&self) -> Resultaat<Option<dpofg_audit::Anker>> {
         let json: Option<String> = self
             .conn
-            .query_row(
-                "SELECT anker_json FROM anker ORDER BY volgnummer DESC LIMIT 1",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("SELECT anker_json FROM anker ORDER BY volgnummer DESC LIMIT 1", [], |r| {
+                r.get(0)
+            })
             .optional()?;
         Ok(match json {
             Some(j) => Some(serde_json::from_str(&j)?),

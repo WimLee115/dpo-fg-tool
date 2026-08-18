@@ -80,8 +80,7 @@ impl Anker {
             return Err(AuditFout::LeegLogboek);
         }
         let kluis_id = kluis_id.into();
-        let boodschap =
-            Self::te_ondertekenen(&kluis_id, stand.volgnummer, &stand.hash, tijdstip);
+        let boodschap = Self::te_ondertekenen(&kluis_id, stand.volgnummer, &stand.hash, tijdstip);
         let handtekening: Signature = sleutel.sign(&boodschap);
         Ok(Self {
             kluis_id,

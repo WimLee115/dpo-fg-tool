@@ -1,0 +1,53 @@
+# Beleid voor afhankelijkheden.
+#
+# Uitgangspunt: elke afhankelijkheid is aanvalsoppervlak dat iemand anders
+# beheert. Een nieuwe afhankelijkheid vereist een geschreven motivering in de
+# wijzigingsaanvraag; dit bestand maakt dat afdwingbaar.
+
+[graph]
+all-features = true
+
+[advisories]
+# Bekende kwetsbaarheden en niet meer onderhouden crates zijn fouten.
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Een expliciete lijst, geen uitsluitingslijst: een onbekende licentie hoort
+# een besluit te vergen, niet stilzwijgend door te glippen.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",
+    "Unlicense",
+]
+confidence-threshold = 0.9
+
+[[licenses.exceptions]]
+# Het eigen product valt buiten de lijst hierboven.
+name = "dpofg-crypto"
+allow = ["LicenseRef-Proprietary"]
+
+[bans]
+# Twee versies van dezelfde crate betekenen twee keer patchen bij een lek, en
+# bij crypto-crates twee verschillende implementaties in hetzelfde proces.
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[[bans.deny]]
+# Deze crates zijn niet meer onderhouden of hebben een bekende opvolger.
+name = "openssl"
+reason = "dit product gebruikt geen OpenSSL; alle cryptografie loopt via gepinde Rust-crates"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

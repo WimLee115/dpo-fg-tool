@@ -34,7 +34,7 @@ pub mod budget;
 pub mod motor;
 pub mod regels;
 
-pub use budget::{Waarschuwingsbudget, Budgetstand};
+pub use budget::{Budgetstand, Waarschuwingsbudget};
 pub use motor::{Bevinding, Niveau, Ontvangerrol, Regel, Regelmotor, Regelrapport};
 
 /// Versie van deze crate.

@@ -163,9 +163,7 @@ impl Meldbesluit {
         match self {
             Self::NogTeNemen => false,
             Self::Melden { .. } => true,
-            Self::NietMelden { afkoelperiode_tot, .. } => {
-                afkoelperiode_tot.is_none_or(|t| nu >= t)
-            }
+            Self::NietMelden { afkoelperiode_tot, .. } => afkoelperiode_tot.is_none_or(|t| nu >= t),
         }
     }
 }

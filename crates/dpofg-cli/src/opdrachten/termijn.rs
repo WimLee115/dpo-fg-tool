@@ -91,7 +91,10 @@ pub fn draai(o: Termijnopties, nu: DateTime<Utc>) -> Result<()> {
     let resterend = deadline.resterend(nu);
     println!();
     if deadline.is_verstreken(nu) {
-        crate::uitvoer::blokkade(&format!("deze termijn is {} geleden verstreken", duur(resterend)));
+        crate::uitvoer::blokkade(&format!(
+            "deze termijn is {} geleden verstreken",
+            duur(resterend)
+        ));
     } else if resterend.num_hours() < 24 {
         let_op(&format!("nog {}", duur(resterend)));
     } else {

@@ -18,7 +18,9 @@
 //! inhoud een berekening berust.
 
 use chrono::NaiveDate;
-use dpofg_terms::{Aanvang, Eenheid, Feestdagenkalender, Rechtsstelsel, Termijnsoort, Verlengingsrecht};
+use dpofg_terms::{
+    Aanvang, Eenheid, Feestdagenkalender, Rechtsstelsel, Termijnsoort, Verlengingsrecht,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::pakket::{Doorgifteinstrument, Instrumentstatus, Pakketinhoud, Rechtsfeit};

@@ -58,13 +58,7 @@ pub fn voortgang(compleet: usize, totaal: usize) -> String {
         0 => BREEDTE,
         t => (compleet.min(t) * BREEDTE) / t,
     };
-    format!(
-        "{}{} {} van de {}",
-        "█".repeat(gevuld),
-        "░".repeat(BREEDTE - gevuld),
-        compleet,
-        totaal
-    )
+    format!("{}{} {} van de {}", "█".repeat(gevuld), "░".repeat(BREEDTE - gevuld), compleet, totaal)
 }
 
 /// Een tijdsduur in gewone taal.

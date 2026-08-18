@@ -43,10 +43,9 @@ impl fmt::Display for DomeinFout {
                 write!(f, "veld '{veld}' moet verwijzen naar een {naar}")
             }
             Self::OnmogelijkTijdstip { veld, reden } => write!(f, "tijdstip '{veld}': {reden}"),
-            Self::TweedePersoonVereist { handeling, reden } => write!(
-                f,
-                "'{handeling}' vereist bevestiging door een tweede persoon: {reden}"
-            ),
+            Self::TweedePersoonVereist { handeling, reden } => {
+                write!(f, "'{handeling}' vereist bevestiging door een tweede persoon: {reden}")
+            }
             Self::BevestigingVereist { handeling, punten } => write!(
                 f,
                 "'{handeling}' is onomkeerbaar; bevestig eerst punt voor punt: {}",

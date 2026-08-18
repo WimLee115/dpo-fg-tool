@@ -117,11 +117,7 @@ fn status(pad: &std::path::Path, nu: DateTime<Utc>) -> Result<()> {
     if let Some(anker) = kluis.laatste_anker()? {
         t.add_row(vec![
             "laatste anker",
-            &format!(
-                "regel {} op {}",
-                anker.volgnummer,
-                anker.tijdstip.format("%d-%m-%Y %H:%M")
-            ),
+            &format!("regel {} op {}", anker.volgnummer, anker.tijdstip.format("%d-%m-%Y %H:%M")),
         ]);
     } else {
         t.add_row(vec!["laatste anker", "geen"]);

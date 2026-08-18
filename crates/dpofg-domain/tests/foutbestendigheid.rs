@@ -9,8 +9,8 @@
 use chrono::{DateTime, TimeZone, Utc};
 use dpofg_domain::{
     avg::{BijzondereCategorie, Grondslag, Rol, UitzonderingArtikel9},
-    Bewaartermijn, Id, Motivering, Ontvanger, Overgenomen, Registerrapport, Status,
-    Termijneenheid, Verwerking, Volledig,
+    Bewaartermijn, Id, Motivering, Ontvanger, Overgenomen, Registerrapport, Status, Termijneenheid,
+    Verwerking, Volledig,
 };
 
 fn nu() -> DateTime<Utc> {
@@ -46,8 +46,14 @@ fn basisverwerking() -> Verwerking {
     v.beveiligingsmaatregelen = Some("toegang op rolbasis, versleutelde opslag".into());
     v.grondslag = Some(Grondslag::WettelijkeVerplichting);
     v.wettelijke_bepaling = Some("art. 7:629 BW".into());
-    v.grondslag_motivering =
-        Some(Motivering::nieuw("de werkgever is wettelijk verplicht het loon door te betalen", "u1", nu()).unwrap());
+    v.grondslag_motivering = Some(
+        Motivering::nieuw(
+            "de werkgever is wettelijk verplicht het loon door te betalen",
+            "u1",
+            nu(),
+        )
+        .unwrap(),
+    );
     v
 }
 
@@ -56,10 +62,7 @@ fn ontbreekt(v: &Verwerking, veld: &str) -> bool {
 }
 
 fn blokkeert(v: &Verwerking, veld: &str) -> bool {
-    v.volledigheid()
-        .ontbreekt
-        .iter()
-        .any(|o| o.veld == veld && o.blokkeert_vaststelling)
+    v.volledigheid().ontbreekt.iter().any(|o| o.veld == veld && o.blokkeert_vaststelling)
 }
 
 // --------------------------------------------------------------------------
@@ -188,7 +191,8 @@ fn burgerservicenummer_roept_een_eigen_grondslag_op() {
     v.burgerservicenummer = true;
     assert!(blokkeert(&v, "verwerking.bsn_grondslag"));
 
-    v.bsn_grondslag = Some("art. 46 UAVG jo. de Wet algemene bepalingen burgerservicenummer".into());
+    v.bsn_grondslag =
+        Some("art. 46 UAVG jo. de Wet algemene bepalingen burgerservicenummer".into());
     assert!(v.volledigheid().is_volledig());
 }
 

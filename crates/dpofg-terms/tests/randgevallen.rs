@@ -75,12 +75,22 @@ fn lokaal(j: i32, m: u32, d: u32, u: u32, min: u32) -> DateTime<Utc> {
 
 /// De 72-uursmelding van artikel 33 AVG.
 fn melding_72u() -> Termijnsoort {
-    Termijnsoort::uren("AVG-33-MELDING", "melding datalek aan de toezichthouder", 72, "art. 33 lid 1 AVG")
+    Termijnsoort::uren(
+        "AVG-33-MELDING",
+        "melding datalek aan de toezichthouder",
+        72,
+        "art. 33 lid 1 AVG",
+    )
 }
 
 /// De vroegtijdige waarschuwing van 24 uur uit de zorgplichtregelgeving.
 fn waarschuwing_24u() -> Termijnsoort {
-    Termijnsoort::uren("NIS-24-WAARSCHUWING", "vroegtijdige waarschuwing", 24, "meldketen, eerste bericht")
+    Termijnsoort::uren(
+        "NIS-24-WAARSCHUWING",
+        "vroegtijdige waarschuwing",
+        24,
+        "meldketen, eerste bericht",
+    )
 }
 
 /// De maandtermijn van artikel 12 lid 3 AVG, met verlengingsrecht.
@@ -217,7 +227,9 @@ fn t21_maandtermijn_met_verlenging_naar_werkdag() {
             naar: "2026-02-16".into()
         }
     );
-    assert!(d.verantwoording.contains("Algemene termijnenwet") || d.verantwoording.contains("1182/71"));
+    assert!(
+        d.verantwoording.contains("Algemene termijnenwet") || d.verantwoording.contains("1182/71")
+    );
 }
 
 /// T-21 zonder verlenging: een maandtermijn die op een werkdag eindigt.
@@ -292,15 +304,29 @@ fn t28_bezwaartermijn_vangt_aan_de_dag_na_bekendmaking() {
 #[test]
 fn beide_aanvangsformuleringen_vallen_samen() {
     let anker = lokaal(2026, 9, 3, 11, 0);
-    for (duur, eenheid) in
-        [(6u32, Eenheid::Weken), (1, Eenheid::Maanden), (10, Eenheid::Kalenderdagen), (1, Eenheid::Jaren)]
-    {
+    for (duur, eenheid) in [
+        (6u32, Eenheid::Weken),
+        (1, Eenheid::Maanden),
+        (10, Eenheid::Kalenderdagen),
+        (1, Eenheid::Jaren),
+    ] {
         let a = Termijnsoort::kalender(
-            "A", "a", duur, eenheid, Rechtsstelsel::Unierecht, Aanvang::VanafGebeurtenis, "x",
+            "A",
+            "a",
+            duur,
+            eenheid,
+            Rechtsstelsel::Unierecht,
+            Aanvang::VanafGebeurtenis,
+            "x",
         );
         let b = Termijnsoort::kalender(
-            "B", "b", duur, eenheid, Rechtsstelsel::NationaalRecht,
-            Aanvang::VanafDagNaGebeurtenis, "x",
+            "B",
+            "b",
+            duur,
+            eenheid,
+            Rechtsstelsel::NationaalRecht,
+            Aanvang::VanafDagNaGebeurtenis,
+            "x",
         );
         let da = bereken(&a, anker, zone(), &kalender()).unwrap();
         let db = bereken(&b, anker, zone(), &kalender()).unwrap();
@@ -318,8 +344,7 @@ fn beide_aanvangsformuleringen_vallen_samen() {
 #[test]
 fn t12_te_late_verlenging_wordt_geweigerd() {
     let anker = lokaal(2026, 1, 15, 9, 30);
-    let mut termijn =
-        LopendeTermijn::start(verzoek_1maand(), anker, zone(), &kalender()).unwrap();
+    let mut termijn = LopendeTermijn::start(verzoek_1maand(), anker, zone(), &kalender()).unwrap();
 
     let fout = termijn.verleng(lokaal(2026, 2, 20, 9, 0), zone(), &kalender()).unwrap_err();
     let tekst = fout.to_string();
@@ -332,8 +357,7 @@ fn t12_te_late_verlenging_wordt_geweigerd() {
 #[test]
 fn t12b_tijdige_verlenging_wordt_toegekend() {
     let anker = lokaal(2026, 1, 15, 9, 30);
-    let mut termijn =
-        LopendeTermijn::start(verzoek_1maand(), anker, zone(), &kalender()).unwrap();
+    let mut termijn = LopendeTermijn::start(verzoek_1maand(), anker, zone(), &kalender()).unwrap();
 
     termijn.verleng(lokaal(2026, 2, 10, 9, 0), zone(), &kalender()).unwrap();
     assert_eq!(termijn.keer_verlengd, 1);
@@ -347,8 +371,7 @@ fn t12b_tijdige_verlenging_wordt_toegekend() {
 #[test]
 fn verlengen_kan_niet_twee_keer() {
     let anker = lokaal(2026, 1, 15, 9, 30);
-    let mut termijn =
-        LopendeTermijn::start(verzoek_1maand(), anker, zone(), &kalender()).unwrap();
+    let mut termijn = LopendeTermijn::start(verzoek_1maand(), anker, zone(), &kalender()).unwrap();
     termijn.verleng(lokaal(2026, 2, 10, 9, 0), zone(), &kalender()).unwrap();
     let fout = termijn.verleng(lokaal(2026, 2, 11, 9, 0), zone(), &kalender()).unwrap_err();
     assert!(fout.to_string().contains("maximum"));

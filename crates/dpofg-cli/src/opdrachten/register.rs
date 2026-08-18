@@ -98,9 +98,7 @@ fn zoek(kluis: &Kluis, kenmerk: &str) -> Result<Verwerking> {
         .lijst(SOORT)?
         .into_iter()
         .find(|r| r.kenmerk.as_deref() == Some(kenmerk))
-        .ok_or_else(|| {
-            anyhow::anyhow!("geen registerregel met kenmerk '{kenmerk}'")
-        })?;
+        .ok_or_else(|| anyhow::anyhow!("geen registerregel met kenmerk '{kenmerk}'"))?;
     Ok(kluis.laad(SOORT, &kop.id)?)
 }
 
@@ -152,10 +150,7 @@ fn lijst(kluis: &Kluis, alleen_onvolledig: bool) -> Result<()> {
     s.add_row(vec!["vastgesteld".to_string(), register.vastgesteld.to_string()]);
     s.add_row(vec!["concept".to_string(), register.concept.to_string()]);
     s.add_row(vec!["volledig".to_string(), register.volledig.to_string()]);
-    s.add_row(vec![
-        "kan niet worden vastgesteld".to_string(),
-        register.geblokkeerd.to_string(),
-    ]);
+    s.add_row(vec!["kan niet worden vastgesteld".to_string(), register.geblokkeerd.to_string()]);
     println!("{s}");
 
     if !register.ontbreekt_per_onderdeel.is_empty() {
@@ -375,7 +370,9 @@ fn vul(
                     "gezondheid" => Ok(BijzondereCategorie::Gezondheidsgegevens),
                     "ras" => Ok(BijzondereCategorie::RasOfEtnischeAfkomst),
                     "politiek" => Ok(BijzondereCategorie::PolitiekeOpvattingen),
-                    "religie" => Ok(BijzondereCategorie::ReligieuzeOfLevensbeschouwelijkeOvertuigingen),
+                    "religie" => {
+                        Ok(BijzondereCategorie::ReligieuzeOfLevensbeschouwelijkeOvertuigingen)
+                    }
                     "vakbond" => Ok(BijzondereCategorie::Vakbondslidmaatschap),
                     "genetisch" => Ok(BijzondereCategorie::GenetischeGegevens),
                     "biometrisch" => Ok(BijzondereCategorie::BiometrischeGegevensVoorIdentificatie),

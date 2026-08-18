@@ -115,8 +115,8 @@ impl Pakketinhoud {
     /// Canoniek geserialiseerd: dezelfde inhoud levert altijd dezelfde bytes,
     /// anders is de handtekening niet reproduceerbaar.
     fn te_ondertekenen(&self) -> Resultaat<Vec<u8>> {
-        let json = serde_json::to_vec(self)
-            .map_err(|e| ContentFout::OngeldigFormaat(e.to_string()))?;
+        let json =
+            serde_json::to_vec(self).map_err(|e| ContentFout::OngeldigFormaat(e.to_string()))?;
         let mut uit = Vec::with_capacity(PAKKETCONTEXT.len() + 8 + json.len());
         uit.extend_from_slice(PAKKETCONTEXT);
         uit.extend_from_slice(&(json.len() as u64).to_be_bytes());
@@ -126,8 +126,9 @@ impl Pakketinhoud {
 
     /// Zoekt een termijnsoort op code.
     pub fn termijn(&self, code: &str) -> Resultaat<&Termijnsoort> {
-        self.termijnen.iter().find(|t| t.code == code).ok_or_else(|| {
-            ContentFout::OnbekendeCode { soort: "termijn".into(), code: code.to_string() }
+        self.termijnen.iter().find(|t| t.code == code).ok_or_else(|| ContentFout::OnbekendeCode {
+            soort: "termijn".into(),
+            code: code.to_string(),
         })
     }
 
@@ -151,16 +152,16 @@ impl Pakketinhoud {
     /// Zoekt een doorgifte-instrument op code.
     pub fn instrument(&self, code: &str) -> Resultaat<&Doorgifteinstrument> {
         self.doorgifteinstrumenten.iter().find(|d| d.code == code).ok_or_else(|| {
-            ContentFout::OnbekendeCode { soort: "doorgifte-instrument".into(), code: code.to_string() }
+            ContentFout::OnbekendeCode {
+                soort: "doorgifte-instrument".into(),
+                code: code.to_string(),
+            }
         })
     }
 
     /// Alle instrumenten die om herbeoordeling vragen.
     pub fn instrumenten_met_herbeoordeling(&self) -> Vec<&Doorgifteinstrument> {
-        self.doorgifteinstrumenten
-            .iter()
-            .filter(|d| d.status.vereist_herbeoordeling())
-            .collect()
+        self.doorgifteinstrumenten.iter().filter(|d| d.status.vereist_herbeoordeling()).collect()
     }
 
     /// Hoeveel dagen geleden de inhoud is bijgewerkt.

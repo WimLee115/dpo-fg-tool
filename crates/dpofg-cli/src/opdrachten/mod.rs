@@ -1,6 +1,7 @@
 //! De opdrachten van de bedieningsschil.
 
 pub mod controle;
+pub mod dossier;
 pub mod incident;
 pub mod kluis;
 pub mod logboek;
@@ -31,9 +32,7 @@ pub fn standaardmap() -> Result<PathBuf> {
     // Bewust geen extra afhankelijkheid: de drie gevallen zijn eenvoudig en
     // expliciet leesbaar. De keuzes volgen het hoofdstuk platformondersteuning.
     let basis = if cfg!(target_os = "windows") {
-        std::env::var_os("APPDATA")
-            .map(PathBuf::from)
-            .context("APPDATA is niet gezet")?
+        std::env::var_os("APPDATA").map(PathBuf::from).context("APPDATA is niet gezet")?
     } else if cfg!(target_os = "macos") {
         let thuis = std::env::var_os("HOME").map(PathBuf::from).context("HOME is niet gezet")?;
         thuis.join("Library").join("Application Support")

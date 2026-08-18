@@ -245,15 +245,12 @@ fn bewaar(
 
 /// Leest een tijdstip uit de opdrachtregel.
 fn lees_tijdstip(tekst: &str) -> Result<DateTime<Utc>> {
-    tekst
-        .parse::<DateTime<chrono::FixedOffset>>()
-        .map(|t| t.with_timezone(&Utc))
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "kon '{tekst}' niet lezen als tijdstip ({e}). Gebruik de vorm \
+    tekst.parse::<DateTime<chrono::FixedOffset>>().map(|t| t.with_timezone(&Utc)).map_err(|e| {
+        anyhow::anyhow!(
+            "kon '{tekst}' niet lezen als tijdstip ({e}). Gebruik de vorm \
                  2026-08-18T09:20:00Z of 2026-08-18T11:20:00+02:00"
-            )
-        })
+        )
+    })
 }
 
 fn nieuw(
@@ -367,10 +364,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
         Some(k) => t.add_row(vec!["kennisname", &k.format("%d-%m-%Y %H:%M UTC").to_string()]),
         None => t.add_row(vec!["kennisname", "nog niet vastgelegd"]),
     };
-    t.add_row(vec![
-        "aangetast",
-        &aantastingstekst(&i.aantasting),
-    ]);
+    t.add_row(vec!["aangetast", &aantastingstekst(&i.aantasting)]);
     if let Some(n) = i.aantal_betrokkenen {
         t.add_row(vec!["betrokkenen", &n.to_string()]);
     }
@@ -392,8 +386,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     }
 
     // De klokken.
-    let verplichtingen =
-        verplichtingen_uit_incident(&i, Zorgplichtcontext::niet_van_toepassing());
+    let verplichtingen = verplichtingen_uit_incident(&i, Zorgplichtcontext::niet_van_toepassing());
     kop("Klokken die uit dit incident volgen");
     let mut k = tabel(&["verplichting", "anker", "vanaf", "reden"]);
     for v in &verplichtingen {
@@ -461,12 +454,8 @@ fn kennisname(
     i.stel_kennisname_vast(moment, motivering)?;
     bewaar(kluis, &i, Handeling::TermijnGestart, "moment van kennisname vastgelegd", nu)?;
 
-    gelukt(&format!(
-        "kennisname vastgelegd op {}",
-        moment.format("%d-%m-%Y %H:%M UTC")
-    ));
-    let verplichtingen =
-        verplichtingen_uit_incident(&i, Zorgplichtcontext::niet_van_toepassing());
+    gelukt(&format!("kennisname vastgelegd op {}", moment.format("%d-%m-%Y %H:%M UTC")));
+    let verplichtingen = verplichtingen_uit_incident(&i, Zorgplichtcontext::niet_van_toepassing());
     println!();
     println!("Hierdoor zijn deze klokken gaan lopen:");
     for v in &verplichtingen {
@@ -554,9 +543,7 @@ fn feiten(
         ));
     }
     if i.aantal_betrokkenen_geschat {
-        terzijde(
-            "Het aantal is als schatting aangemerkt; die aanduiding gaat mee in de melding.",
-        );
+        terzijde("Het aantal is als schatting aangemerkt; die aanduiding gaat mee in de melding.");
     }
 
     let r = i.volledigheid();

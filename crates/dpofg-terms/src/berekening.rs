@@ -86,10 +86,7 @@ pub fn bereken(
     kalender: &Feestdagenkalender,
 ) -> Resultaat<Deadline> {
     if soort.duur == 0 {
-        return Err(TermijnFout::OngeldigeDuur(format!(
-            "termijn {} heeft duur 0",
-            soort.code
-        )));
+        return Err(TermijnFout::OngeldigeDuur(format!("termijn {} heeft duur 0", soort.code)));
     }
 
     if soort.eenheid.is_urentermijn() {
@@ -147,10 +144,9 @@ fn bereken_kalender(
         // Awb art. 6:8: de termijn vangt aan met ingang van de dag ná de
         // gebeurtenis. De laatste dag ligt dan één dag eerder dan wanneer je
         // vanaf de referentiedag zou doortellen.
-        Aanvang::VanafDagNaGebeurtenis => (
-            gebeurtenisdag.succ_opt().ok_or(TermijnFout::DatumBuitenBereik)?,
-            1,
-        ),
+        Aanvang::VanafDagNaGebeurtenis => {
+            (gebeurtenisdag.succ_opt().ok_or(TermijnFout::DatumBuitenBereik)?, 1)
+        }
     };
 
     let ruwe_einddag = match soort.eenheid {
@@ -256,8 +252,8 @@ fn afronden(
     verlenging: ToegepasteVerlenging,
 ) -> Resultaat<Deadline> {
     // De termijn eindigt bij het verstrijken van de laatste dag.
-    let einde_dag = NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999)
-        .expect("vaste, geldige tijd");
+    let einde_dag =
+        NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).expect("vaste, geldige tijd");
     let naive = dag.and_time(einde_dag);
 
     let lokaal = match zone.from_local_datetime(&naive) {

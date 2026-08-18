@@ -10,6 +10,7 @@ use tempfile::TempDir;
 const WACHTWOORD: &str = "paard batterij niet vastzetten";
 
 struct Proef {
+    #[allow(dead_code)]
     _map: TempDir,
     kluis: std::path::PathBuf,
 }
@@ -57,6 +58,23 @@ impl Proef {
         assert!(!uit.status.success(), "'{opdracht}' had moeten falen:\n{tekst}");
         tekst
     }
+}
+
+/// Het pad naar `dpofg-verify`.
+///
+/// Cargo zet `CARGO_BIN_EXE_` alleen voor binaries van dezelfde crate, dus het
+/// pad wordt afgeleid van de eigen binary: beide staan in dezelfde uitvoermap.
+fn verify_binary() -> std::path::PathBuf {
+    let eigen = std::path::PathBuf::from(env!("CARGO_BIN_EXE_dpofg"));
+    let map = eigen.parent().expect("de binary staat in een map");
+    let naam = if cfg!(windows) { "dpofg-verify.exe" } else { "dpofg-verify" };
+    let pad = map.join(naam);
+    assert!(
+        pad.exists(),
+        "{} bestaat niet; bouw eerst de hele werkruimte met 'cargo build --workspace'",
+        pad.display()
+    );
+    pad
 }
 
 /// Splitst een opdrachtregel, met enkele aanhalingstekens als groepering.
@@ -165,7 +183,8 @@ fn elke_verwerker_vraagt_om_een_eigen_overeenkomst() {
 fn een_ontvanger_buiten_de_eer_vraagt_om_een_waarborg() {
     let p = Proef::nieuw();
     p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
-    let uit = p.moet("register vul 0412-K --veld ontvanger --waarde 'analyse:verwerker,buiten-eer'");
+    let uit =
+        p.moet("register vul 0412-K --veld ontvanger --waarde 'analyse:verwerker,buiten-eer'");
     assert!(uit.contains("buiten de EER"));
     assert!(uit.contains("hoofdstuk V AVG"));
 }
@@ -262,7 +281,9 @@ fn niet_melden_vereist_een_tweede_laag() {
     p.moet("incident nieuw 2026-0041 brief --signaal 2026-01-05T09:00:00Z");
     p.moet("incident kennisname 2026-0041 2026-01-05T09:20:00Z");
     p.moet("incident aantasting 2026-0041 --vertrouwelijkheid");
-    p.moet("incident feiten 2026-0041 --gegevens naam --betrokkenen 1 --exfiltratie-uitgesloten true");
+    p.moet(
+        "incident feiten 2026-0041 --gegevens naam --betrokkenen 1 --exfiltratie-uitgesloten true",
+    );
     p.moet("incident weging 2026-0041 --uitkomst geen-risico --motivering 'brief ongeopend retour ontvangen van de postbezorger'");
 
     // Zonder tweede persoon en zonder afkoelperiode: geweigerd.
@@ -334,7 +355,9 @@ fn het_logboek_meldt_zijn_eigen_reikwijdte() {
 
     let zonder_anker = p.moet("logboek verifieer");
     assert!(zonder_anker.contains("intern samenhangend"));
-    assert!(zonder_anker.contains("niet vast te stellen of er aan het einde regels zijn verwijderd"));
+    assert!(
+        zonder_anker.contains("niet vast te stellen of er aan het einde regels zijn verwijderd")
+    );
 
     p.moet("logboek anker --bewaarplaats 'notulen directieoverleg'");
 
@@ -401,10 +424,7 @@ fn het_kennispakket_toont_zijn_consolidatiedatum() {
 
 #[test]
 fn er_bestaat_geen_wachtwoordvlag() {
-    let uit = Command::new(env!("CARGO_BIN_EXE_dpofg"))
-        .args(["--help"])
-        .output()
-        .unwrap();
+    let uit = Command::new(env!("CARGO_BIN_EXE_dpofg")).args(["--help"]).output().unwrap();
     let tekst = String::from_utf8_lossy(&uit.stdout);
     assert!(!tekst.contains("--wachtwoord"), "een wachtwoordvlag lekt naar de proceslijst");
     assert!(tekst.contains("nooit als argument"));
@@ -441,4 +461,165 @@ fn bij_gevoelige_gegevens_helpt_een_afkoelperiode_niet() {
     );
     assert!(uit.contains("burgerservicenummer"));
     assert!(uit.contains("volstaat een afkoelperiode niet"));
+}
+
+// --------------------------------------------------------------------------
+// Het dossier en de controle door een derde
+// --------------------------------------------------------------------------
+
+/// De hele cirkel: samenstellen, en daarna controleren met de losse binary die
+/// de kluis niet nodig heeft en geen wachtwoord vraagt.
+#[test]
+fn een_dossier_is_door_een_derde_te_controleren() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    for opdracht in [
+        "register vul 0412-K --veld doeleinden --waarde loondoorbetaling",
+        "register vul 0412-K --veld betrokkenen --waarde medewerkers",
+        "register vul 0412-K --veld gegevens --waarde naam",
+        "register vul 0412-K --veld ontvanger --waarde leidinggevende",
+        "register vul 0412-K --veld beveiliging --waarde 'toegang op rolbasis'",
+        "register vul 0412-K --veld bewaartermijn --waarde '2 jaar vanaf einde dienstverband | art. 52 AWR'",
+        "register vul 0412-K --veld grondslag --waarde wettelijke-verplichting",
+        "register vul 0412-K --veld wettelijke-bepaling --waarde 'art. 7:629 BW'",
+        "register vul 0412-K --veld grondslag-motivering --waarde 'wettelijke loondoorbetalingsplicht'",
+    ] {
+        p.moet(opdracht);
+    }
+    p.moet("register vaststellen 0412-K");
+    p.moet("logboek anker --bewaarplaats notulen");
+
+    let map = p._map.path().join("uitvraag");
+    let uit = p.moet(&format!(
+        "dossier {} --aanleiding 'uitvraag van 12 augustus' --bestemd-voor 'de toezichthouder'",
+        map.display()
+    ));
+    assert!(uit.contains("Dossier samengesteld"));
+    assert!(uit.contains("dpofg-verify dossier"));
+
+    // De controle door een derde: geen kluis, geen wachtwoord.
+    let controle = Command::new(verify_binary())
+        .args(["dossier", map.join("manifest.json").to_str().unwrap()])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&controle.stdout).to_string();
+
+    assert!(controle.status.success(), "de controle hoort te slagen:\n{tekst}");
+    assert!(tekst.contains("het manifest is niet gewijzigd na ondertekening"));
+    assert!(tekst.contains("komen overeen met het manifest"));
+    assert!(tekst.contains("UITKOMST: de controle is geslaagd"));
+    // Het voorbehoud gaat mee en wordt niet weggelaten.
+    assert!(tekst.contains("toont uit zichzelf niet aan op welk moment"));
+    // En de eerlijke grens van de handtekening staat erbij.
+    assert!(tekst.contains("Of die sleutel toebehoort aan wie u verwacht"));
+}
+
+/// Een gewijzigd stuk wordt op twee onafhankelijke manieren gevonden: door het
+/// manifest en door de hashketen.
+#[test]
+fn een_gewijzigd_stuk_valt_door_de_mand() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    // Iemand past de omschrijving van één logboekregel aan. Bewust een veld dat
+    // het formaat niet breekt: anders zou de vervalsing al bij het inlezen
+    // opvallen en zegt de test niets over de hashketen.
+    let logboekpad = map.join("logboek.json");
+    let inhoud = std::fs::read_to_string(&logboekpad).unwrap();
+    assert!(inhoud.contains("kluis aangemaakt met schemaversie"));
+    std::fs::write(
+        &logboekpad,
+        inhoud.replacen(
+            "kluis aangemaakt met schemaversie",
+            "alles in orde bevonden bij versie",
+            1,
+        ),
+    )
+    .unwrap();
+
+    // 1. Het manifest ziet het.
+    let uit = Command::new(verify_binary())
+        .args(["dossier", map.join("manifest.json").to_str().unwrap()])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+    assert!(!uit.status.success());
+    assert!(tekst.contains("logboek.json' komt niet overeen met de hash"));
+
+    // 2. En de hashketen ziet het ook, los van het manifest.
+    let uit = Command::new(verify_binary())
+        .args([
+            "logboek",
+            logboekpad.to_str().unwrap(),
+            "--anker",
+            map.join("anker.json").to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+    assert!(!uit.status.success());
+    assert!(tekst.contains("de inhoud van regel"), "kreeg: {tekst}");
+    assert!(tekst.contains("gewijzigd"));
+}
+
+/// Concepten blijven standaard buiten het dossier, maar hun aantal staat erin.
+#[test]
+fn wat_er_ontbreekt_staat_in_het_manifest() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+
+    let map = p._map.path().join("uitvraag");
+    let uit = p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder",
+        map.display()
+    ));
+    assert!(uit.contains("Bewust weggelaten"));
+    assert!(uit.contains("status concept"));
+
+    let controle = Command::new(verify_binary())
+        .args(["dossier", map.join("manifest.json").to_str().unwrap()])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&controle.stdout).to_string();
+    assert!(tekst.contains("Bewust weggelaten"), "de ontvanger hoort dit ook te zien");
+}
+
+/// Een vervalsing die het formaat zelf breekt, valt al bij het inlezen op — en
+/// wordt onderscheiden van een dossier dat wél leesbaar is maar niet klopt.
+#[test]
+fn een_onleesbaar_bestand_is_iets_anders_dan_een_onjuist_dossier() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let logboekpad = map.join("logboek.json");
+    let inhoud = std::fs::read_to_string(&logboekpad).unwrap();
+    // Deze wijziging raakt de vaste woordenlijst van de handelingen.
+    std::fs::write(&logboekpad, inhoud.replacen("record_aangemaakt", "record_goedgekeurd", 1))
+        .unwrap();
+
+    let uit = Command::new(verify_binary())
+        .args(["logboek", logboekpad.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let fouttekst = String::from_utf8_lossy(&uit.stderr).to_string();
+
+    // Afsluitcode 1 betekent: kon niet lezen. Afsluitcode 2 betekent: gelezen,
+    // maar niet in orde. Dat onderscheid telt voor wie dit in een script draait.
+    assert_eq!(uit.status.code(), Some(1), "onleesbaar hoort code 1 te geven");
+    assert!(fouttekst.contains("niet leesbaar"), "kreeg: {fouttekst}");
+    assert!(fouttekst.contains("unknown variant"), "de oorzaak hoort erbij: {fouttekst}");
 }

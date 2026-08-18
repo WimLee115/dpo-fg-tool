@@ -39,7 +39,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    aead::{self, Binding, Gegevenssleutel, Envelop, SLEUTEL_LENGTE},
+    aead::{self, Binding, Envelop, Gegevenssleutel, SLEUTEL_LENGTE},
     kdf::{self, KdfParameters, Zout, ZOUT_LENGTE},
     CryptoFout, Geheim, Resultaat, Wachtwoordzin,
 };
@@ -205,10 +205,7 @@ impl GeopendeKluis {
     }
 
     /// Ontsluit de sleutel van een compartiment.
-    pub fn compartiment_openen(
-        &self,
-        hoofd: &Compartimenthoofd,
-    ) -> Resultaat<Compartimentsleutel> {
+    pub fn compartiment_openen(&self, hoofd: &Compartimenthoofd) -> Resultaat<Compartimentsleutel> {
         let ruw = aead::ontsleutel(&self.kluissleutel, &hoofd.binding(), &hoofd.sleutel)?;
         Compartimentsleutel::uit_slice(&ruw)
     }

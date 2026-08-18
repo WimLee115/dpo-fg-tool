@@ -169,11 +169,7 @@ impl Gebeurtenis {
         self
     }
 
-    pub fn met_inhoudswijziging(
-        mut self,
-        voor: Option<String>,
-        na: Option<String>,
-    ) -> Self {
+    pub fn met_inhoudswijziging(mut self, voor: Option<String>, na: Option<String>) -> Self {
         self.inhoud_voor = voor;
         self.inhoud_na = na;
         self

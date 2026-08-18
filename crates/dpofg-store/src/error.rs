@@ -55,10 +55,9 @@ impl fmt::Display for StoreFout {
                  beschadigen en wordt geweigerd"
             ),
             Self::NietGevonden { soort, id } => write!(f, "geen {soort} gevonden met kenmerk {id}"),
-            Self::CompartimentGesloten(c) => write!(
-                f,
-                "het compartiment '{c}' is niet ontgrendeld; de inhoud is niet te lezen"
-            ),
+            Self::CompartimentGesloten(c) => {
+                write!(f, "het compartiment '{c}' is niet ontgrendeld; de inhoud is niet te lezen")
+            }
             Self::OnbekendCompartiment(c) => write!(f, "de kluis kent geen compartiment '{c}'"),
             Self::KluisInGebruik(p) => write!(
                 f,

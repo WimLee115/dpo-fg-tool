@@ -283,7 +283,10 @@ mod tests {
         assert_eq!(r.geblokkeerd, 1);
         assert_eq!(
             r.ontbreekt_per_onderdeel,
-            vec![("verwerking.bewaartermijn".to_string(), 2), ("verwerking.grondslag".to_string(), 1)]
+            vec![
+                ("verwerking.bewaartermijn".to_string(), 2),
+                ("verwerking.grondslag".to_string(), 1)
+            ]
         );
     }
 

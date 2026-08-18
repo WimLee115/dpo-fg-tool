@@ -68,6 +68,9 @@ enum Opdracht {
     /// Het kennispakket met de juridische inhoud.
     #[command(subcommand)]
     Pakket(opdrachten::pakket::Pakketopdracht),
+
+    /// Stel een dossier samen voor een toezichthouder of auditor.
+    Dossier(opdrachten::dossier::Dossieropties),
 }
 
 fn main() {
@@ -106,5 +109,6 @@ fn draai() -> Result<()> {
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),
         Opdracht::Pakket(o) => opdrachten::pakket::draai(o, args.kluis, nu),
+        Opdracht::Dossier(o) => opdrachten::dossier::draai(o, args.kluis, nu),
     }
 }

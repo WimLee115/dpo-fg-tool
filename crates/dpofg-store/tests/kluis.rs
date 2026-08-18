@@ -192,17 +192,52 @@ fn niets_wordt_hard_overschreven() {
     let (_map, mut k) = nieuwe_kluis();
 
     let mut d = dossier();
-    k.bewaar("verzoek", "v1", "algemeen", "concept", None, &d, &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "concept",
+        None,
+        &d,
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(9),
+    )
+    .unwrap();
 
     d.aantekening = "identiteit vastgesteld".into();
-    let v2 = k.bewaar("verzoek", "v1", "algemeen", "concept", None, &d, &actor(),
-                      Handeling::RecordGewijzigd, "identiteit vastgesteld", t(10)).unwrap();
+    let v2 = k
+        .bewaar(
+            "verzoek",
+            "v1",
+            "algemeen",
+            "concept",
+            None,
+            &d,
+            &actor(),
+            Handeling::RecordGewijzigd,
+            "identiteit vastgesteld",
+            t(10),
+        )
+        .unwrap();
     assert_eq!(v2, 2);
 
     d.aantekening = "afgehandeld".into();
-    let v3 = k.bewaar("verzoek", "v1", "algemeen", "vastgesteld", None, &d, &actor(),
-                      Handeling::RecordVastgesteld, "afgehandeld", t(11)).unwrap();
+    let v3 = k
+        .bewaar(
+            "verzoek",
+            "v1",
+            "algemeen",
+            "vastgesteld",
+            None,
+            &d,
+            &actor(),
+            Handeling::RecordVastgesteld,
+            "afgehandeld",
+            t(11),
+        )
+        .unwrap();
     assert_eq!(v3, 3);
 
     assert_eq!(k.versies("v1").unwrap(), vec![1, 2]);
@@ -217,10 +252,32 @@ fn niets_wordt_hard_overschreven() {
 #[test]
 fn de_aanmaakdatum_blijft_staan_bij_een_wijziging() {
     let (_map, mut k) = nieuwe_kluis();
-    k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
-    k.bewaar("verzoek", "v1", "algemeen", "vastgesteld", None, &dossier(), &actor(),
-             Handeling::RecordGewijzigd, "gewijzigd", t(14)).unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "concept",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(9),
+    )
+    .unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "vastgesteld",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordGewijzigd,
+        "gewijzigd",
+        t(14),
+    )
+    .unwrap();
 
     let kop = &k.lijst("verzoek").unwrap()[0];
     assert_eq!(kop.aangemaakt_op, t(9));
@@ -237,10 +294,32 @@ fn elke_wijziging_landt_in_het_logboek() {
     let (_map, mut k) = nieuwe_kluis();
     let voor = k.ketenstand().volgnummer;
 
-    k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
-    k.bewaar("verzoek", "v1", "algemeen", "vastgesteld", None, &dossier(), &actor(),
-             Handeling::RecordVastgesteld, "vastgesteld", t(10)).unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "concept",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(9),
+    )
+    .unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "vastgesteld",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordVastgesteld,
+        "vastgesteld",
+        t(10),
+    )
+    .unwrap();
 
     assert_eq!(k.ketenstand().volgnummer, voor + 2);
 
@@ -255,8 +334,19 @@ fn elke_wijziging_landt_in_het_logboek() {
 fn het_logboek_is_ongeschonden_na_gewoon_gebruik() {
     let (_map, mut k) = nieuwe_kluis();
     for n in 1..=5 {
-        k.bewaar("verzoek", &format!("v{n}"), "algemeen", "concept", None, &dossier(), &actor(),
-                 Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+        k.bewaar(
+            "verzoek",
+            &format!("v{n}"),
+            "algemeen",
+            "concept",
+            None,
+            &dossier(),
+            &actor(),
+            Handeling::RecordAangemaakt,
+            "aangemaakt",
+            t(9),
+        )
+        .unwrap();
     }
     let rapport = k.verifieer_logboek().unwrap();
     assert!(rapport.is_ongeschonden(), "kreeg: {:?}", rapport.bevindingen);
@@ -272,8 +362,19 @@ fn het_logboek_weigert_wijziging_en_verwijdering() {
     let pad = map.path().join("test.dpofg");
     {
         let mut k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
-        k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-                 Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+        k.bewaar(
+            "verzoek",
+            "v1",
+            "algemeen",
+            "concept",
+            None,
+            &dossier(),
+            &actor(),
+            Handeling::RecordAangemaakt,
+            "aangemaakt",
+            t(9),
+        )
+        .unwrap();
     }
 
     let conn = rusqlite::Connection::open(&pad).unwrap();
@@ -290,24 +391,49 @@ fn het_logboek_weigert_wijziging_en_verwijdering() {
 #[test]
 fn een_anker_bevestigt_de_keten() {
     let (_map, mut k) = nieuwe_kluis();
-    k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "concept",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(9),
+    )
+    .unwrap();
 
     let sleutel = dpofg_audit::anker::nieuw_sleutelpaar();
-    let anker =
-        dpofg_audit::Anker::plaats(&sleutel, "kluis-1", k.ketenstand(), t(12)).unwrap()
-            .met_bewaarplaats("notulen directieoverleg");
+    let anker = dpofg_audit::Anker::plaats(&sleutel, "kluis-1", k.ketenstand(), t(12))
+        .unwrap()
+        .met_bewaarplaats("notulen directieoverleg");
     k.anker_bewaren(&anker).unwrap();
 
     // Daarna gaat het werk door.
-    k.bewaar("verzoek", "v2", "algemeen", "concept", None, &dossier(), &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(13)).unwrap();
+    k.bewaar(
+        "verzoek",
+        "v2",
+        "algemeen",
+        "concept",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(13),
+    )
+    .unwrap();
 
     let rapport = k.verifieer_logboek().unwrap();
     assert!(rapport.is_ongeschonden());
     assert!(matches!(rapport.ankerstatus, Ankerstatus::Bevestigd { .. }));
     assert!(rapport.reikwijdte().contains("bevestigd tot en met regel"));
-    assert_eq!(k.laatste_anker().unwrap().unwrap().bewaarplaats.as_deref(), Some("notulen directieoverleg"));
+    assert_eq!(
+        k.laatste_anker().unwrap().unwrap().bewaarplaats.as_deref(),
+        Some("notulen directieoverleg")
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -317,13 +443,22 @@ fn een_anker_bevestigt_de_keten() {
 #[test]
 fn bijlagen_worden_inhoudsgeadresseerd_bewaard() {
     let (_map, mut k) = nieuwe_kluis();
-    k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "concept",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(9),
+    )
+    .unwrap();
 
     let inhoud = b"inhoud van de brief met persoonsgegevens";
-    let hash = k
-        .bijlage_toevoegen("v1", "algemeen", "brief.pdf", inhoud, &actor(), t(9))
-        .unwrap();
+    let hash = k.bijlage_toevoegen("v1", "algemeen", "brief.pdf", inhoud, &actor(), t(9)).unwrap();
 
     assert_eq!(k.bijlage_lezen(&hash).unwrap(), inhoud);
 
@@ -341,10 +476,28 @@ fn een_bijlage_staat_versleuteld_op_schijf() {
     let pad = map.path().join("test.dpofg");
     {
         let mut k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
-        k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-                 Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
-        k.bijlage_toevoegen("v1", "algemeen", "brief.pdf", b"strikt vertrouwelijke inhoud",
-                            &actor(), t(9)).unwrap();
+        k.bewaar(
+            "verzoek",
+            "v1",
+            "algemeen",
+            "concept",
+            None,
+            &dossier(),
+            &actor(),
+            Handeling::RecordAangemaakt,
+            "aangemaakt",
+            t(9),
+        )
+        .unwrap();
+        k.bijlage_toevoegen(
+            "v1",
+            "algemeen",
+            "brief.pdf",
+            b"strikt vertrouwelijke inhoud",
+            &actor(),
+            t(9),
+        )
+        .unwrap();
     }
     let ruw = std::fs::read(&pad).unwrap();
     let geheim = b"strikt vertrouwelijke inhoud";
@@ -359,8 +512,19 @@ fn een_bijlage_staat_versleuteld_op_schijf() {
 fn zoeken_in_versleutelde_velden() {
     let (_map, mut k) = nieuwe_kluis();
     for (id, adres) in [("v1", "jan@example.nl"), ("v2", "piet@example.nl")] {
-        k.bewaar("verzoek", id, "algemeen", "concept", None, &dossier(), &actor(),
-                 Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+        k.bewaar(
+            "verzoek",
+            id,
+            "algemeen",
+            "concept",
+            None,
+            &dossier(),
+            &actor(),
+            Handeling::RecordAangemaakt,
+            "aangemaakt",
+            t(9),
+        )
+        .unwrap();
         k.indexeer(id, "algemeen", "betrokkene.emailadres", adres).unwrap();
     }
 
@@ -368,10 +532,14 @@ fn zoeken_in_versleutelde_velden() {
     assert_eq!(treffers, vec!["v1"]);
 
     // Normalisatie werkt door: hoofdletters en spaties maken niets uit.
-    let treffers = k.zoek_op_index("algemeen", "betrokkene.emailadres", " JAN@Example.NL ").unwrap();
+    let treffers =
+        k.zoek_op_index("algemeen", "betrokkene.emailadres", " JAN@Example.NL ").unwrap();
     assert_eq!(treffers, vec!["v1"]);
 
-    assert!(k.zoek_op_index("algemeen", "betrokkene.emailadres", "kees@example.nl").unwrap().is_empty());
+    assert!(k
+        .zoek_op_index("algemeen", "betrokkene.emailadres", "kees@example.nl")
+        .unwrap()
+        .is_empty());
 }
 
 /// Een index op een veld met weinig mogelijke waarden wordt geweigerd: hij zou
@@ -379,8 +547,19 @@ fn zoeken_in_versleutelde_velden() {
 #[test]
 fn een_index_op_een_veld_met_lage_variatie_wordt_geweigerd() {
     let (_map, mut k) = nieuwe_kluis();
-    k.bewaar("incident", "i1", "algemeen", "concept", None, &dossier(), &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+    k.bewaar(
+        "incident",
+        "i1",
+        "algemeen",
+        "concept",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(9),
+    )
+    .unwrap();
     let fout = k.indexeer("i1", "algemeen", "incident.risiconiveau", "hoog").unwrap_err();
     assert!(fout.to_string().contains("dezelfde waarde delen"), "kreeg: {fout}");
 }
@@ -397,8 +576,19 @@ fn wachtwoord_wijzigen_herversleutelt_niets() {
 
     {
         let mut k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
-        k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-                 Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+        k.bewaar(
+            "verzoek",
+            "v1",
+            "algemeen",
+            "concept",
+            None,
+            &dossier(),
+            &actor(),
+            Handeling::RecordAangemaakt,
+            "aangemaakt",
+            t(9),
+        )
+        .unwrap();
         k.wachtwoord_wijzigen(&nieuw, TEST, &actor(), t(10)).unwrap();
     }
 
@@ -448,8 +638,19 @@ fn een_onbekend_record_geeft_een_duidelijke_melding() {
 fn sluiten_landt_in_het_logboek() {
     let (_map, mut k) = nieuwe_kluis();
     let voor = k.ketenstand().volgnummer;
-    k.bewaar("verzoek", "v1", "algemeen", "concept", None, &dossier(), &actor(),
-             Handeling::RecordAangemaakt, "aangemaakt", t(9)).unwrap();
+    k.bewaar(
+        "verzoek",
+        "v1",
+        "algemeen",
+        "concept",
+        None,
+        &dossier(),
+        &actor(),
+        Handeling::RecordAangemaakt,
+        "aangemaakt",
+        t(9),
+    )
+    .unwrap();
     let pad = k.pad().to_path_buf();
     k.sluiten(&actor(), t(18)).unwrap();
 

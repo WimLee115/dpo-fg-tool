@@ -63,8 +63,8 @@ impl Ketenregel {
         // Canonieke serialisatie: serde_json sorteert de velden van een struct
         // in declaratievolgorde, wat stabiel is over versies zolang de volgorde
         // niet verandert. De formaatversie hieronder legt dat vast.
-        let inhoud = serde_json::to_vec(gebeurtenis)
-            .map_err(|e| AuditFout::Serialisatie(e.to_string()))?;
+        let inhoud =
+            serde_json::to_vec(gebeurtenis).map_err(|e| AuditFout::Serialisatie(e.to_string()))?;
 
         let mut hasher = Hasher::new_derive_key(CONTEXT);
         hasher.update(&volgnummer.to_be_bytes());
@@ -77,8 +77,7 @@ impl Ketenregel {
 
     /// Controleert of de opgeslagen hash klopt met de inhoud.
     pub fn hash_klopt(&self) -> Resultaat<bool> {
-        let berekend =
-            Self::bereken_hash(self.volgnummer, &self.gebeurtenis, &self.vorige_hash)?;
+        let berekend = Self::bereken_hash(self.volgnummer, &self.gebeurtenis, &self.vorige_hash)?;
         Ok(berekend == self.hash)
     }
 }
@@ -127,12 +126,8 @@ pub fn keten_aan(
     let volgnummer = stand.volgnummer + 1;
     let tijdstip = gebeurtenis.tijdstip;
     let hash = Ketenregel::bereken_hash(volgnummer, &gebeurtenis, &stand.hash)?;
-    let regel = Ketenregel {
-        volgnummer,
-        gebeurtenis,
-        vorige_hash: stand.hash.clone(),
-        hash: hash.clone(),
-    };
+    let regel =
+        Ketenregel { volgnummer, gebeurtenis, vorige_hash: stand.hash.clone(), hash: hash.clone() };
     let nieuwe_stand = Ketenstand { volgnummer, hash, tijdstip: Some(tijdstip) };
     Ok((regel, nieuwe_stand))
 }

@@ -1,0 +1,145 @@
+# Bouwstraat van dpo-fg-tool.
+#
+# De volgorde is bewust: opmaak en statische analyse eerst, want die falen
+# binnen een minuut en besparen de rest van de tijd. De platformmatrix draait
+# als laatste, omdat die het duurst is.
+#
+# Er is geen publicatiestap. Releases worden handmatig vrijgegeven na een
+# rookproef op alle drie de platforms; een pijplijn die zonder menselijke
+# tussenkomst een binary bij klanten kan krijgen, introduceert precies het
+# risico dat het productontwerp vermijdt.
+
+name: kwaliteit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  opmaak-en-analyse:
+    name: opmaak en statische analyse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: opmaak
+        run: cargo fmt --all -- --check
+
+      - name: statische analyse
+        # Waarschuwingen zijn fouten: een waarschuwing die blijft staan, leert
+        # iedereen waarschuwingen negeren.
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  tests:
+    name: tests op ${{ matrix.os }}
+    needs: opmaak-en-analyse
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: bouwen
+        run: cargo build --workspace --all-targets
+
+      - name: tests
+        run: cargo test --workspace
+
+      - name: documentatievoorbeelden
+        run: cargo test --workspace --doc
+
+  afhankelijkheden:
+    name: afhankelijkheden en licenties
+    needs: opmaak-en-analyse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo-deny installeren
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  materiaallijst:
+    name: softwarestuklijst
+    needs: opmaak-en-analyse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo-cyclonedx installeren
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: stuklijst opstellen
+        run: cargo cyclonedx --all --format json
+
+      - name: stuklijst bewaren
+        uses: actions/upload-artifact@v4
+        with:
+          name: softwarestuklijst
+          path: "**/*.cdx.json"
+          if-no-files-found: error
+
+  netwerkstilte:
+    name: geen uitgaand netwerkverkeer
+    needs: opmaak-en-analyse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: bouwen
+        run: cargo build --workspace
+
+      - name: netwerkgereedschap installeren
+        run: sudo apt-get update && sudo apt-get install -y libcap2-bin strace
+
+      - name: controleren dat het programma geen verbinding opent
+        # De belofte "geen egress" is een van de drie kernbeloften uit het plan.
+        # Een belofte die niet wordt nagerekend, is een marketingtekst.
+        run: |
+          set -euo pipefail
+          export DPOFG_WACHTWOORD="een voldoende lange wachtwoordzin voor de bouwstraat"
+          export DPOFG_KLUIS="$RUNNER_TEMP/proef.dpofg"
+
+          strace -f -e trace=network -o "$RUNNER_TEMP/netwerk.log" \
+            ./target/debug/dpofg kluis nieuw --licht > /dev/null
+
+          strace -f -e trace=network -o "$RUNNER_TEMP/netwerk2.log" \
+            ./target/debug/dpofg register nieuw X Y --eigenaar Z > /dev/null
+
+          # socket() naar een netwerkfamilie is de aanwijzing waar het om gaat.
+          # AF_UNIX-sockets zijn lokaal en tellen niet mee.
+          if grep -E 'socket\(AF_INET|socket\(AF_INET6|connect\(' \
+               "$RUNNER_TEMP/netwerk.log" "$RUNNER_TEMP/netwerk2.log"; then
+            echo "::error::het programma opent een netwerkverbinding; dat hoort niet te kunnen"
+            exit 1
+          fi
+          echo "geen netwerkaanroepen aangetroffen"
+
+      - name: opname bewaren
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: netwerkopname
+          path: ${{ runner.temp }}/netwerk*.log
+          if-no-files-found: warn

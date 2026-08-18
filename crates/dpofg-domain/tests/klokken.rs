@@ -77,18 +77,17 @@ fn een_hoog_risico_voegt_de_mededeling_toe() {
 fn de_mededeling_hangt_aan_de_vaststelling_niet_aan_de_kennisname() {
     let mut i = incident();
     i.risiconiveau = Some(Risiconiveau::HoogRisico);
-    i.risicoweging = Some(Motivering::nieuw(
-        "na onderzoek blijkt dat gezondheidsgegevens zijn ingezien",
-        "u1",
-        t(19, 14, 0),
-    )
-    .unwrap());
+    i.risicoweging = Some(
+        Motivering::nieuw(
+            "na onderzoek blijkt dat gezondheidsgegevens zijn ingezien",
+            "u1",
+            t(19, 14, 0),
+        )
+        .unwrap(),
+    );
 
     let v = verplichtingen_uit_incident(&i, Zorgplichtcontext::niet_van_toepassing());
-    let mededeling = v
-        .iter()
-        .find(|x| x.code.code() == Verplichtingcode::AVG_MEDEDELING)
-        .unwrap();
+    let mededeling = v.iter().find(|x| x.code.code() == Verplichtingcode::AVG_MEDEDELING).unwrap();
 
     assert_eq!(mededeling.ankertype, Ankertype::VaststellingHoogRisico);
     assert_eq!(mededeling.anker, Some(t(19, 14, 0)));
@@ -111,11 +110,12 @@ fn niet_melden_laat_de_interne_vastlegging_staan() {
     .unwrap();
 
     let v = verplichtingen_uit_incident(&i, Zorgplichtcontext::niet_van_toepassing());
-    let intern = v
-        .iter()
-        .find(|x| x.code.code() == Verplichtingcode::AVG_INTERN_REGISTER)
-        .unwrap();
-    assert!(intern.reden.contains("enige verantwoording die overblijft"), "kreeg: {}", intern.reden);
+    let intern = v.iter().find(|x| x.code.code() == Verplichtingcode::AVG_INTERN_REGISTER).unwrap();
+    assert!(
+        intern.reden.contains("enige verantwoording die overblijft"),
+        "kreeg: {}",
+        intern.reden
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -168,10 +168,7 @@ fn t05_het_eindrapport_wacht_op_de_verzending_van_de_melding() {
         &i,
         Zorgplichtcontext { valt_onder_meldketen: true, is_significant: true },
     );
-    let eind = v
-        .iter()
-        .find(|x| x.code.code() == Verplichtingcode::ZORG_EINDRAPPORT)
-        .unwrap();
+    let eind = v.iter().find(|x| x.code.code() == Verplichtingcode::ZORG_EINDRAPPORT).unwrap();
 
     assert_eq!(eind.ankertype, Ankertype::VerzendingMelding);
     assert!(eind.wacht_op_anker, "zonder verzending loopt de klok nog niet");
@@ -183,10 +180,7 @@ fn t05_het_eindrapport_wacht_op_de_verzending_van_de_melding() {
         &i,
         Zorgplichtcontext { valt_onder_meldketen: true, is_significant: true },
     );
-    let eind2 = v2
-        .iter()
-        .find(|x| x.code.code() == Verplichtingcode::ZORG_EINDRAPPORT)
-        .unwrap();
+    let eind2 = v2.iter().find(|x| x.code.code() == Verplichtingcode::ZORG_EINDRAPPORT).unwrap();
     assert!(!eind2.wacht_op_anker);
     assert_eq!(eind2.anker, Some(t(19, 15, 0)));
     assert_ne!(eind2.anker, i.kennisname_op, "niet het incident zelf");
@@ -199,7 +193,10 @@ fn t06_een_voortdurend_incident_levert_een_voortgangsrapport() {
     i.gemeld_op = Some(t(19, 15, 0));
 
     let v = verplichtingen_bij_voortdurend_incident(&i, t(19, 15, 0) + Duration::days(30));
-    assert_eq!(codes(&v), vec![Verplichtingcode::ZORG_VOORTGANG, Verplichtingcode::ZORG_EINDRAPPORT]);
+    assert_eq!(
+        codes(&v),
+        vec![Verplichtingcode::ZORG_VOORTGANG, Verplichtingcode::ZORG_EINDRAPPORT]
+    );
 
     let nieuw_eind = &v[1];
     assert_eq!(nieuw_eind.ankertype, Ankertype::Afhandeling);
@@ -279,7 +276,10 @@ fn de_meldklok_verdwijnt_pas_als_het_besluit_vaststaat() {
     )
     .unwrap();
 
-    assert!(!meldklok_vervalt(&i.meldbesluit, t(18, 20, 0)), "binnen de afkoelperiode blijft hij staan");
+    assert!(
+        !meldklok_vervalt(&i.meldbesluit, t(18, 20, 0)),
+        "binnen de afkoelperiode blijft hij staan"
+    );
     assert!(meldklok_vervalt(&i.meldbesluit, t(19, 0, 0)), "daarna vervalt hij");
 }
 
@@ -287,7 +287,9 @@ fn de_meldklok_verdwijnt_pas_als_het_besluit_vaststaat() {
 fn bij_melden_vervalt_de_klok_niet_maar_wordt_hij_gehaald() {
     let mut i = incident();
     i.risiconiveau = Some(Risiconiveau::Risico);
-    i.meldbesluit = dpofg_domain::Meldbesluit::Melden { motivering: motivering("er is een risico voor betrokkenen") };
+    i.meldbesluit = dpofg_domain::Meldbesluit::Melden {
+        motivering: motivering("er is een risico voor betrokkenen"),
+    };
     assert!(!meldklok_vervalt(&i.meldbesluit, t(20, 0, 0)));
 }
 

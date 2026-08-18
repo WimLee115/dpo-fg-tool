@@ -62,11 +62,7 @@ pub enum Bewaartermijn {
     ///
     /// Dit is een geldige toestand — maar wel een zichtbare. Zie
     /// `openstaande uitstelafspraken` in de meetnormen.
-    NogTeBepalen {
-        motivering: Motivering,
-        uiterlijk_bepaald_op: DateTime<Utc>,
-        eigenaar: String,
-    },
+    NogTeBepalen { motivering: Motivering, uiterlijk_bepaald_op: DateTime<Utc>, eigenaar: String },
 }
 
 impl Bewaartermijn {
@@ -324,10 +320,7 @@ impl Volledig for Verwerking {
         let mut afgeleid = 0;
         if self.heeft_bijzondere_gegevens() {
             afgeleid += 1;
-            if self
-                .uitzondering_artikel9
-                .is_some_and(|u| u.vereist_nationale_bepaling())
-            {
+            if self.uitzondering_artikel9.is_some_and(|u| u.vereist_nationale_bepaling()) {
                 afgeleid += 1;
             }
         }
@@ -464,8 +457,9 @@ impl Volledig for Verwerking {
                     "kies de uitzondering die het verwerken van deze bijzondere gegevens toestaat",
                     "art. 9 lid 1 en lid 2 AVG",
                 )),
-                Some(u) if u.vereist_nationale_bepaling()
-                    && self.uitzondering_nationale_bepaling.is_none() =>
+                Some(u)
+                    if u.vereist_nationale_bepaling()
+                        && self.uitzondering_nationale_bepaling.is_none() =>
                 {
                     uit.push(Ontbrekend::blokkerend(
                         "verwerking.uitzondering_nationale_bepaling",
@@ -494,8 +488,7 @@ impl Volledig for Verwerking {
         }
 
         // --- verwerkers ---
-        if self.heeft_verwerkers()
-            && self.verwerkersovereenkomsten.len() < self.aantal_verwerkers()
+        if self.heeft_verwerkers() && self.verwerkersovereenkomsten.len() < self.aantal_verwerkers()
         {
             uit.push(Ontbrekend::blokkerend(
                 "verwerking.verwerkersovereenkomsten",
@@ -562,10 +555,7 @@ impl Volledig for Verwerking {
             if !o.is_geverifieerd() {
                 uit.push(Ontbrekend::signalerend(
                     "verwerking.verificatie_overname",
-                    format!(
-                        "deze regel is overgenomen uit {} en nog niet geverifieerd",
-                        o.bron
-                    ),
+                    format!("deze regel is overgenomen uit {} en nog niet geverifieerd", o.bron),
                     "art. 5 lid 2 AVG",
                 ));
             }

@@ -58,7 +58,9 @@ pub mod soort;
 pub use berekening::{bereken, tijdzone, Deadline, TIJDZONE_NL};
 pub use error::{Resultaat, TermijnFout};
 pub use kalender::Feestdagenkalender;
-pub use kalenderrekenen::{is_schrikkeljaar, tel_dagen_op, tel_jaren_op, tel_maanden_op, tel_weken_op};
+pub use kalenderrekenen::{
+    is_schrikkeljaar, tel_dagen_op, tel_jaren_op, tel_maanden_op, tel_weken_op,
+};
 pub use opschorting::{LopendeTermijn, Opschorting, Termijnstatus};
 pub use soort::{
     Aanvang, Eenheid, Rechtsstelsel, Termijnsoort, ToegepasteVerlenging, Verlengingsrecht,

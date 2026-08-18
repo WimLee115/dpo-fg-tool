@@ -66,9 +66,7 @@ pub fn tel_jaren_op(datum: NaiveDate, aantal: u32) -> Resultaat<NaiveDate> {
 
 /// Telt kalenderdagen op.
 pub fn tel_dagen_op(datum: NaiveDate, aantal: u32) -> Resultaat<NaiveDate> {
-    datum
-        .checked_add_days(chrono::Days::new(aantal as u64))
-        .ok_or(TermijnFout::DatumBuitenBereik)
+    datum.checked_add_days(chrono::Days::new(aantal as u64)).ok_or(TermijnFout::DatumBuitenBereik)
 }
 
 /// Telt weken op, als zeven kalenderdagen per week.

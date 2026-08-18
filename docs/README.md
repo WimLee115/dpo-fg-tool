@@ -6,6 +6,7 @@
 | [FOUTBESTENDIGHEID.md](FOUTBESTENDIGHEID.md) | Foutbestendig ontwerp. De ontwerpladder van sterk naar zwak, foutbestendiging per werkproces, interactiepatronen, ingebouwde kennis, 123 continu draaiende controleregels, meetnormen en acceptatiecriteria | ~1540 regels |
 | [PLATFORMONDERSTEUNING.md](PLATFORMONDERSTEUNING.md) | Linux, macOS en Windows: ondersteunde versies, webviewverschillen, sleutel- en geheimenopslag, hardwaretokens, bestandslocaties, valkuilen van het bestandssysteem, ondertekening en distributie, bijwerken, netwerkstilte en de testmatrix | ~1030 regels |
 | [REVIEW.md](REVIEW.md) | De kritische toetsing door een privacyjurist met toezichtachtergrond en een beveiligingsarchitect, waarop herziening 2.0 van het plan berust | ~370 regels |
+| [FORMAAT.md](FORMAAT.md) | De bestandsformaten, zo beschreven dat een toezichthouder een dossier kan controleren zonder software van de organisatie die het aanlevert | ~210 regels |
 
 ## Leesvolgorde
 

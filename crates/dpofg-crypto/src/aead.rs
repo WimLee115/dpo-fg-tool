@@ -68,9 +68,8 @@ impl Binding {
     /// De lengte van elk onderdeel gaat mee, zodat de bindingen
     /// (`ab`, `c`) en (`a`, `bc`) niet dezelfde bytes opleveren.
     fn naar_bytes(&self) -> Vec<u8> {
-        let mut uit = Vec::with_capacity(
-            32 + self.veld.len() + self.record.len() + self.compartiment.len(),
-        );
+        let mut uit =
+            Vec::with_capacity(32 + self.veld.len() + self.record.len() + self.compartiment.len());
         uit.push(FORMAATVERSIE);
         for deel in [&self.veld, &self.record, &self.compartiment] {
             uit.extend_from_slice(&(deel.len() as u32).to_be_bytes());

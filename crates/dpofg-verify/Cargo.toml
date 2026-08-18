@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 description = "Losse verificatiebinary voor toezichthouders"
 
+[[bin]]
+name = "dpofg-verify"
+path = "src/main.rs"
+
 [dependencies]
 dpofg-audit.workspace = true
 dpofg-report.workspace = true

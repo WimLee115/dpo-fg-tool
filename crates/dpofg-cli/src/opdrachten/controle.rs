@@ -166,8 +166,7 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
         kop("Meest voorkomend");
         let mut r = tabel(&["regel", "aantal", "wat de regel controleert"]);
         for (code, aantal) in per_regel.iter().take(5) {
-            let omschrijving =
-                motor.regel(code).map(|x| x.controleert.clone()).unwrap_or_default();
+            let omschrijving = motor.regel(code).map(|x| x.controleert.clone()).unwrap_or_default();
             r.add_row(vec![code.clone(), aantal.to_string(), omschrijving]);
         }
         println!("{r}");

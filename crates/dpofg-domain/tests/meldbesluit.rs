@@ -30,11 +30,8 @@ fn incident() -> Incident {
         "u1",
     );
     i.stel_kennisname_vast(t(18, 9, 20), None).unwrap();
-    i.aantasting = Aantasting {
-        vertrouwelijkheid: true,
-        integriteit: false,
-        beschikbaarheid: false,
-    };
+    i.aantasting =
+        Aantasting { vertrouwelijkheid: true, integriteit: false, beschikbaarheid: false };
     i.categorieen_gegevens = vec!["naam".into(), "adres".into()];
     i.aantal_betrokkenen = Some(1);
     i.exfiltratie_uitgesloten = Some(false);
@@ -54,7 +51,12 @@ fn zonder_weging_geen_besluit() {
     let mut i = incident();
     i.risiconiveau = None;
     let fout = i
-        .besluit_niet_melden(motivering("het lijkt me niet nodig"), Some("u2".into()), t(18, 10, 0), Duration::zero())
+        .besluit_niet_melden(
+            motivering("het lijkt me niet nodig"),
+            Some("u2".into()),
+            t(18, 10, 0),
+            Duration::zero(),
+        )
         .unwrap_err();
     assert!(matches!(fout, DomeinFout::OngeldigeWaarde { .. }));
     assert!(fout.to_string().contains("weeg eerst het risico"));
@@ -84,13 +86,15 @@ fn een_besluit_dat_de_weging_tegenspreekt_wordt_geblokkeerd() {
 #[test]
 fn zonder_beoordeling_van_de_aantasting_geen_besluit() {
     let mut i = incident();
-    i.aantasting = Aantasting {
-        vertrouwelijkheid: false,
-        integriteit: false,
-        beschikbaarheid: false,
-    };
+    i.aantasting =
+        Aantasting { vertrouwelijkheid: false, integriteit: false, beschikbaarheid: false };
     let fout = i
-        .besluit_niet_melden(motivering("er is niets aan de hand"), Some("u2".into()), t(18, 10, 0), Duration::zero())
+        .besluit_niet_melden(
+            motivering("er is niets aan de hand"),
+            Some("u2".into()),
+            t(18, 10, 0),
+            Duration::zero(),
+        )
         .unwrap_err();
     assert!(fout.to_string().contains("beschikbaarheid"), "kreeg: {fout}");
 }
@@ -100,7 +104,12 @@ fn zonder_antwoord_over_exfiltratie_geen_besluit() {
     let mut i = incident();
     i.exfiltratie_uitgesloten = None;
     let fout = i
-        .besluit_niet_melden(motivering("wij denken dat het meevalt"), Some("u2".into()), t(18, 10, 0), Duration::zero())
+        .besluit_niet_melden(
+            motivering("wij denken dat het meevalt"),
+            Some("u2".into()),
+            t(18, 10, 0),
+            Duration::zero(),
+        )
         .unwrap_err();
     assert!(fout.to_string().contains("uit te sluiten"), "kreeg: {fout}");
 }
@@ -266,11 +275,7 @@ fn t31_de_klok_start_bij_ontvangst_van_de_verwerkersmelding() {
     i.melding_verwerker_ontvangen_op = Some(t(20, 9, 0));
     i.stel_kennisname_vast(t(20, 9, 5), None).unwrap();
 
-    assert_eq!(
-        i.anker_meldklok(),
-        Some(t(20, 9, 0)),
-        "het anker is de ontvangst van de melding"
-    );
+    assert_eq!(i.anker_meldklok(), Some(t(20, 9, 0)), "het anker is de ontvangst van de melding");
     assert_eq!(
         i.incident_bij_verwerker_op,
         Some(t(17, 3, 0)),

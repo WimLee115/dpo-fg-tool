@@ -187,10 +187,7 @@ fn een_vastgestelde_maar_onvolledige_regel_slaat_aan() {
     // Signalerend en niet blokkerend: de regel is al vastgesteld, dus er valt
     // niets meer tegen te houden. Wat er nog aan blokkeert, doet BEW-01.
     assert_eq!(reg01.niveau, Niveau::Signalerend);
-    assert_eq!(
-        b.iter().find(|x| x.regelcode == "BEW-01").unwrap().niveau,
-        Niveau::Blokkerend
-    );
+    assert_eq!(b.iter().find(|x| x.regelcode == "BEW-01").unwrap().niveau, Niveau::Blokkerend);
     assert!(reg01.toelichting.contains("bewaartermijn"));
     assert_eq!(reg01.record_kenmerk.as_deref(), Some("0412-K"));
 }

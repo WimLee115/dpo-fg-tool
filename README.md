@@ -50,6 +50,13 @@ cargo build --release
 # Het logboek controleren en verankeren
 ./target/release/dpofg logboek verifieer
 ./target/release/dpofg logboek anker --bewaarplaats "notulen directieoverleg"
+
+# Een dossier samenstellen voor een toezichthouder…
+./target/release/dpofg dossier ./uitvraag \
+  --aanleiding "uitvraag van 12 augustus" --bestemd-voor "de toezichthouder"
+
+# …dat de ontvanger controleert zonder de kluis en zonder wachtwoord
+./target/release/dpofg-verify dossier ./uitvraag/manifest.json
 ```
 
 Het wachtwoord wordt nooit als argument aangenomen: het wordt gevraagd, of gelezen uit `DPOFG_WACHTWOORD` voor geautomatiseerd gebruik.
@@ -68,6 +75,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Controleregels over de samenhang | 21 van de 55 regels draaien |
 | Kennispakketten met handtekening en terugrolbescherming | werkt |
 | Dossiers samenstellen en ondertekenen | werkt |
+| Losse verificatiebinary voor toezichthouders | werkt |
 | Betrokkenenverzoeken, DPIA, leveranciersregister | nog niet |
 | Grafische schil | nog niet |
 
@@ -86,6 +94,7 @@ Vraag de werkelijke dekking op met `dpofg controle --dekking`. Het aantal regels
 | `dpofg-rules` | controleregels en waarschuwingsbudget |
 | `dpofg-report` | dossiers samenstellen en ondertekenen |
 | `dpofg-cli` | bedieningsschil |
+| `dpofg-verify` | losse verificatiebinary; leest uitsluitend, vraagt geen wachtwoord |
 
 ## Documentatie
 
@@ -95,6 +104,7 @@ Vraag de werkelijke dekking op met `dpofg controle --dekking`. Het aantal regels
 | [`docs/FOUTBESTENDIGHEID.md`](docs/FOUTBESTENDIGHEID.md) | Foutbestendig ontwerp: de ontwerpladder, foutbestendiging per werkproces, interactiepatronen en de controleregels |
 | [`docs/PLATFORMONDERSTEUNING.md`](docs/PLATFORMONDERSTEUNING.md) | Linux, macOS en Windows: sleutelopslag, hardwaretokens, ondertekening, distributie en de testmatrix |
 | [`docs/REVIEW.md`](docs/REVIEW.md) | De juridische en beveiligingstoetsing waarop het plan berust |
+| [`docs/FORMAAT.md`](docs/FORMAAT.md) | De bestandsformaten, zodat een toezichthouder een dossier kan controleren zonder software van de aanleverende organisatie |
 
 ## Reikwijdte
 

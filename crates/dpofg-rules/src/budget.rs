@@ -104,11 +104,7 @@ impl Waarschuwingsbudget {
 
     /// De standen van alle gebruikers die het budget overschrijden.
     pub fn overschrijdingen(&self, nu: DateTime<Utc>) -> Vec<Budgetstand> {
-        self.onderbrekingen
-            .keys()
-            .map(|g| self.stand(g, nu))
-            .filter(|s| s.overschreden)
-            .collect()
+        self.onderbrekingen.keys().map(|g| self.stand(g, nu)).filter(|s| s.overschreden).collect()
     }
 
     /// Welk deel van de keren dat een regel werd getoond, hij werd genegeerd.

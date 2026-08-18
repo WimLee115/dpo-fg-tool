@@ -201,10 +201,7 @@ pub struct OndertekendManifest {
 }
 
 impl OndertekendManifest {
-    pub fn onderteken(
-        manifest: Manifest,
-        sleutel: &SigningKey,
-    ) -> Result<Self, serde_json::Error> {
+    pub fn onderteken(manifest: Manifest, sleutel: &SigningKey) -> Result<Self, serde_json::Error> {
         let boodschap = manifest.te_ondertekenen()?;
         let handtekening: Signature = sleutel.sign(&boodschap);
         Ok(Self {
@@ -242,7 +239,8 @@ impl OndertekendManifest {
         let mut afwijkingen = Vec::new();
         for stuk in &self.manifest.stukken {
             match stukken.iter().find(|(naam, _)| naam == &stuk.naam) {
-                None => afwijkingen.push(format!("'{}' staat in het manifest maar ontbreekt", stuk.naam)),
+                None => afwijkingen
+                    .push(format!("'{}' staat in het manifest maar ontbreekt", stuk.naam)),
                 Some((_, inhoud)) => {
                     let hash = blake3::hash(inhoud).to_hex().to_string();
                     if hash != stuk.hash {
@@ -256,7 +254,8 @@ impl OndertekendManifest {
         }
         for (naam, _) in stukken {
             if !self.manifest.stukken.iter().any(|s| &s.naam == naam) {
-                afwijkingen.push(format!("'{naam}' zit in de bundel maar staat niet in het manifest"));
+                afwijkingen
+                    .push(format!("'{naam}' zit in de bundel maar staat niet in het manifest"));
             }
         }
         afwijkingen
