@@ -50,6 +50,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Vervalprognose | werkt | Welke eisen op 30, 90 en 365 dagen niet meer aantoonbaar zijn, met oorzaak, eigenaar en datum; over vijf dossiersoorten heen |
 | Bestuursstuk | werkt | De prognose als ondertekende bundel met leesbaar stuk, machineleesbare kant en logboek; te controleren met dezelfde losse verificatiebinary |
 | De drie factoren van aantoonbaarheid | **deels** | Vastgesteld, uitgevoerd en actueel als drie tellingen; geen gewogen score, want het plan geeft daarvoor geen schaal |
+| Werkbak | werkt | Eén lijst over alle regimes heen, met de grondslag en het anker per regel; een verplichting verdwijnt doordat het dossier verandert, nooit door een vinkje. Ook als JSON |
 | Correctieplicht | werkt | Per bevinding een besluit met eigenaar en einddatum: herstel of gemotiveerde afwijking; alleen een lopende afwijking onderdrukt de bevinding |
 | Persoonlijk dossier van de functionaris | werkt | Een tweede kluisbestand met een eigen wachtwoordzin; adviezen met comply-or-explain, onafhankelijkheidsincidenten, en een hash in de kluis van de organisatie waarmee het bestaan is aan te tonen zonder de inhoud |
 
@@ -70,7 +71,6 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Ketenbewijs tussen organisaties | 4 | |
 | Overdrachtsdossier bij een wisseling van functionaris | 4 | De scheiding tussen het persoonlijke dossier en het adviesregister van de organisatie is er; de overdracht zelf nog niet |
 | Grafische schil | 1 | De opdrachtregel is bewust eerst gebouwd; de opzet ligt er in [`docs/SCHIL.md`](docs/SCHIL.md) |
-| De werkbak als motor | 1 | `AfgeleideVerplichting` bestaat alleen voor incidenten en kent geen voldaan-toestand; zonder die laag levert elk werkbakscherm een lijst op waaruit niets kan verdwijnen |
 | Multi-entiteit | 5 | |
 
 ---
@@ -127,7 +127,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 774 testfuncties, 778 uitgevoerde tests; ~7.400 regels in `tests` |
+| Tests | 794 testfuncties, 798 uitgevoerde tests; ~7.700 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

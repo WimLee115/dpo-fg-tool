@@ -19,6 +19,7 @@ pub mod register;
 pub mod risico;
 pub mod termijn;
 pub mod verzoek;
+pub mod werkbak;
 pub mod woo;
 pub mod wpg;
 pub mod zorgplicht;

@@ -94,6 +94,9 @@ enum Opdracht {
     /// Het persoonlijke dossier van de functionaris: advies en onafhankelijkheid.
     Fg(opdrachten::fg::Fgargumenten),
 
+    /// Eén lijst met wat er openstaat, over alle regimes heen.
+    Werkbak(opdrachten::werkbak::Werkbakargumenten),
+
     /// Wat er met een bevinding gebeurt: herstel of gemotiveerde afwijking.
     #[command(subcommand)]
     Correctie(opdrachten::correctie::Correctieopdracht),
@@ -169,6 +172,7 @@ fn draai() -> Result<()> {
         Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
         Opdracht::Leverancier(o) => opdrachten::leverancier::draai(o, args.kluis, nu),
         Opdracht::Fg(o) => opdrachten::fg::draai(o, args.kluis, nu),
+        Opdracht::Werkbak(o) => opdrachten::werkbak::draai(o, args.kluis, nu),
         Opdracht::Correctie(o) => opdrachten::correctie::draai(o, args.kluis, nu),
         Opdracht::Prognose(o) => opdrachten::prognose::draai(o, args.kluis, nu),
         Opdracht::Risico(o) => opdrachten::risico::draai(o, args.kluis, nu),

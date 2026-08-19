@@ -107,6 +107,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Zorgplichtcontrolset (art. 21 lid 3 Cbw) met bewijs dat vervalt | werkt |
 | Risicobeoordeling als eigen dossier, met aanvaarding van het restrisico | werkt |
 | Vervalprognose op 30, 90 en 365 dagen | werkt |
+| Werkbak: één lijst met wat er openstaat, over alle regimes heen | werkt |
 | Correctieplicht: per bevinding een besluit met eigenaar en datum | werkt |
 | De prognose als ondertekend bestuursstuk | werkt |
 | Persoonlijk dossier van de functionaris, met eigen wachtwoordzin | werkt |

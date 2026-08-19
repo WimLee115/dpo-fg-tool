@@ -18,6 +18,7 @@
 #![warn(missing_debug_implementations, rust_2018_idioms)]
 
 pub mod prognose;
+pub mod werkbak;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};

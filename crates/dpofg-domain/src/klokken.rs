@@ -107,6 +107,14 @@ pub struct AfgeleideVerplichting {
     pub reden: String,
     /// Of het anker nog ontbreekt en de klok dus nog niet loopt.
     pub wacht_op_anker: bool,
+    /// Wanneer de verplichting is nagekomen.
+    ///
+    /// Zonder dit veld kan een verplichting nooit uit een werkvoorraad
+    /// verdwijnen, en een lijst waaruit niets verdwijnt leert de gebruiker
+    /// haar te negeren. De afdoening komt uit het dossier zelf en wordt hier
+    /// niet apart bijgehouden: twee plaatsen waar staat of er is gemeld,
+    /// lopen uit elkaar.
+    pub voldaan_op: Option<DateTime<Utc>>,
 }
 
 impl AfgeleideVerplichting {
@@ -124,7 +132,18 @@ impl AfgeleideVerplichting {
             anker,
             reden: reden.into(),
             wacht_op_anker: anker.is_none(),
+            voldaan_op: None,
         }
+    }
+
+    fn voldaan(mut self, op: Option<DateTime<Utc>>) -> Self {
+        self.voldaan_op = op;
+        self
+    }
+
+    /// Of deze verplichting nog openstaat.
+    pub fn staat_open(&self) -> bool {
+        self.voldaan_op.is_none()
     }
 }
 
@@ -170,74 +189,92 @@ pub fn verplichtingen_uit_incident(
         ),
         _ => (Ankertype::Kennisname, incident.kennisname_op),
     };
-    uit.push(AfgeleideVerplichting::nieuw(
-        id,
-        Verplichtingcode::AVG_MELDING,
-        ankertype,
-        anker,
-        format!("de klok loopt vanaf {}", ankertype.omschrijving()),
-    ));
+    uit.push(
+        AfgeleideVerplichting::nieuw(
+            id,
+            Verplichtingcode::AVG_MELDING,
+            ankertype,
+            anker,
+            format!("de klok loopt vanaf {}", ankertype.omschrijving()),
+        )
+        .voldaan(incident.gemeld_op),
+    );
 
     // --- 2. De mededeling aan betrokkenen ---
     // Alleen bij een hoog risico, en verankerd op de vaststelling daarvan —
     // niet op de kennisname. Wie beide op hetzelfde anker zet, laat de tweede
     // klok te vroeg aflopen.
     if incident.risiconiveau.is_some_and(|r| r.leidt_tot_mededeling()) {
-        uit.push(AfgeleideVerplichting::nieuw(
-            id,
-            Verplichtingcode::AVG_MEDEDELING,
-            Ankertype::VaststellingHoogRisico,
-            incident.risicoweging.as_ref().map(|m| m.op),
-            "de weging kwam uit op een hoog risico voor de betrokkenen",
-        ));
+        uit.push(
+            AfgeleideVerplichting::nieuw(
+                id,
+                Verplichtingcode::AVG_MEDEDELING,
+                Ankertype::VaststellingHoogRisico,
+                incident.risicoweging.as_ref().map(|m| m.op),
+                "de weging kwam uit op een hoog risico voor de betrokkenen",
+            )
+            .voldaan(incident.betrokkenen_geinformeerd_op),
+        );
     }
 
     // --- 3. Vastlegging in het interne register ---
     // Geldt altijd, ook — juist — wanneer er niet wordt gemeld. Dat is de
     // vastlegging waarop een toezichthouder als eerste vraagt.
-    uit.push(AfgeleideVerplichting::nieuw(
-        id,
-        Verplichtingcode::AVG_INTERN_REGISTER,
-        Ankertype::Kennisname,
-        incident.kennisname_op,
-        if incident.meldbesluit.is_niet_melden() {
-            "er wordt niet gemeld; de vastlegging in het interne register is dan de enige \
+    uit.push(
+        AfgeleideVerplichting::nieuw(
+            id,
+            Verplichtingcode::AVG_INTERN_REGISTER,
+            Ankertype::Kennisname,
+            incident.kennisname_op,
+            if incident.meldbesluit.is_niet_melden() {
+                "er wordt niet gemeld; de vastlegging in het interne register is dan de enige \
              verantwoording die overblijft"
-        } else {
-            "elke inbreuk wordt intern vastgelegd, ongeacht het meldbesluit"
-        },
-    ));
+            } else {
+                "elke inbreuk wordt intern vastgelegd, ongeacht het meldbesluit"
+            },
+        )
+        .voldaan(incident.afgehandeld_op),
+    );
 
     // --- 4 tot en met 6. De zorgplichtketen ---
     if zorgplicht.valt_onder_meldketen && zorgplicht.is_significant {
         let significant_anker = incident.significant_vastgesteld_op.or(incident.kennisname_op);
 
-        uit.push(AfgeleideVerplichting::nieuw(
-            id,
-            Verplichtingcode::ZORG_WAARSCHUWING,
-            Ankertype::VaststellingSignificant,
-            significant_anker,
-            "het incident is als significant aangemerkt",
-        ));
-        uit.push(AfgeleideVerplichting::nieuw(
-            id,
-            Verplichtingcode::ZORG_MELDING,
-            Ankertype::VaststellingSignificant,
-            significant_anker,
-            "het incident is als significant aangemerkt",
-        ));
+        uit.push(
+            AfgeleideVerplichting::nieuw(
+                id,
+                Verplichtingcode::ZORG_WAARSCHUWING,
+                Ankertype::VaststellingSignificant,
+                significant_anker,
+                "het incident is als significant aangemerkt",
+            )
+            .voldaan(incident.zorgketen.waarschuwing_op),
+        );
+        uit.push(
+            AfgeleideVerplichting::nieuw(
+                id,
+                Verplichtingcode::ZORG_MELDING,
+                Ankertype::VaststellingSignificant,
+                significant_anker,
+                "het incident is als significant aangemerkt",
+            )
+            .voldaan(incident.zorgketen.melding_op),
+        );
 
         // Randgeval T-05: het eindrapport hangt aan de verzending van de
         // melding, niet aan het incident. Zolang er niet is gemeld, is het
         // anker er nog niet — en dat hoort zichtbaar te zijn.
-        uit.push(AfgeleideVerplichting::nieuw(
-            id,
-            Verplichtingcode::ZORG_EINDRAPPORT,
-            Ankertype::VerzendingMelding,
-            incident.gemeld_op,
-            "het eindrapport loopt vanaf de verzending van de incidentmelding, \
+        uit.push(
+            AfgeleideVerplichting::nieuw(
+                id,
+                Verplichtingcode::ZORG_EINDRAPPORT,
+                Ankertype::VerzendingMelding,
+                incident.gemeld_op,
+                "het eindrapport loopt vanaf de verzending van de incidentmelding, \
              niet vanaf het incident zelf",
-        ));
+            )
+            .voldaan(incident.zorgketen.eindrapport_op),
+        );
     }
 
     uit
@@ -261,14 +298,16 @@ pub fn verplichtingen_bij_voortdurend_incident(
             Ankertype::VerzendingMelding,
             Some(nu),
             "het incident duurt voort op het moment waarop het eindrapport verwacht werd",
-        ),
+        )
+        .voldaan(incident.zorgketen.voortgang_op),
         AfgeleideVerplichting::nieuw(
             incident.id,
             Verplichtingcode::ZORG_EINDRAPPORT,
             Ankertype::Afhandeling,
             None,
             "het eindrapport loopt opnieuw vanaf de afronding van de afhandeling",
-        ),
+        )
+        .voldaan(incident.zorgketen.eindrapport_op),
     ]
 }
 

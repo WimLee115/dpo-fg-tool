@@ -6,8 +6,8 @@
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use dpofg_domain::{
-    incident::Herkomstkanaal, Aantasting, DomeinFout, Incident, Meldbesluit, Motivering,
-    Risiconiveau, Volledig,
+    incident::{Herkomstkanaal, Zorgtrap},
+    Aantasting, DomeinFout, Incident, Meldbesluit, Motivering, Risiconiveau, Volledig,
 };
 
 fn t(dag: u32, uur: u32, minuut: u32) -> DateTime<Utc> {
@@ -367,4 +367,106 @@ fn een_leeg_incident_meldt_alles_wat_ontbreekt() {
 fn het_incident_valt_standaard_in_het_vertrouwelijke_compartiment() {
     let i = incident();
     assert_eq!(i.compartiment.naam(), "vertrouwelijk");
+}
+
+// --- de afdoening van de verplichtingen ---------------------------------------
+
+/// De handeling die de meldklok afdoet. Zonder haar kon een verplichting
+/// nooit uit een werkvoorraad verdwijnen.
+#[test]
+fn een_verzonden_melding_is_vast_te_leggen() {
+    let mut i = incident();
+    i.stel_kennisname_vast(t(18, 12, 0), None).unwrap();
+    assert!(i.gemeld_op.is_none());
+
+    i.leg_melding_vast(
+        t(18, 12, 0) + Duration::hours(20),
+        Some("AP-2026-441".into()),
+        t(18, 12, 0) + Duration::hours(20),
+    )
+    .unwrap();
+    assert_eq!(i.meldreferentie.as_deref(), Some("AP-2026-441"));
+
+    // Een tweede verzending is een aanvulling en geen herhaling.
+    let fout = i
+        .leg_melding_vast(
+            t(18, 12, 0) + Duration::hours(30),
+            None,
+            t(18, 12, 0) + Duration::hours(30),
+        )
+        .unwrap_err();
+    assert!(fout.to_string().contains("aanvulling"), "kreeg: {fout}");
+}
+
+#[test]
+fn een_melding_voor_het_anker_wordt_geweigerd() {
+    let mut i = incident();
+    i.stel_kennisname_vast(t(18, 12, 0), None).unwrap();
+    let fout =
+        i.leg_melding_vast(t(18, 12, 0) - Duration::hours(2), None, t(18, 12, 0)).unwrap_err();
+    assert!(fout.to_string().contains("vóór het anker"), "kreeg: {fout}");
+}
+
+/// Wie besloot niet te melden en dan toch meldt, keert een besluit om; die
+/// omkering hoort met haar motivering in het logboek te staan.
+#[test]
+fn melden_na_een_besluit_om_niet_te_melden_wordt_geweigerd() {
+    let mut i = incident();
+    i.stel_kennisname_vast(t(18, 12, 0), None).unwrap();
+    i.risiconiveau = Some(Risiconiveau::GeenRisico);
+    i.besluit_niet_melden(
+        motivering("er is geen risico voor de betrokkenen"),
+        Some("een tweede persoon".into()),
+        t(18, 12, 0),
+        Duration::zero(),
+    )
+    .unwrap();
+    let fout = i.leg_melding_vast(t(18, 12, 0), None, t(18, 12, 0)).unwrap_err();
+    assert!(fout.to_string().contains("keer dat eerst om"), "kreeg: {fout}");
+}
+
+/// De mededeling hoort bij een hoog risico; zonder die uitkomst is er
+/// niets mee te delen.
+#[test]
+fn de_mededeling_vraagt_eerst_een_hoog_risico() {
+    let mut i = incident();
+    let fout = i.leg_mededeling_vast(t(18, 12, 0), t(18, 12, 0)).unwrap_err();
+    assert!(fout.to_string().contains("hoog risico"), "kreeg: {fout}");
+
+    i.risiconiveau = Some(Risiconiveau::HoogRisico);
+    i.leg_mededeling_vast(t(18, 12, 0), t(18, 12, 0)).unwrap();
+    assert!(i.betrokkenen_geinformeerd_op.is_some());
+}
+
+/// Het eindrapport hangt aan de verzending van de incidentmelding, en die
+/// aan de waarschuwing. Een keten met een gat in het midden is geen keten.
+#[test]
+fn de_zorgplichtketen_wordt_op_volgorde_vastgelegd() {
+    let mut i = incident();
+    let fout =
+        i.leg_zorgverzending_vast(Zorgtrap::Melding, t(18, 12, 0), t(18, 12, 0)).unwrap_err();
+    assert!(fout.to_string().contains("vroegtijdige waarschuwing"), "kreeg: {fout}");
+
+    i.leg_zorgverzending_vast(Zorgtrap::Waarschuwing, t(18, 12, 0), t(18, 12, 0)).unwrap();
+    i.leg_zorgverzending_vast(
+        Zorgtrap::Melding,
+        t(18, 12, 0) + Duration::hours(40),
+        t(18, 12, 0) + Duration::hours(40),
+    )
+    .unwrap();
+    i.leg_zorgverzending_vast(
+        Zorgtrap::Eindrapport,
+        t(18, 12, 0) + Duration::days(20),
+        t(18, 12, 0) + Duration::days(20),
+    )
+    .unwrap();
+    assert!(i.zorgketen.eindrapport_op.is_some());
+
+    // En niet vóór de trap eronder.
+    let mut j = incident();
+    j.leg_zorgverzending_vast(Zorgtrap::Waarschuwing, t(18, 12, 0), t(18, 12, 0)).unwrap();
+    let fout = j
+        .leg_zorgverzending_vast(Zorgtrap::Melding, t(18, 12, 0) - Duration::hours(1), t(18, 12, 0))
+        .unwrap_err();
+    assert!(fout.to_string().contains("vóór de vroegtijdige waarschuwing"), "kreeg: {fout}");
 }

@@ -255,6 +255,16 @@ fn termijnen() -> Vec<Termijnsoort> {
             "interne norm; geen wettelijke grondslag",
         ),
         Termijnsoort::kalender(
+            "AVG-33-5-REGISTER",
+            "vastlegging van de inbreuk in het interne register",
+            30,
+            Eenheid::Kalenderdagen,
+            Rechtsstelsel::ZelfGesteld,
+            Aanvang::VanafGebeurtenis,
+            "art. 33 lid 5 AVG; de verordening noemt geen termijn, dertig dagen is een interne \
+             norm",
+        ),
+        Termijnsoort::kalender(
             "INTERN-RISICOBEOORDELING-HORIZON",
             "horizon waarbinnen een verlopende risicobeoordeling wordt gemeld",
             60,
@@ -430,6 +440,8 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                  motivering is toegestaan",
                 "de termijn waarbinnen het bestuur het maatregelenpakket opnieuw vaststelt",
                 "de drempel waarboven een zelf vastgestelde uitvoeringsfrequentie te lang is",
+                "de termijn voor de vastlegging in het interne register; de verordening noemt \
+                 er geen",
                 "de geldigheidsduur van een risicobeoordeling en de termijn waarbinnen een \
                  verlopende beoordeling wordt gemeld"
             ]

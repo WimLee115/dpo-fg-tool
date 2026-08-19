@@ -3152,3 +3152,132 @@ fn de_gronden_van_de_onafhankelijkheid_staan_in_beeld() {
     assert!(uit.contains("art. 38 lid 2 AVG"), "kreeg:\n{uit}");
     assert!(uit.contains("waardeloos wanneer het bewijs"), "kreeg:\n{uit}");
 }
+
+// --------------------------------------------------------------------------
+// De werkbak
+// --------------------------------------------------------------------------
+
+/// Een verplichting verdwijnt doordat het dossier verandert, nooit doordat
+/// iemand haar afvinkt. Zonder die handeling bleef er een lijst staan waaruit
+/// niets kon verdwijnen, en dat leert een gebruiker haar te negeren.
+#[test]
+fn een_verzonden_melding_verdwijnt_uit_de_werkbak() {
+    let p = Proef::nieuw();
+    p.moet(
+        "incident nieuw 2026-0041 'verkeerd geadresseerde brief' --signaal 2026-08-19T06:00:00Z",
+    );
+    p.moet("incident kennisname 2026-0041 2026-08-19T06:00:00Z");
+
+    let uit = p.moet("werkbak");
+    assert!(uit.contains("2 openstaande"), "kreeg:\n{uit}");
+    assert!(uit.contains("melding van een inbreuk"), "kreeg:\n{uit}");
+    assert!(uit.contains("art. 33 lid 1 AVG"), "de grondslag hoort in de regel:\n{uit}");
+    assert!(uit.contains("1/2"), "het spoor hoort erbij:\n{uit}");
+
+    let uit = p.moet("incident melden 2026-0041 --referentie AP-2026-441");
+    assert!(uit.contains("uur na het anker"), "kreeg:\n{uit}");
+    assert!(uit.contains("AP-2026-441"), "kreeg:\n{uit}");
+
+    let uit = p.moet("werkbak");
+    assert!(uit.contains("1 openstaande"), "kreeg:\n{uit}");
+    assert!(!uit.contains("melding van een inbreuk"), "de meldklok hoort weg te zijn:\n{uit}");
+    assert!(uit.contains("1/1"), "het spoor telt mee met wat er nog openstaat:\n{uit}");
+}
+
+/// Een melding zonder referentienummer is later alleen met de eigen opgave te
+/// onderbouwen; dat wordt gezegd en niet geweigerd.
+#[test]
+fn een_melding_zonder_referentie_wordt_gemeld_maar_niet_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'iets' --signaal 2026-08-19T06:00:00Z");
+    p.moet("incident kennisname 2026-0041 2026-08-19T06:00:00Z");
+    let uit = p.moet("incident melden 2026-0041");
+    assert!(uit.contains("geen referentienummer"), "kreeg:\n{uit}");
+
+    // En een tweede verzending is een aanvulling, geen herhaling.
+    let uit = p.moet_falen("incident melden 2026-0041");
+    assert!(uit.contains("aanvulling"), "kreeg:\n{uit}");
+}
+
+/// Wie besloot niet te melden en dan toch meldt, keert een besluit om.
+#[test]
+fn melden_na_een_besluit_om_niet_te_melden_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'iets' --signaal 2026-08-19T06:00:00Z");
+    p.moet("incident kennisname 2026-0041 2026-08-19T06:00:00Z");
+    p.moet("incident aantasting 2026-0041 --vertrouwelijkheid");
+    p.moet("incident feiten 2026-0041 --exfiltratie-uitgesloten true");
+    p.moet("incident weging 2026-0041 --uitkomst geen-risico --motivering 'de brief is retour gekomen en niet geopend'");
+    p.moet("incident niet-melden 2026-0041 --motivering 'de brief is ongeopend retour gekomen' --tweede-persoon 'J. Jansen'");
+
+    let uit = p.moet_falen("incident melden 2026-0041");
+    assert!(uit.contains("keer dat eerst om"), "kreeg:\n{uit}");
+}
+
+/// Het eindrapport hangt aan de verzending van de incidentmelding, en die aan
+/// de waarschuwing. Een keten met een gat in het midden is geen keten.
+#[test]
+fn de_zorgplichtketen_wordt_op_volgorde_vastgelegd() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'iets' --signaal 2026-08-19T06:00:00Z");
+    let uit = p.moet_falen("incident zorgmelding 2026-0041 --trap melding");
+    assert!(uit.contains("vroegtijdige waarschuwing"), "kreeg:\n{uit}");
+
+    p.moet("incident zorgmelding 2026-0041 --trap waarschuwing");
+    let uit = p.moet("incident zorgmelding 2026-0041 --trap melding");
+    assert!(uit.contains("vroegtijdige waarschuwing, incidentmelding"), "kreeg:\n{uit}");
+}
+
+/// Wat er buiten de lijst valt, staat er altijd bij. Een lege lijst die als
+/// "klaar" wordt gelezen is de duurste fout die een werkvoorraad kan maken.
+#[test]
+fn de_werkbak_noemt_wat_er_niet_in_staat() {
+    let p = Proef::nieuw();
+    let uit = p.moet("werkbak");
+    assert!(uit.contains("er staat niets open in deze lijst"), "kreeg:\n{uit}");
+    assert!(uit.contains("Niet in deze lijst"), "kreeg:\n{uit}");
+    assert!(uit.contains("dpofg prognose"), "kreeg:\n{uit}");
+    assert!(uit.contains("dpofg controle"), "kreeg:\n{uit}");
+}
+
+/// De lijst is ook machinaal te lezen: een schil, een geplande taak of een
+/// afdruk komt daarmee uit dezelfde bron als het scherm.
+#[test]
+fn de_werkbak_is_ook_als_json_te_lezen() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'iets' --signaal 2026-08-19T06:00:00Z");
+    p.moet("incident kennisname 2026-0041 2026-08-19T06:00:00Z");
+
+    // Alleen wat naar de standaarduitvoer gaat: de waarschuwing over het
+    // wachtwoord uit de omgeving hoort op de foutuitvoer en mag de JSON niet
+    // vervuilen. Dat is precies waarom die scheiding er is.
+    let uit = String::from_utf8(p.draai("werkbak --json").stdout).unwrap();
+    let regels: serde_json::Value = serde_json::from_str(uit.trim()).expect("geldige JSON");
+    let lijst = regels.as_array().expect("een lijst");
+    assert_eq!(lijst.len(), 2);
+    assert_eq!(lijst[0]["record_soort"], "incident");
+    assert_eq!(lijst[0]["onherstelbaar"], true);
+    assert!(lijst[0]["grondslag"].as_str().unwrap().contains("art. 33 lid 1"));
+    assert!(lijst[0]["deadline"].is_string());
+}
+
+/// De volgorde ligt vast: onherstelbaar gaat vóór herstelbaar.
+#[test]
+fn de_werkbak_zet_het_onherstelbare_bovenaan() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'iets' --signaal 2026-08-19T06:00:00Z");
+    p.moet("incident kennisname 2026-0041 2026-08-19T06:00:00Z");
+
+    let uit = String::from_utf8(p.draai("werkbak --json").stdout).unwrap();
+    let lijst: serde_json::Value = serde_json::from_str(uit.trim()).unwrap();
+    assert_eq!(lijst[0]["band"], "onherstelbaar_deze_week");
+    assert_eq!(lijst[1]["band"], "loopt");
+
+    // En op het scherm staat de onherstelbare band boven de interne
+    // vastlegging, die herstelbaar is.
+    let uit = p.moet("werkbak");
+    let plek_band =
+        uit.find("onherstelbaar, verloopt deze week").expect("de band hoort er te staan");
+    let plek_register = uit.find("interne register").expect("de tweede regel hoort er te staan");
+    assert!(plek_band < plek_register, "de banden staan in de verkeerde volgorde:\n{uit}");
+}

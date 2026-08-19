@@ -168,6 +168,64 @@ impl Meldbesluit {
     }
 }
 
+/// De trap in de zorgplichtmeldketen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Zorgtrap {
+    /// De vroegtijdige waarschuwing.
+    Waarschuwing,
+    /// De incidentmelding.
+    Melding,
+    /// Het eindrapport.
+    Eindrapport,
+    /// Het tussentijdse voortgangsrapport bij een lopend incident.
+    Voortgang,
+}
+
+impl Zorgtrap {
+    pub fn omschrijving(&self) -> &'static str {
+        match self {
+            Self::Waarschuwing => "vroegtijdige waarschuwing",
+            Self::Melding => "incidentmelding",
+            Self::Eindrapport => "eindrapport",
+            Self::Voortgang => "voortgangsrapport",
+        }
+    }
+
+    pub fn alle() -> [Self; 4] {
+        [Self::Waarschuwing, Self::Melding, Self::Eindrapport, Self::Voortgang]
+    }
+}
+
+/// Wanneer elke trap van de zorgplichtmeldketen is verzonden.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Zorgketenverzendingen {
+    pub waarschuwing_op: Option<DateTime<Utc>>,
+    pub melding_op: Option<DateTime<Utc>>,
+    pub eindrapport_op: Option<DateTime<Utc>>,
+    pub voortgang_op: Option<DateTime<Utc>>,
+}
+
+impl Zorgketenverzendingen {
+    pub fn van(&self, trap: Zorgtrap) -> Option<DateTime<Utc>> {
+        match trap {
+            Zorgtrap::Waarschuwing => self.waarschuwing_op,
+            Zorgtrap::Melding => self.melding_op,
+            Zorgtrap::Eindrapport => self.eindrapport_op,
+            Zorgtrap::Voortgang => self.voortgang_op,
+        }
+    }
+
+    fn zet(&mut self, trap: Zorgtrap, op: DateTime<Utc>) {
+        match trap {
+            Zorgtrap::Waarschuwing => self.waarschuwing_op = Some(op),
+            Zorgtrap::Melding => self.melding_op = Some(op),
+            Zorgtrap::Eindrapport => self.eindrapport_op = Some(op),
+            Zorgtrap::Voortgang => self.voortgang_op = Some(op),
+        }
+    }
+}
+
 /// Een incident.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Incident {
@@ -222,6 +280,11 @@ pub struct Incident {
     pub risicoweging: Option<Motivering>,
     pub meldbesluit: Meldbesluit,
     pub gemeld_op: Option<DateTime<Utc>>,
+    /// Het referentienummer dat de toezichthouder bij de melding teruggaf.
+    ///
+    /// Zonder referentie is een verzending later alleen met de eigen opgave te
+    /// onderbouwen; met referentie is zij bij de ontvanger na te gaan.
+    pub meldreferentie: Option<String>,
     pub mededeling_betrokkenen_besluit: Option<Motivering>,
     pub mededeling_betrokkenen_op: Option<DateTime<Utc>>,
 
@@ -245,6 +308,21 @@ pub struct Incident {
     #[serde(default)]
     pub maatregelen_omschrijving: Vec<String>,
     pub afgehandeld_op: Option<DateTime<Utc>>,
+    /// Wanneer de betrokkenen zijn geïnformeerd, bij een hoog risico.
+    ///
+    /// Zonder dit veld heeft de mededelingsplicht van artikel 34 geen enkele
+    /// afdoening: de verplichting zou blijven staan tot het einde der tijden,
+    /// ook nadat zij is nagekomen. Een lijst waaruit niets kan verdwijnen,
+    /// leert de gebruiker haar te negeren.
+    pub betrokkenen_geinformeerd_op: Option<DateTime<Utc>>,
+    /// Wanneer de trappen van de zorgplichtmeldketen zijn verzonden.
+    ///
+    /// Drie afzonderlijke velden en geen enkele vlag: de vroegtijdige
+    /// waarschuwing, de incidentmelding en het eindrapport zijn drie
+    /// verzendingen met elk hun eigen termijn en hun eigen anker. Wie ze
+    /// samentrekt, kan later niet meer laten zien welke van de drie te laat
+    /// was.
+    pub zorgketen: Zorgketenverzendingen,
 
     pub behandelaar: String,
 }
@@ -294,12 +372,15 @@ impl Incident {
             risicoweging: None,
             meldbesluit: Meldbesluit::NogTeNemen,
             gemeld_op: None,
+            meldreferentie: None,
             mededeling_betrokkenen_besluit: None,
             mededeling_betrokkenen_op: None,
             oorzaakcategorie: None,
             maatregelen: Vec::new(),
             maatregelen_omschrijving: Vec::new(),
             afgehandeld_op: None,
+            betrokkenen_geinformeerd_op: None,
+            zorgketen: Zorgketenverzendingen::default(),
             behandelaar: behandelaar.into(),
         }
     }
@@ -400,6 +481,153 @@ impl Incident {
         if melding_ontvangen.is_some() {
             self.melding_verwerker_ontvangen_op = melding_ontvangen;
         }
+        Ok(())
+    }
+
+    /// Legt vast dat de melding aan de toezichthouder is verzonden.
+    ///
+    /// Dit is de handeling die de meldklok afdoet. Zij bestond niet: het veld
+    /// `gemeld_op` werd nergens gezet, waardoor de verplichting nooit uit een
+    /// werkvoorraad kon verdwijnen en het eindrapport uit de zorgplichtketen
+    /// geen anker kreeg.
+    ///
+    /// De verzending is een feit en geen besluit. Of er gemeld moest worden,
+    /// is een eerdere vraag met een eigen bewaking; deze methode registreert
+    /// alleen dát en wanneer.
+    pub fn leg_melding_vast(
+        &mut self,
+        op: DateTime<Utc>,
+        referentie: Option<String>,
+        nu: DateTime<Utc>,
+    ) -> Resultaat<()> {
+        if let Some(eerder) = self.gemeld_op {
+            return Err(DomeinFout::OngeldigeStatusovergang {
+                van: "gemeld".into(),
+                naar: "gemeld".into(),
+                reden: format!(
+                    "er is al een melding vastgelegd op {}; een tweede verzending is een \\
+                     aanvulling en hoort als zodanig te worden vastgelegd",
+                    eerder.to_rfc3339()
+                ),
+            });
+        }
+        if op > nu {
+            return Err(DomeinFout::OnmogelijkTijdstip {
+                veld: "gemeld_op".into(),
+                reden: "de melding zou in de toekomst zijn verzonden".into(),
+            });
+        }
+        let anker = self.anker_meldklok().ok_or(DomeinFout::OntbrekendeVerwijzing {
+            veld: "gemeld_op".into(),
+            naar: "kennisname, want de meldklok heeft nog geen anker".into(),
+        })?;
+        if op < anker {
+            return Err(DomeinFout::OnmogelijkTijdstip {
+                veld: "gemeld_op".into(),
+                reden: format!(
+                    "de melding zou zijn verzonden op {}, vóór het anker van de meldklok op {}",
+                    op.to_rfc3339(),
+                    anker.to_rfc3339()
+                ),
+            });
+        }
+        if self.meldbesluit.is_niet_melden() {
+            return Err(DomeinFout::OngeldigeStatusovergang {
+                van: "besloten niet te melden".into(),
+                naar: "gemeld".into(),
+                reden: "er ligt een besluit om niet te melden; keer dat eerst om, zodat de \\
+                        omkering met haar motivering in het logboek staat"
+                    .into(),
+            });
+        }
+        self.gemeld_op = Some(op);
+        self.meldreferentie = referentie.filter(|r| !r.trim().is_empty());
+        self.herkomst.wijzig("melding aan de toezichthouder vastgelegd", nu);
+        Ok(())
+    }
+
+    /// Legt vast dat een trap van de zorgplichtmeldketen is verzonden.
+    ///
+    /// De volgorde wordt afgedwongen: het eindrapport hangt aan de verzending
+    /// van de incidentmelding, en die aan de waarschuwing. Een eindrapport
+    /// vastleggen zonder melding zou een keten opleveren waarin de tweede trap
+    /// ontbreekt terwijl de derde is afgedaan.
+    pub fn leg_zorgverzending_vast(
+        &mut self,
+        trap: Zorgtrap,
+        op: DateTime<Utc>,
+        nu: DateTime<Utc>,
+    ) -> Resultaat<()> {
+        if let Some(eerder) = self.zorgketen.van(trap) {
+            return Err(DomeinFout::OngeldigeStatusovergang {
+                van: "verzonden".into(),
+                naar: "verzonden".into(),
+                reden: format!(
+                    "de {} is al vastgelegd op {}",
+                    trap.omschrijving(),
+                    eerder.to_rfc3339()
+                ),
+            });
+        }
+        if op > nu {
+            return Err(DomeinFout::OnmogelijkTijdstip {
+                veld: "zorgketen".into(),
+                reden: format!("de {} zou in de toekomst zijn verzonden", trap.omschrijving()),
+            });
+        }
+        let voorwaarde = match trap {
+            Zorgtrap::Waarschuwing => None,
+            Zorgtrap::Melding => Some((Zorgtrap::Waarschuwing, self.zorgketen.waarschuwing_op)),
+            Zorgtrap::Eindrapport | Zorgtrap::Voortgang => {
+                Some((Zorgtrap::Melding, self.zorgketen.melding_op))
+            }
+        };
+        if let Some((eerdere, moment)) = voorwaarde {
+            let Some(moment) = moment else {
+                return Err(DomeinFout::OntbrekendeVerwijzing {
+                    veld: "zorgketen".into(),
+                    naar: format!(
+                        "verzonden {}; die gaat aan de {} vooraf",
+                        eerdere.omschrijving(),
+                        trap.omschrijving()
+                    ),
+                });
+            };
+            if op < moment {
+                return Err(DomeinFout::OnmogelijkTijdstip {
+                    veld: "zorgketen".into(),
+                    reden: format!(
+                        "de {} zou vóór de {} zijn verzonden",
+                        trap.omschrijving(),
+                        eerdere.omschrijving()
+                    ),
+                });
+            }
+        }
+        self.zorgketen.zet(trap, op);
+        self.herkomst.wijzig(format!("{} verzonden", trap.omschrijving()), nu);
+        Ok(())
+    }
+
+    /// Legt vast dat de betrokkenen zijn geïnformeerd.
+    pub fn leg_mededeling_vast(&mut self, op: DateTime<Utc>, nu: DateTime<Utc>) -> Resultaat<()> {
+        if !self.risiconiveau.is_some_and(|r| r.leidt_tot_mededeling()) {
+            return Err(DomeinFout::OngeldigeStatusovergang {
+                van: "geen hoog risico".into(),
+                naar: "betrokkenen geïnformeerd".into(),
+                reden: "de mededeling aan betrokkenen hoort bij een hoog risico; is dat de \\
+                        uitkomst van de weging, leg die dan eerst vast"
+                    .into(),
+            });
+        }
+        if op > nu {
+            return Err(DomeinFout::OnmogelijkTijdstip {
+                veld: "betrokkenen_geinformeerd_op".into(),
+                reden: "de mededeling zou in de toekomst zijn gedaan".into(),
+            });
+        }
+        self.betrokkenen_geinformeerd_op = Some(op);
+        self.herkomst.wijzig("betrokkenen geïnformeerd", nu);
         Ok(())
     }
 

@@ -6,6 +6,7 @@ use clap::Subcommand;
 use dpofg_audit::Handeling;
 use dpofg_domain::{
     incident::Herkomstkanaal,
+    incident::Zorgtrap,
     klokken::{verplichtingen_uit_incident, Zorgplichtcontext},
     Aantasting, Incident, Motivering, Risiconiveau, Volledig,
 };
@@ -144,6 +145,39 @@ pub enum Incidentopdracht {
         #[arg(long)]
         gemeld: Option<String>,
     },
+    /// Leg vast dat de melding aan de toezichthouder is verzonden.
+    ///
+    /// Dit is de handeling die de meldklok afdoet. Zolang zij ontbreekt, staat
+    /// de verplichting in de werkbak, ook nadat er is gemeld.
+    Melden {
+        /// Het kenmerk van het incident.
+        kenmerk: String,
+        /// Wanneer is verzonden. Standaard: nu.
+        #[arg(long)]
+        op: Option<String>,
+        /// Het referentienummer dat de toezichthouder teruggaf.
+        #[arg(long)]
+        referentie: Option<String>,
+    },
+    /// Leg vast dat de betrokkenen zijn geïnformeerd.
+    Mededeling {
+        /// Het kenmerk van het incident.
+        kenmerk: String,
+        /// Wanneer. Standaard: nu.
+        #[arg(long)]
+        op: Option<String>,
+    },
+    /// Leg vast dat een trap van de zorgplichtmeldketen is verzonden.
+    Zorgmelding {
+        /// Het kenmerk van het incident.
+        kenmerk: String,
+        /// Welke trap.
+        #[arg(long, value_enum)]
+        trap: Trapkeuze,
+        /// Wanneer. Standaard: nu.
+        #[arg(long)]
+        op: Option<String>,
+    },
     /// Rond het incident af: oorzaak, maatregelen en afhandelmoment.
     ///
     /// Zonder oorzaakcategorie is er geen patroon te zien over incidenten heen,
@@ -175,6 +209,25 @@ pub enum Incidentopdracht {
         #[arg(long, default_value = "0")]
         afkoeluren: i64,
     },
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+pub enum Trapkeuze {
+    Waarschuwing,
+    Melding,
+    Eindrapport,
+    Voortgang,
+}
+
+impl From<Trapkeuze> for Zorgtrap {
+    fn from(k: Trapkeuze) -> Self {
+        match k {
+            Trapkeuze::Waarschuwing => Zorgtrap::Waarschuwing,
+            Trapkeuze::Melding => Zorgtrap::Melding,
+            Trapkeuze::Eindrapport => Zorgtrap::Eindrapport,
+            Trapkeuze::Voortgang => Zorgtrap::Voortgang,
+        }
+    }
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -275,6 +328,15 @@ pub fn draai(o: Incidentopdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>) 
             gemeld.as_deref(),
             nu,
         ),
+        Incidentopdracht::Melden { kenmerk, op, referentie } => {
+            melden(&mut kluis, &kenmerk, op.as_deref(), referentie, nu)
+        }
+        Incidentopdracht::Mededeling { kenmerk, op } => {
+            mededeling(&mut kluis, &kenmerk, op.as_deref(), nu)
+        }
+        Incidentopdracht::Zorgmelding { kenmerk, trap, op } => {
+            zorgmelding(&mut kluis, &kenmerk, trap.into(), op.as_deref(), nu)
+        }
         Incidentopdracht::Afronden { kenmerk, oorzaak, maatregelen, afgehandeld } => {
             afronden(&mut kluis, &kenmerk, &oorzaak, &maatregelen, afgehandeld.as_deref(), nu)
         }
@@ -350,6 +412,82 @@ fn verwerker(
             ));
         }
     }
+    Ok(())
+}
+
+fn melden(
+    kluis: &mut Kluis,
+    kenmerk: &str,
+    op: Option<&str>,
+    referentie: Option<String>,
+    nu: DateTime<Utc>,
+) -> Result<()> {
+    let mut i = zoek(kluis, kenmerk)?;
+    let moment = match op {
+        Some(t) => lees_tijdstip(t)?,
+        None => nu,
+    };
+    i.leg_melding_vast(moment, referentie, nu)?;
+    bewaar(kluis, &i, Handeling::MeldingVerzonden, "melding aan de toezichthouder", nu)?;
+
+    gelukt(&format!("de melding van {kenmerk} is vastgelegd"));
+    if let Some(anker) = i.anker_meldklok() {
+        let uren = (moment - anker).num_hours();
+        terzijde(&format!("{uren} uur na het anker van de meldklok"));
+    }
+    match &i.meldreferentie {
+        Some(r) => terzijde(&format!("referentie {r}")),
+        None => let_op(
+            "Er is geen referentienummer vastgelegd. Zonder referentie is de verzending later \
+             alleen met uw eigen opgave te onderbouwen.",
+        ),
+    }
+    terzijde("de meldklok staat hiermee op voldaan en verdwijnt uit 'dpofg werkbak'");
+    Ok(())
+}
+
+fn mededeling(kluis: &mut Kluis, kenmerk: &str, op: Option<&str>, nu: DateTime<Utc>) -> Result<()> {
+    let mut i = zoek(kluis, kenmerk)?;
+    let moment = match op {
+        Some(t) => lees_tijdstip(t)?,
+        None => nu,
+    };
+    i.leg_mededeling_vast(moment, nu)?;
+    bewaar(kluis, &i, Handeling::RecordGewijzigd, "betrokkenen geïnformeerd", nu)?;
+
+    gelukt(&format!("de mededeling aan de betrokkenen van {kenmerk} is vastgelegd"));
+    terzijde("art. 34 lid 1 AVG");
+    Ok(())
+}
+
+fn zorgmelding(
+    kluis: &mut Kluis,
+    kenmerk: &str,
+    trap: Zorgtrap,
+    op: Option<&str>,
+    nu: DateTime<Utc>,
+) -> Result<()> {
+    let mut i = zoek(kluis, kenmerk)?;
+    let moment = match op {
+        Some(t) => lees_tijdstip(t)?,
+        None => nu,
+    };
+    i.leg_zorgverzending_vast(trap, moment, nu)?;
+    bewaar(
+        kluis,
+        &i,
+        Handeling::MeldingVerzonden,
+        &format!("{} verzonden", trap.omschrijving()),
+        nu,
+    )?;
+
+    gelukt(&format!("de {} van {kenmerk} is vastgelegd", trap.omschrijving()));
+    let verzonden: Vec<&str> = Zorgtrap::alle()
+        .into_iter()
+        .filter(|t| i.zorgketen.van(*t).is_some())
+        .map(|t| t.omschrijving())
+        .collect();
+    terzijde(&format!("verzonden: {}", verzonden.join(", ")));
     Ok(())
 }
 
