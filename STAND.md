@@ -40,6 +40,8 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Betrokkenenverzoeken | werkt | Maandtermijn met beide lezingen, vindplaatsen uit het register, art. 19-kennisgeving, art. 12 lid 4-bericht |
 | Woo-spoor | werkt | Eigen beslistermijn van vier weken, weigeringsgronden gescheiden in absoluut en relatief, zienswijze van derden |
 | Redactieregie | werkt | Profiel, uitlevering aan extern hulpmiddel, terugleescontrole; verstrekking geblokkeerd tot die slaagt |
+| Wpg-spoor | werkt | Toepasselijkheid met motivering, jaarlijkse controle en vierjaarlijkse audit, verbeterplan met eigenaar per maatregel |
+| Veldmapping | werkt | Eén profiel per bronsysteem, verschilrapport in twee richtingen, genegeerde velden met reden |
 
 ---
 
@@ -94,6 +96,8 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 **De tool redigeert niet zelf, en controleert maar één van de drie dingen machinaal.** De redactieregie wijst aan wát er weg moet en levert uit aan een extern hulpmiddel; het bewerken van een tekstlaag of het zwart maken van beeld blijft daarbuiten. Van de drie terugleescontroles kan het programma er precies één zelf: zoeken of de letterlijke waarden nog in de bytes van het teruggeleverde bestand staan. Dat vindt de meest gemaakte fout — een zwart vlak over tekst die in de tekstlaag blijft staan — en het vindt hem **niet** wanneer die tekst in een samengedrukte stroom zit. De metagegevens en het beeld moeten buiten de tool worden gecontroleerd. Een controle die niet is uitgevoerd telt niet als geslaagd en houdt de verstrekking tegen, tot een tweede persoon vastlegt dat hij het heeft nagekeken.
 
+**De veldmapping leest geen systemen uit.** Zij vergelijkt een lijst veldnamen met de categorieën in de registerregel. Die lijst komt van de beheerder van het bronsysteem; de tool legt geen verbinding en ontleedt geen bestandsformaat. Dat is bewust: een importeur per bron is drie keer hetzelfde onderhoud voor hetzelfde probleem, en het openen van een verbinding botst met het uitgangspunt dat het programma nooit een netwerkverbinding opent.
+
 **Geen hardwaretoken.** Het platformhoofdstuk beschrijft hoe FIDO2 en PIV per besturingssysteem werken; de implementatie ontbreekt.
 
 **De netwerkstiltetest draait alleen op Linux.** De bouwstraat controleert met `strace` dat het programma geen verbinding opent. Voor macOS en Windows is een gelijkwaardige controle nodig.
@@ -104,8 +108,8 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 | | |
 |---|---|
-| Rust-code | ~16.700 regels, zonder commentaar en lege regels |
-| Tests | 502 testfuncties, 506 uitgevoerde tests |
+| Rust-code | ~18.200 regels, zonder commentaar en lege regels |
+| Tests | 532 testfuncties, 536 uitgevoerde tests |
 | Documentatie | ~4.700 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

@@ -1001,6 +1001,136 @@ fn een_pad_met_een_accent_laat_het_logboek_heel() {
 }
 
 // --------------------------------------------------------------------------
+// Het Wpg-spoor
+// --------------------------------------------------------------------------
+
+/// Dat het regime niet geldt, is even goed een standpunt.
+#[test]
+fn niet_van_toepassing_sluit_het_wpg_spoor_met_een_motivering() {
+    let p = Proef::nieuw();
+    p.moet("wpg nieuw WPG-2026 'handhaving openbare orde'");
+    let uit = p.moet("wpg toepasselijkheid WPG-2026 --motivering 'de organisatie verwerkt geen politiegegevens; de boa-taken zijn uitbesteed'");
+    assert!(uit.contains("niet van toepassing"));
+    assert!(uit.contains("alle verplichte onderdelen"), "kreeg:\n{uit}");
+}
+
+/// Een rapport opbergen zonder plan is de manier waarop een audit geen gevolg
+/// krijgt.
+#[test]
+fn een_audit_met_bevindingen_vraagt_een_verbeterplan() {
+    let p = Proef::nieuw();
+    p.moet("wpg nieuw WPG-2026 'handhaving openbare orde'");
+    p.moet("wpg toepasselijkheid WPG-2026 --van-toepassing --motivering 'de boa-taken worden in eigen beheer uitgevoerd'");
+    p.moet("wpg controle WPG-2026 2026-03-01T09:00:00Z --door 'de interne auditdienst'");
+
+    let audit = p.moet("wpg controle WPG-2026 2026-04-01T09:00:00Z --door 'een externe auditor' --extern-uitgevoerd --bevindingen 3 --rapport AUD-2026-01");
+    assert!(audit.contains("3 bevinding(en)"));
+    assert!(audit.contains("geen gevolg krijgt"));
+    assert!(audit.contains("verbeterplan"));
+
+    p.moet("wpg verbeterplan WPG-2026 --door 'de directie' --maatregel 'logging aanzetten | de teamleider | 2027-01-31'");
+    let toon = p.moet("wpg toon WPG-2026");
+    assert!(toon.contains("alle verplichte onderdelen"), "kreeg:\n{toon}");
+}
+
+#[test]
+fn een_maatregel_zonder_eigenaar_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("wpg nieuw WPG-2026 'handhaving openbare orde'");
+    let uit = p.moet_falen(
+        "wpg verbeterplan WPG-2026 --door 'de directie' --maatregel 'logging aanzetten'",
+    );
+    assert!(uit.contains("eigenaar"), "kreeg:\n{uit}");
+}
+
+/// De norm komt uit het kennispakket en niet uit de code.
+#[test]
+fn een_verlopen_audit_wordt_gemeld_met_de_norm_erbij() {
+    let p = Proef::nieuw();
+    p.moet("wpg nieuw WPG-2026 'handhaving openbare orde'");
+    p.moet("wpg toepasselijkheid WPG-2026 --van-toepassing --motivering 'de boa-taken worden in eigen beheer uitgevoerd'");
+    p.moet("wpg controle WPG-2026 2021-01-01T09:00:00Z --door 'een externe auditor' --extern-uitgevoerd");
+
+    let uit = p.moet("wpg toon WPG-2026");
+    assert!(uit.contains("de norm is 48"), "kreeg:\n{uit}");
+    assert!(uit.contains("art. 33 lid 3 Wet politiegegevens"));
+}
+
+// --------------------------------------------------------------------------
+// De veldmapping
+// --------------------------------------------------------------------------
+
+fn mapping_opzetten(p: &Proef) {
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("register vul 0412-K --veld gegevens --waarde naam");
+    p.moet("mapping nieuw MAP-0412 'verzuimsysteem' --bron verzuimsysteem --verwerking 0412-K");
+    p.moet("mapping koppel MAP-0412 --bronveld achternaam --categorie naam");
+}
+
+/// De kernuitkomst: een veld dat niemand heeft aangewezen, is een verwerking
+/// die niet in het register staat.
+#[test]
+fn een_nieuw_veld_in_het_systeem_valt_op() {
+    let p = Proef::nieuw();
+    mapping_opzetten(&p);
+
+    let velden = p._map.path().join("velden.txt");
+    std::fs::write(&velden, "achternaam\nbsn\n").unwrap();
+
+    let uit = p.moet(&format!("mapping vergelijk MAP-0412 {}", velden.display()));
+    assert!(uit.contains("Staat in het systeem, niet in het register"), "kreeg:\n{uit}");
+    assert!(uit.contains("bsn"));
+    assert!(uit.contains("verwerking die niet is vastgelegd"));
+}
+
+/// Een register dat te veel noemt is even onbetrouwbaar als een register dat te
+/// weinig noemt.
+#[test]
+fn een_categorie_zonder_veld_valt_ook_op() {
+    let p = Proef::nieuw();
+    mapping_opzetten(&p);
+    p.moet("register vul 0412-K --veld gegevens --waarde gezondheid");
+
+    let velden = p._map.path().join("velden.txt");
+    std::fs::write(&velden, "achternaam\n").unwrap();
+
+    let uit = p.moet(&format!("mapping vergelijk MAP-0412 {}", velden.display()));
+    assert!(uit.contains("Staat in het register, niet in het systeem"), "kreeg:\n{uit}");
+    assert!(uit.contains("gezondheid"));
+}
+
+/// Een genegeerd veld zonder reden is een weggeklikte melding.
+#[test]
+fn negeren_vergt_een_reden_en_neemt_de_afwijking_weg() {
+    let p = Proef::nieuw();
+    mapping_opzetten(&p);
+
+    let velden = p._map.path().join("velden.txt");
+    std::fs::write(&velden, "achternaam\naangemaakt_op\n").unwrap();
+    let voor = p.moet(&format!("mapping vergelijk MAP-0412 {}", velden.display()));
+    assert!(voor.contains("aangemaakt_op"));
+
+    p.moet("mapping negeer MAP-0412 --bronveld aangemaakt_op --reden 'technisch veld zonder persoonsgegevens'");
+    let na = p.moet(&format!("mapping vergelijk MAP-0412 {}", velden.display()));
+    assert!(na.contains("geen afwijkingen"), "kreeg:\n{na}");
+    assert!(na.contains("buiten beschouwing"));
+}
+
+/// Een kopregel met puntkomma's is even goed invoer als één naam per regel.
+#[test]
+fn een_kopregel_met_scheidingstekens_wordt_ook_gelezen() {
+    let p = Proef::nieuw();
+    mapping_opzetten(&p);
+
+    let velden = p._map.path().join("kop.csv");
+    std::fs::write(&velden, "achternaam;bsn;afdeling\n").unwrap();
+    let uit = p.moet(&format!("mapping vergelijk MAP-0412 {}", velden.display()));
+    assert!(uit.contains("3 veldnaam/namen gelezen"), "kreeg:\n{uit}");
+    assert!(uit.contains("bsn"));
+    assert!(uit.contains("afdeling"));
+}
+
+// --------------------------------------------------------------------------
 // De redactieregie
 // --------------------------------------------------------------------------
 

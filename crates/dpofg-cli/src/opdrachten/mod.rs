@@ -6,12 +6,14 @@ pub mod dpia;
 pub mod incident;
 pub mod kluis;
 pub mod logboek;
+pub mod mapping;
 pub mod pakket;
 pub mod redactie;
 pub mod register;
 pub mod termijn;
 pub mod verzoek;
 pub mod woo;
+pub mod wpg;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};

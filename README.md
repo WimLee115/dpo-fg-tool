@@ -99,10 +99,12 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Betrokkenenverzoeken (art. 15 t/m 22) met de maandtermijn | werkt |
 | Woo-spoor met eigen beslistermijn en weigeringsgronden | werkt |
 | Redactieregie met verplichte terugleescontrole | werkt |
+| Wpg-spoor met de audit- en controlecyclus | werkt |
+| Veldmapping met verschilrapport tegen het register | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |
-| Leveranciersregister, doorgifterecord, Wpg-spoor | nog niet |
+| Leveranciersregister, doorgifterecord, belangenafweging | nog niet |
 | Grafische schil | nog niet |
 
 Vraag de werkelijke dekking op met `dpofg controle --dekking`. Het aantal regels in de catalogus zegt niets over wat er wordt bewaakt; die opdracht wel.

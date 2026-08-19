@@ -71,6 +71,14 @@ enum Opdracht {
     #[command(subcommand)]
     Redactie(opdrachten::redactie::Redactieopdrachtkeuze),
 
+    /// Het spoor van de Wet politiegegevens.
+    #[command(subcommand)]
+    Wpg(opdrachten::wpg::Wpgopdracht),
+
+    /// Veldmapping: het register naast de werkelijkheid leggen.
+    #[command(subcommand)]
+    Mapping(opdrachten::mapping::Mappingopdracht),
+
     /// De controleregels over de hele verzameling draaien.
     Controle(opdrachten::controle::Controleopties),
 
@@ -125,6 +133,8 @@ fn draai() -> Result<()> {
         Opdracht::Verzoek(o) => opdrachten::verzoek::draai(o, args.kluis, nu),
         Opdracht::Woo(o) => opdrachten::woo::draai(o, args.kluis, nu),
         Opdracht::Redactie(o) => opdrachten::redactie::draai(o, args.kluis, nu),
+        Opdracht::Wpg(o) => opdrachten::wpg::draai(o, args.kluis, nu),
+        Opdracht::Mapping(o) => opdrachten::mapping::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),

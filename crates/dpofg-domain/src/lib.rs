@@ -66,11 +66,13 @@ pub mod dpia;
 mod error;
 pub mod incident;
 pub mod klokken;
+pub mod mapping;
 pub mod redactie;
 pub mod verwerking;
 pub mod verzoek;
 pub mod volledigheid;
 pub mod woo;
+pub mod wpg;
 
 pub use basis::{Compartiment, Herkomst, Id, Motivering, Overgenomen, Status};
 pub use dpia::{Dpia, Restrisico, Restrisiconiveau, Voortoets};
@@ -80,6 +82,7 @@ pub use klokken::{
     verplichtingen_uit_incident, AfgeleideVerplichting, Ankertype, Verplichtingcode,
     Zorgplichtcontext,
 };
+pub use mapping::{Mappingprofiel, Veldkoppeling, Verschilrapport};
 pub use redactie::{Controlesoort, Controleuitkomst, Redactiecategorie, Redactieopdracht};
 pub use verwerking::{Bewaartermijn, Ontvanger, Verwerking};
 pub use verzoek::{

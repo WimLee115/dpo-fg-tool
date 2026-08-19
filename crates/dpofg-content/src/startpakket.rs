@@ -182,6 +182,32 @@ fn termijnen() -> Vec<Termijnsoort> {
             Aanvang::VanafGebeurtenis,
             "art. 4.4 lid 4 Wet open overheid",
         ),
+        // --- Wet politiegegevens ---
+        //
+        // De audit is vierjaarlijks en de interne controle jaarlijks. Beide
+        // worden hier als maandtermijn uitgedrukt en niet als lopende klok:
+        // een deadline vier jaar vooruit valt buiten de dekking van de
+        // feestdagenkalender, en dan zou de motor terecht weigeren te rekenen
+        // over een termijn waarvan de einddatum er niet toe doet op de dag
+        // nauwkeurig.
+        Termijnsoort::kalender(
+            "WPG-EXTERNE-AUDIT",
+            "externe audit op de verwerking van politiegegevens",
+            48,
+            Eenheid::Maanden,
+            Rechtsstelsel::NationaalRecht,
+            Aanvang::VanafGebeurtenis,
+            "art. 33 lid 3 Wet politiegegevens",
+        ),
+        Termijnsoort::kalender(
+            "WPG-INTERNE-CONTROLE",
+            "interne controle op de verwerking van politiegegevens",
+            12,
+            Eenheid::Maanden,
+            Rechtsstelsel::NationaalRecht,
+            Aanvang::VanafGebeurtenis,
+            "art. 33 lid 1 Wet politiegegevens",
+        ),
         // --- Zelf vastgestelde termijnen ---
         Termijnsoort::kalender(
             "INTERN-REGISTERHERZIENING",
@@ -358,7 +384,8 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                 "de negen criteria voor een effectbeoordeling en de drempel van twee",
                 "de zesendertig maanden voor de herbeoordeling van een effectbeoordeling",
                 "de beslistermijn en de verdagingstermijn van de Wet open overheid",
-                "de opsomming van weigeringsgronden en of die volledig is"
+                "de opsomming van weigeringsgronden en of die volledig is",
+                "de frequentie van de audit en de interne controle onder de Wet politiegegevens"
             ]
         }),
     );
