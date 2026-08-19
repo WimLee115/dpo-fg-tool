@@ -26,6 +26,31 @@ De tool draait op **Linux, macOS en Windows** als gelijkwaardige platforms.
 | **Geen vendor lock-in** | Alles is exporteerbaar in open formaten. De gegevens zijn en blijven van de organisatie. |
 | **Nederlands eerst** | Terminologie, formulieren en sjablonen volgen de Nederlandse praktijk en de richtsnoeren van de Autoriteit Persoonsgegevens. |
 
+## Installeren
+
+Er is een beheerscript dat bouwt, plaatst, bijwerkt en verwijdert. Het raakt
+uw gegevens nooit aan: de kluis staat buiten de programmamap en blijft bij het
+verwijderen staan tenzij u het woord `WISSEN` overtypt.
+
+```sh
+# Linux en macOS
+./installatie/dpofg-beheer.sh            # menu
+./installatie/dpofg-beheer.sh stand      # wat staat waar
+./installatie/dpofg-beheer.sh installeren
+./installatie/dpofg-beheer.sh bijwerken
+./installatie/dpofg-beheer.sh verwijderen
+```
+
+```powershell
+# Windows
+.\installatie\dpofg-beheer.ps1
+.\installatie\dpofg-beheer.ps1 stand
+```
+
+Nodig om te bouwen: Rust, Node.js met pnpm, en op Linux
+`libwebkit2gtk-4.1-dev`. Het script noemt wat er ontbreekt voordat het begint.
+Liever met de hand:
+
 ## Snel beginnen
 
 ```sh
