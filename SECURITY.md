@@ -51,6 +51,17 @@ De volgende maatregelen zijn onderdeel van het productontwerp en worden bij elke
 - Vastgezette afhankelijkheden, een softwarestuklijst (SBOM) per release en ondertekende releases.
 - Geautomatiseerde controle op bekende kwetsbaarheden in afhankelijkheden.
 
+## De ondertekenidentiteit van een installatie
+
+Elk kluisbestand draagt sinds de uitgave met vast sleutelbeheer één Ed25519-sleutelpaar. Daarmee worden alle ankers en dossiermanifesten van die kluis ondertekend; de publieke helft is met `dpofg kluis sleutel` op te vragen en hoort langs een ánder kanaal dan het dossier te worden gepubliceerd.
+
+Wat dat betekent voor het dreigingsmodel:
+
+- **De privésleutel bestaat blijvend.** Voordien werd per stuk een sleutelpaar gemaakt en meteen weggegooid; er viel niets te stelen. Nu wel. Het zaad staat uitsluitend versleuteld in het kluisbestand, gewikkeld onder de kluissleutel, en komt nooit onversleuteld op schijf.
+- **Kluisbestand plus wachtwoordzin is voldoende om te ondertekenen.** Wie beide heeft, kan ankers en dossiers produceren die niet van die van de organisatie te onderscheiden zijn. Behandel een reservekopie van de kluis daarom als sleutelmateriaal, en niet alleen als gegevens.
+- **Er is geen intrekking.** Raakt een sleutel weg, dan is de enige weg: een nieuwe kluis, de nieuwe sleutel publiceren, en de oude sleutel ernaast blijven vermelden met de datum vanaf wanneer hij niet meer geldt. Reeds uitgeleverde dossiers blijven met de oude sleutel controleerbaar; dat is onvermijdelijk, want de handtekening eronder verandert niet.
+- **Een kopie van een kluis draagt dezelfde identiteit.** Cryptografisch zijn origineel en kopie niet te onderscheiden. Wel zichtbaar: twee kopieën die beide doorwerken leveren ankers op met hetzelfde volgnummer, een verschillende hash en dezelfde ondertekenaar — een vork die aan de installatie is toe te schrijven.
+
 ## Grenzen van het dreigingsmodel
 
 Buiten scope vallen aanvallen waarbij het onderliggende besturingssysteem al volledig is gecompromitteerd met de rechten van de gebruiker op het moment dat de kluis is ontgrendeld, alsook fysieke aanvallen op ontgrendelde apparatuur. Deze zijn beschreven in het dreigingsmodel in de projectdocumentatie.

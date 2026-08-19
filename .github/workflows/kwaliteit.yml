@@ -127,10 +127,16 @@ jobs:
           strace -f -e trace=network -o "$RUNNER_TEMP/netwerk2.log" \
             ./target/debug/dpofg register nieuw X Y --eigenaar Z > /dev/null
 
+          # De sleutelopdracht opent de kluis alleen-lezen en zonder wachtwoord;
+          # juist zo'n afwijkend pad verdient de controle.
+          strace -f -e trace=network -o "$RUNNER_TEMP/netwerk3.log" \
+            ./target/debug/dpofg kluis sleutel > /dev/null
+
           # socket() naar een netwerkfamilie is de aanwijzing waar het om gaat.
           # AF_UNIX-sockets zijn lokaal en tellen niet mee.
           if grep -E 'socket\(AF_INET|socket\(AF_INET6|connect\(' \
-               "$RUNNER_TEMP/netwerk.log" "$RUNNER_TEMP/netwerk2.log"; then
+               "$RUNNER_TEMP/netwerk.log" "$RUNNER_TEMP/netwerk2.log" \
+               "$RUNNER_TEMP/netwerk3.log"; then
             echo "::error::het programma opent een netwerkverbinding; dat hoort niet te kunnen"
             exit 1
           fi

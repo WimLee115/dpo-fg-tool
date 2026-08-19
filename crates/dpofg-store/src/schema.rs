@@ -27,9 +27,16 @@ use rusqlite::Connection;
 use crate::Resultaat;
 
 /// De schemaversie die deze uitgave schrijft en leest.
-pub const SCHEMAVERSIE: u32 = 1;
+pub const SCHEMAVERSIE: u32 = 2;
 
 /// Legt het schema aan of werkt het bij.
+///
+/// Alle migraties draaien met de ophoging van `user_version` in **één**
+/// transactie. Zonder dat zou een afbreking halverwege — stroomuitval, een
+/// afgeschoten proces — een kluis achterlaten met een deel van de tabellen en
+/// `user_version` op de oude waarde: bij de volgende poging draait de migratie
+/// dan opnieuw en loopt hij stuk op een tabel die al bestaat. `user_version` is
+/// in SQLite onderdeel van de transactie, dus dit werkt zoals het eruitziet.
 pub fn migreer(conn: &Connection) -> Resultaat<u32> {
     let huidig: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
 
@@ -43,12 +50,30 @@ pub fn migreer(conn: &Connection) -> Resultaat<u32> {
         return Ok(huidig);
     }
 
-    if huidig < 1 {
-        migratie_1(conn)?;
-    }
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    let uitkomst = (|| -> Resultaat<()> {
+        if huidig < 1 {
+            migratie_1(conn)?;
+        }
+        if huidig < 2 {
+            migratie_2(conn)?;
+        }
+        conn.pragma_update(None, "user_version", SCHEMAVERSIE)?;
+        Ok(())
+    })();
 
-    conn.pragma_update(None, "user_version", SCHEMAVERSIE)?;
-    Ok(SCHEMAVERSIE)
+    match uitkomst {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")?;
+            Ok(SCHEMAVERSIE)
+        }
+        Err(fout) => {
+            // De terugdraaiing mag de oorspronkelijke fout niet verdringen: die
+            // zegt wát er misging, en dat is wat de gebruiker moet lezen.
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(fout)
+        }
+    }
 }
 
 /// Migratie 1: de eerste indeling.
@@ -203,6 +228,43 @@ fn migratie_1(conn: &Connection) -> Resultaat<()> {
             uitgever_sleutel TEXT NOT NULL,
             geinstalleerd_op TEXT NOT NULL,
             inhoud_json   TEXT NOT NULL
+        ) STRICT;
+        "#,
+    )?;
+    Ok(())
+}
+
+/// Migratie 2: de ondertekenidentiteit van de installatie.
+///
+/// Zonder eigen transactie: [`migreer`] zet er al één omheen.
+fn migratie_2(conn: &Connection) -> Resultaat<()> {
+    conn.execute_batch(
+        r#"
+        -- ------------------------------------------------------------------
+        -- De vaste ondertekenidentiteit van deze installatie.
+        --
+        -- `publieke_sleutel` staat in klare tekst. Dat is geen omissie: de
+        -- publieke helft ís publiek, en hij moet voor te lezen zijn zonder het
+        -- wachtwoord — anders wordt het intypen van een wachtwoordzin voor het
+        -- opvragen van publiek materiaal een gewoonte. Precedent in dit schema:
+        -- `kennispakket.uitgever_sleutel`.
+        --
+        -- `zaad_envelop` bevat het ondertekenzaad, uitsluitend gewikkeld onder
+        -- de kluissleutel. Daardoor overleeft de identiteit een
+        -- wachtwoordwijziging: die vervangt alleen de wikkeling van de
+        -- kluissleutel zelf.
+        --
+        -- Er staat één rij in, altijd. Twee identiteiten in één kluis zouden
+        -- betekenen dat twee ankers van dezelfde kluis een andere ondertekenaar
+        -- dragen, en dan is de vergelijking bij de ontvanger waardeloos.
+        -- ------------------------------------------------------------------
+        CREATE TABLE IF NOT EXISTS installatie (
+            id               INTEGER PRIMARY KEY CHECK (id = 1),
+            generatie        INTEGER NOT NULL,
+            publieke_sleutel TEXT    NOT NULL,
+            zaad_envelop     BLOB    NOT NULL,
+            aangemaakt_op    TEXT    NOT NULL,
+            programmaversie  TEXT    NOT NULL
         ) STRICT;
         "#,
     )?;

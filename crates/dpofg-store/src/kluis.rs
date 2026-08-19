@@ -17,11 +17,13 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 use dpofg_audit::{keten_aan, Actor, Gebeurtenis, Handeling, Ketenregel, Ketenstand};
 use dpofg_crypto::{
-    aead::{self, Binding},
+    aead::{self, Binding, Envelop},
+    identiteit::{Installatiesleutel, SigningKey},
     kdf::KdfParameters,
     keys::{Compartimenthoofd, Compartimentsleutel, GeopendeKluis, Kluishoofd},
     Wachtwoordzin,
 };
+use rusqlite::OpenFlags;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -29,6 +31,13 @@ use crate::{schema, Resultaat, StoreFout};
 
 /// Vaste aanduiding waaraan een kluisbestand te herkennen is.
 const KLUISMERK: i32 = 0x4450_4647; // "DPFG"
+
+/// Generatie van de ondertekenidentiteit.
+///
+/// Vast op 1 zolang er geen rotatie is. De kolom bestaat wél al, en het
+/// generatienummer gaat mee in de binding van de wikkeling, zodat rotatie later
+/// geen schemawijziging vergt.
+const GENERATIE: u32 = 1;
 
 /// Een geopende kluis.
 pub struct Kluis {
@@ -40,6 +49,9 @@ pub struct Kluis {
     /// De hoofden van alle compartimenten in deze kluis.
     compartimenten: BTreeMap<String, Compartimenthoofd>,
     ketenstand: Ketenstand,
+    /// De vaste ondertekenidentiteit van deze installatie.
+    installatie: Installatiesleutel,
+    installatie_aangemaakt_op: DateTime<Utc>,
 }
 
 impl std::fmt::Debug for Kluis {
@@ -49,8 +61,22 @@ impl std::fmt::Debug for Kluis {
             .field("compartimenten", &self.compartimenten.keys().collect::<Vec<_>>())
             .field("ontgrendeld", &self.ontgrendeld.keys().collect::<Vec<_>>())
             .field("logboekregels", &self.ketenstand.volgnummer)
+            .field("installatiesleutel", &kort(self.installatie.publieke_sleutel()))
             .finish()
     }
+}
+
+/// De eerste zestien tekens van een sleutel of hash, voor weergave.
+fn kort(waarde: &str) -> String {
+    waarde.chars().take(16).collect()
+}
+
+/// De publieke gegevens van de ondertekenidentiteit, zonder wachtwoord te lezen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Installatiekop {
+    pub publieke_sleutel: String,
+    pub generatie: u32,
+    pub aangemaakt_op: DateTime<Utc>,
 }
 
 /// Beknopte gegevens van een record, zonder de versleutelde inhoud.
@@ -98,6 +124,9 @@ impl Kluis {
             ],
         )?;
 
+        let (envelop, installatie) = sleutels.installatie_aanmaken(GENERATIE)?;
+        schrijf_installatie(&conn, GENERATIE, &installatie, &envelop, nu)?;
+
         let mut kluis = Self {
             conn,
             pad,
@@ -105,6 +134,8 @@ impl Kluis {
             ontgrendeld: BTreeMap::new(),
             compartimenten: BTreeMap::new(),
             ketenstand: Ketenstand::leeg(),
+            installatie,
+            installatie_aangemaakt_op: nu,
         };
 
         // Het algemene compartiment bestaat altijd.
@@ -122,7 +153,11 @@ impl Kluis {
                 "kluis",
                 "1",
                 dpofg_crypto::keys::COMPARTIMENT_ALGEMEEN,
-                format!("kluis aangemaakt met schemaversie {}", schema::SCHEMAVERSIE),
+                format!(
+                    "kluis aangemaakt met schemaversie {}; installatiesleutel {}",
+                    schema::SCHEMAVERSIE,
+                    kluis.installatie.publieke_sleutel()
+                ),
             ),
             None,
         )?;
@@ -167,8 +202,39 @@ impl Kluis {
 
         let ketenstand = lees_ketenstand(&conn)?;
 
-        let mut kluis =
-            Self { conn, pad, sleutels, ontgrendeld: BTreeMap::new(), compartimenten, ketenstand };
+        // De ondertekenidentiteit. Een kluis van schemaversie 1 heeft er nog
+        // geen; die wordt hier alsnog aangemaakt. Dat kan niet in
+        // `schema::migreer`, want die draait vóór het wachtwoord is verwerkt en
+        // heeft dus geen sleutelmateriaal om iets mee te wikkelen.
+        let bestaand = lees_installatie(&conn)?;
+        let (installatie, aangemaakt_op, was_nieuw) = match bestaand {
+            Some((generatie, publiek, envelop, aangemaakt_op)) => {
+                let sleutel = sleutels.installatie_openen(&envelop, generatie)?;
+                if sleutel.publieke_sleutel() != publiek {
+                    return Err(StoreFout::InstallatiesleutelWijktAf {
+                        in_kluis: publiek,
+                        uit_zaad: sleutel.publieke_sleutel().to_string(),
+                    });
+                }
+                (sleutel, aangemaakt_op, false)
+            }
+            None => {
+                let (envelop, sleutel) = sleutels.installatie_aanmaken(GENERATIE)?;
+                schrijf_installatie(&conn, GENERATIE, &sleutel, &envelop, nu)?;
+                (sleutel, nu, true)
+            }
+        };
+
+        let mut kluis = Self {
+            conn,
+            pad,
+            sleutels,
+            ontgrendeld: BTreeMap::new(),
+            compartimenten,
+            ketenstand,
+            installatie,
+            installatie_aangemaakt_op: aangemaakt_op,
+        };
 
         kluis.log(
             Gebeurtenis::nieuw(
@@ -183,11 +249,136 @@ impl Kluis {
             None,
         )?;
 
+        if was_nieuw {
+            // In de keten zelf vastleggen vanaf welk volgnummer de
+            // installatiesleutel geldt. Wat daarvóór is uitgeleverd, draagt een
+            // wegwerpsleutel en kan dus nooit met deze sleutel overeenkomen.
+            let publiek = kluis.installatie.publieke_sleutel().to_string();
+            kluis.log(
+                Gebeurtenis::nieuw(
+                    Handeling::InstallatiesleutelAangemaakt,
+                    Actor::systeem(),
+                    nu,
+                    "kluis",
+                    "1",
+                    dpofg_crypto::keys::COMPARTIMENT_ALGEMEEN,
+                    format!(
+                        "ondertekenidentiteit {publiek} aangemaakt; ankers en dossiers van vóór deze regel dragen een wegwerpsleutel"
+                    ),
+                ),
+                None,
+            )?;
+        }
+
         Ok(kluis)
     }
 
     pub fn pad(&self) -> &Path {
         &self.pad
+    }
+
+    /// De publieke installatiesleutel: 64 hexadecimale tekens.
+    ///
+    /// Dit is de waarde die in elk anker en elk dossiermanifest van deze kluis
+    /// terechtkomt, en die de organisatie langs een ander kanaal publiceert.
+    pub fn installatiesleutel(&self) -> &str {
+        self.installatie.publieke_sleutel()
+    }
+
+    /// Wanneer de ondertekenidentiteit is aangemaakt.
+    pub fn installatiesleutel_aangemaakt_op(&self) -> DateTime<Utc> {
+        self.installatie_aangemaakt_op
+    }
+
+    /// Tekent iets met de installatiesleutel.
+    ///
+    /// De enige uitgang naar de privésleutel. Er is bewust geen accessor die
+    /// de sleutel of het zaad teruggeeft: code die het sleutelmateriaal ergens
+    /// anders heen brengt, moet er dan opzettelijk uitzien. Een harde garantie
+    /// is dat niet — `SigningKey` is `Clone` — maar wel een leesbare.
+    pub fn onderteken_met<T>(&self, f: impl FnOnce(&SigningKey) -> T) -> T {
+        f(self.installatie.ondertekensleutel())
+    }
+
+    /// Leest de publieke installatiesleutel zonder de kluis te openen.
+    ///
+    /// Geen wachtwoord en geen sleutelafleiding. Bedoeld voor het publiceren
+    /// van de sleutel: een wachtwoordzin intypen om publiek materiaal voor te
+    /// lezen, is een gewoonte die je niet wilt aanleren.
+    ///
+    /// # Wat er wel en niet wordt gecontroleerd
+    ///
+    /// De kolom `publieke_sleutel` staat in klare tekst en is dus met een
+    /// gewone databasebewerking te wijzigen door iemand die het bestand kan
+    /// beschrijven maar het wachtwoord niet kent. Zou deze functie die waarde
+    /// ongetoetst teruggeven, dan zou juist die tegenstander de organisatie een
+    /// vreemde sleutel kunnen laten publiceren. De waarde wordt daarom
+    /// vergeleken met de sleutel die in het **ketenlogboek** staat: die is
+    /// opgenomen in de hashketen en dus niet te wijzigen zonder de keten te
+    /// breken.
+    ///
+    /// Wat hier níet gebeurt, is het narekenen van de hele keten — dat is
+    /// `dpofg logboek verifieer`, en dat vereist de kluis. Iemand die zowel de
+    /// kolom als de logregel aanpast, komt hierlangs; hij breekt daarmee wel de
+    /// keten, en dat is precies wat de verificatie aantoont.
+    ///
+    /// Het bestand wordt niet gewijzigd, maar SQLite kan er in de normale modus
+    /// een WAL-index (`-wal`, `-shm`) naast aanleggen. Lukt dat niet — een
+    /// alleen-lezen medium of een teruggezette reservekopie op een
+    /// niet-schrijfbare map — dan wordt het bestand als onveranderlijk geopend
+    /// en blijft de map onaangeroerd.
+    ///
+    /// Levert `Ok(None)` bij een kluis van schemaversie 1, die nog geen
+    /// identiteit draagt.
+    pub fn installatiesleutel_lezen(pad: impl AsRef<Path>) -> Resultaat<Option<Installatiekop>> {
+        let pad = pad.as_ref();
+        let conn = open_alleen_lezen(pad)?;
+
+        let merk: i32 = conn.pragma_query_value(None, "application_id", |r| r.get(0))?;
+        if merk != KLUISMERK {
+            return Err(StoreFout::GeenKluisbestand(pad.display().to_string()));
+        }
+
+        let heeft_tabel: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'installatie'",
+                [],
+                |r| r.get::<_, i32>(0),
+            )
+            .optional()?
+            .is_some();
+        if !heeft_tabel {
+            return Ok(None);
+        }
+
+        let rij = conn
+            .query_row(
+                "SELECT generatie, publieke_sleutel, aangemaakt_op FROM installatie WHERE id = 1",
+                [],
+                |r| {
+                    Ok((r.get::<_, i64>(0)? as u32, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+                },
+            )
+            .optional()?;
+
+        let Some((generatie, publieke_sleutel, aangemaakt)) = rij else {
+            return Ok(None);
+        };
+
+        if let Some(in_logboek) = sleutel_uit_logboek(&conn)? {
+            if !in_logboek.eq_ignore_ascii_case(&publieke_sleutel) {
+                return Err(StoreFout::InstallatiesleutelWijktAfVanLogboek {
+                    in_kluis: publieke_sleutel,
+                    in_logboek,
+                });
+            }
+        }
+
+        Ok(Some(Installatiekop {
+            publieke_sleutel,
+            generatie,
+            aangemaakt_op: parse_tijd(&aangemaakt),
+        }))
     }
 
     /// Of de afleidingsparameters onder de huidige norm liggen.
@@ -679,6 +870,108 @@ fn schrijf_logboekregel(conn: &Connection, regel: &Ketenregel) -> Resultaat<()> 
         ],
     )?;
     Ok(())
+}
+
+/// Opent een kluisbestand om er uitsluitend uit te lezen.
+///
+/// Eerst gewoon alleen-lezen: dan mag SQLite een WAL-index naast het bestand
+/// aanleggen, wat op een normale werkmap het snelst en het minst bijzonder is.
+/// Lukt dat niet omdat er niets geschreven mag worden, dan wordt het bestand
+/// als onveranderlijk geopend. Dat is bewust de terugval en niet de standaard:
+/// `immutable=1` is een belofte aan SQLite dat niemand het bestand wijzigt, en
+/// die belofte is onwaar zodra er een tweede, schrijvend proces in dezelfde
+/// kluis werkt.
+fn open_alleen_lezen(pad: &Path) -> Resultaat<Connection> {
+    let vlaggen = OpenFlags::SQLITE_OPEN_READ_ONLY;
+    match Connection::open_with_flags(pad, vlaggen) {
+        Ok(conn) => match conn.query_row("SELECT 1 FROM sqlite_master LIMIT 1", [], |_| Ok(())) {
+            Ok(()) | Err(rusqlite::Error::QueryReturnedNoRows) => Ok(conn),
+            Err(_) => open_onveranderlijk(pad),
+        },
+        Err(_) => open_onveranderlijk(pad),
+    }
+}
+
+fn open_onveranderlijk(pad: &Path) -> Resultaat<Connection> {
+    let uri = format!("file:{}?immutable=1", pad.display().to_string().replace('?', "%3f"));
+    Ok(Connection::open_with_flags(
+        uri,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+    )?)
+}
+
+/// De installatiesleutel zoals die in het ketenlogboek is vastgelegd.
+///
+/// Beide handelingen die de identiteit vastleggen zetten de publieke sleutel
+/// letterlijk in hun omschrijving: `kluis_aangemaakt` bij een nieuwe kluis,
+/// `installatiesleutel_aangemaakt` bij een kluis die uit schemaversie 1 is
+/// gemigreerd. Die omschrijving zit in de hashketen.
+fn sleutel_uit_logboek(conn: &Connection) -> Resultaat<Option<String>> {
+    let regel: Option<String> = conn
+        .query_row(
+            "SELECT regel_json FROM logboek
+             WHERE handeling IN ('installatiesleutel_aangemaakt', 'kluis_aangemaakt')
+             ORDER BY volgnummer DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+
+    let Some(json) = regel else { return Ok(None) };
+    let regel: Ketenregel = serde_json::from_str(&json)?;
+    Ok(hex_uit(&regel.gebeurtenis.omschrijving))
+}
+
+/// Haalt de eerste reeks van 64 hexadecimale tekens uit een tekst.
+fn hex_uit(tekst: &str) -> Option<String> {
+    tekst
+        .split(|c: char| !c.is_ascii_hexdigit())
+        .find(|w| w.len() == 64)
+        .map(|w| w.to_ascii_lowercase())
+}
+
+/// Schrijft de ondertekenidentiteit weg. Eén rij, altijd id 1.
+fn schrijf_installatie(
+    conn: &Connection,
+    generatie: u32,
+    sleutel: &Installatiesleutel,
+    envelop: &Envelop,
+    nu: DateTime<Utc>,
+) -> Resultaat<()> {
+    conn.execute(
+        "INSERT INTO installatie
+             (id, generatie, publieke_sleutel, zaad_envelop, aangemaakt_op, programmaversie)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5)",
+        params![
+            generatie,
+            sleutel.publieke_sleutel(),
+            envelop.naar_bytes(),
+            nu.to_rfc3339(),
+            env!("CARGO_PKG_VERSION"),
+        ],
+    )?;
+    Ok(())
+}
+
+/// Leest de rij met de ondertekenidentiteit, als die er is.
+#[allow(clippy::type_complexity)]
+fn lees_installatie(conn: &Connection) -> Resultaat<Option<(u32, String, Envelop, DateTime<Utc>)>> {
+    let rij: Option<(u32, String, Vec<u8>, String)> = conn
+        .query_row(
+            "SELECT generatie, publieke_sleutel, zaad_envelop, aangemaakt_op
+             FROM installatie WHERE id = 1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .optional()?;
+
+    match rij {
+        None => Ok(None),
+        Some((generatie, publiek, bytes, aangemaakt)) => {
+            let envelop = Envelop::uit_bytes(&bytes)?;
+            Ok(Some((generatie, publiek, envelop, parse_tijd(&aangemaakt))))
+        }
+    }
 }
 
 fn lees_ketenstand(conn: &Connection) -> Resultaat<Ketenstand> {

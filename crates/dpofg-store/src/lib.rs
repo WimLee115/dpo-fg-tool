@@ -23,7 +23,7 @@ pub mod kluis;
 pub mod schema;
 
 pub use error::{Resultaat, StoreFout};
-pub use kluis::{Kluis, Recordkop};
+pub use kluis::{Installatiekop, Kluis, Recordkop};
 pub use schema::SCHEMAVERSIE;
 
 /// Versie van deze crate.

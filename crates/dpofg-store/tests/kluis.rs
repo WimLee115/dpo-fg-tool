@@ -601,6 +601,269 @@ fn wachtwoord_wijzigen_herversleutelt_niets() {
 }
 
 // --------------------------------------------------------------------------
+// De ondertekenidentiteit van de installatie
+// --------------------------------------------------------------------------
+
+#[test]
+fn de_installatiesleutel_blijft_gelijk_na_openen() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+
+    let eerst = {
+        let k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+        assert_eq!(k.installatiesleutel().len(), 64);
+        assert_eq!(k.installatiesleutel_aangemaakt_op(), t(9));
+        k.installatiesleutel().to_string()
+    };
+
+    let k = Kluis::openen(&pad, &ww(), t(10)).unwrap();
+    assert_eq!(k.installatiesleutel(), eerst);
+    // De aanmaakdatum is die van het aanmaken, niet die van het openen.
+    assert_eq!(k.installatiesleutel_aangemaakt_op(), t(9));
+}
+
+#[test]
+fn twee_kluizen_krijgen_verschillende_installatiesleutels() {
+    let (_a, ka) = nieuwe_kluis();
+    let (_b, kb) = nieuwe_kluis();
+    assert_ne!(ka.installatiesleutel(), kb.installatiesleutel());
+}
+
+/// Hierop staat of valt de constructie: verandert de sleutel bij een
+/// wachtwoordwissel, dan is elk eerder uitgeleverd dossier niet meer aan deze
+/// installatie toe te schrijven.
+#[test]
+fn de_installatiesleutel_blijft_gelijk_na_een_wachtwoordwijziging() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    let nieuw_ww = Wachtwoordzin::nieuw("een heel andere voldoende lange zin");
+
+    let eerst = {
+        let mut k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+        let sleutel = k.installatiesleutel().to_string();
+        k.wachtwoord_wijzigen(&nieuw_ww, TEST, &actor(), t(10)).unwrap();
+        assert_eq!(k.installatiesleutel(), sleutel);
+        sleutel
+    };
+
+    let k = Kluis::openen(&pad, &nieuw_ww, t(11)).unwrap();
+    assert_eq!(k.installatiesleutel(), eerst);
+}
+
+#[test]
+fn het_ondertekenzaad_staat_niet_ruw_in_het_bestand() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    let zaad = {
+        let k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+        // `onderteken_met` is de enige uitgang naar de privésleutel; de test
+        // gebruikt hem om te kunnen zoeken naar wat er níet mag staan.
+        k.onderteken_met(|s| s.to_bytes())
+    };
+
+    // Een kluis bestaat door de write-ahead log uit drie bestanden; alle drie
+    // controleren, anders zegt de test minder dan zij lijkt te zeggen.
+    let mut gelezen = 0;
+    for achtervoegsel in ["", "-wal", "-shm"] {
+        let pad = pad.with_file_name(format!("test.dpofg{achtervoegsel}"));
+        let Ok(ruw) = std::fs::read(&pad) else { continue };
+        gelezen += 1;
+        assert!(
+            !ruw.windows(zaad.len()).any(|w| w == zaad),
+            "het ondertekenzaad staat leesbaar in {}",
+            pad.display()
+        );
+    }
+    assert!(gelezen >= 1, "er is geen enkel kluisbestand gelezen");
+}
+
+/// Een kluis die met de vorige uitgave is aangemaakt, krijgt bij het openen
+/// alsnog een identiteit — en dat feit landt in de keten.
+#[test]
+fn een_kluis_van_schemaversie_1_krijgt_bij_openen_een_installatiesleutel() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+
+    // De toestand van vóór deze uitgave nabootsen.
+    {
+        let conn = rusqlite::Connection::open(&pad).unwrap();
+        conn.execute("DROP TABLE installatie", []).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+    }
+
+    let k = Kluis::openen(&pad, &ww(), t(10)).unwrap();
+    assert_eq!(k.installatiesleutel().len(), 64);
+    assert_eq!(k.installatiesleutel_aangemaakt_op(), t(10));
+
+    let regels = k.logboek().unwrap();
+    let regel = regels
+        .iter()
+        .find(|r| r.gebeurtenis.handeling == Handeling::InstallatiesleutelAangemaakt)
+        .expect("het aanmaken hoort in de keten te staan");
+    assert!(regel.gebeurtenis.omschrijving.contains(k.installatiesleutel()));
+    assert!(regel.gebeurtenis.omschrijving.contains("wegwerpsleutel"));
+
+    // En bij een volgende opening komt er geen tweede regel bij.
+    drop(k);
+    let k = Kluis::openen(&pad, &ww(), t(11)).unwrap();
+    let aantal = k
+        .logboek()
+        .unwrap()
+        .iter()
+        .filter(|r| r.gebeurtenis.handeling == Handeling::InstallatiesleutelAangemaakt)
+        .count();
+    assert_eq!(aantal, 1);
+}
+
+/// De publieke sleutel staat in klare tekst zodat hij zonder wachtwoord te
+/// lezen is. Dat betekent dat iemand hem kan aanpassen — en dan moet de kluis
+/// dat merken, anders publiceert de organisatie een andere sleutel dan zij
+/// gebruikt.
+#[test]
+fn een_gewijzigde_publieke_sleutelkolom_wordt_opgemerkt() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+
+    {
+        let conn = rusqlite::Connection::open(&pad).unwrap();
+        conn.execute("UPDATE installatie SET publieke_sleutel = ?1 WHERE id = 1", ["f".repeat(64)])
+            .unwrap();
+    }
+
+    let fout = Kluis::openen(&pad, &ww(), t(10)).unwrap_err();
+    assert!(matches!(fout, StoreFout::InstallatiesleutelWijktAf { .. }));
+    assert!(fout.to_string().contains("het bestand is gewijzigd"));
+}
+
+#[test]
+fn de_publieke_sleutel_is_zonder_wachtwoord_te_lezen() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    let publiek = {
+        let k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+        k.installatiesleutel().to_string()
+    };
+
+    let voor = std::fs::metadata(&pad).unwrap().modified().unwrap();
+    let kop = Kluis::installatiesleutel_lezen(&pad).unwrap().expect("er is een sleutel");
+    let na = std::fs::metadata(&pad).unwrap().modified().unwrap();
+
+    assert_eq!(kop.publieke_sleutel, publiek);
+    assert_eq!(kop.generatie, 1);
+    assert_eq!(kop.aangemaakt_op, t(9));
+    assert_eq!(voor, na, "het lezen mag het kluisbestand niet aanraken");
+}
+
+/// De publicatieroute is de plaats waar een vervalste sleutel het meeste kwaad
+/// doet: wat hier uit komt, publiceert de organisatie. Een schrijver zónder
+/// wachtwoord mag daarom niet kunnen bepalen wat er wordt gepubliceerd.
+#[test]
+fn een_gewijzigde_sleutelkolom_wordt_ook_zonder_wachtwoord_opgemerkt() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+
+    {
+        let conn = rusqlite::Connection::open(&pad).unwrap();
+        conn.execute("UPDATE installatie SET publieke_sleutel = ?1 WHERE id = 1", ["f".repeat(64)])
+            .unwrap();
+    }
+
+    let fout = Kluis::installatiesleutel_lezen(&pad).unwrap_err();
+    assert!(matches!(fout, StoreFout::InstallatiesleutelWijktAfVanLogboek { .. }), "kreeg: {fout}");
+    assert!(fout.to_string().contains("publiceer deze waarde niet"));
+}
+
+/// Een kluis die uit schemaversie 1 is gemigreerd draagt de sleutel in een
+/// andere logregel; ook die moet de kruiscontrole voeden.
+#[test]
+fn de_kruiscontrole_werkt_ook_na_migratie_van_schemaversie_1() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+    {
+        let conn = rusqlite::Connection::open(&pad).unwrap();
+        conn.execute("DROP TABLE installatie", []).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+    }
+    let publiek = {
+        let k = Kluis::openen(&pad, &ww(), t(10)).unwrap();
+        k.installatiesleutel().to_string()
+    };
+    assert_eq!(Kluis::installatiesleutel_lezen(&pad).unwrap().unwrap().publieke_sleutel, publiek);
+
+    {
+        let conn = rusqlite::Connection::open(&pad).unwrap();
+        conn.execute("UPDATE installatie SET publieke_sleutel = ?1 WHERE id = 1", ["e".repeat(64)])
+            .unwrap();
+    }
+    assert!(matches!(
+        Kluis::installatiesleutel_lezen(&pad).unwrap_err(),
+        StoreFout::InstallatiesleutelWijktAfVanLogboek { .. }
+    ));
+}
+
+/// Het lezen mag geen bestand aanmaken op een medium waar niet geschreven kan
+/// worden — juist een teruggezette reservekopie of een archiefmedium is de
+/// plaats waar iemand de sleutel wil nalezen.
+#[cfg(unix)]
+#[test]
+fn de_sleutel_is_ook_van_een_niet_schrijfbare_map_te_lezen() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let map = TempDir::new().unwrap();
+    let submap = map.path().join("archief");
+    std::fs::create_dir(&submap).unwrap();
+    let pad = submap.join("test.dpofg");
+    let publiek = {
+        let k = Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+        k.installatiesleutel().to_string()
+    };
+    // De kluis netjes sluiten laat -wal en -shm verdwijnen.
+    for extra in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(pad.with_file_name(format!("test.dpofg{extra}")));
+    }
+
+    let oud = std::fs::metadata(&submap).unwrap().permissions();
+    std::fs::set_permissions(&submap, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    let gelezen = Kluis::installatiesleutel_lezen(&pad);
+    let bestanden: Vec<_> = std::fs::read_dir(&submap)
+        .unwrap()
+        .map(|r| r.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+
+    std::fs::set_permissions(&submap, oud).unwrap();
+
+    assert_eq!(gelezen.unwrap().unwrap().publieke_sleutel, publiek);
+    assert_eq!(bestanden, vec!["test.dpofg".to_string()], "er is iets naast de kluis aangelegd");
+}
+
+#[test]
+fn een_kluis_zonder_identiteit_levert_geen_sleutel_op() {
+    let map = TempDir::new().unwrap();
+    let pad = map.path().join("test.dpofg");
+    Kluis::aanmaken(&pad, &ww(), TEST, t(9)).unwrap();
+    {
+        let conn = rusqlite::Connection::open(&pad).unwrap();
+        conn.execute("DROP TABLE installatie", []).unwrap();
+    }
+    assert_eq!(Kluis::installatiesleutel_lezen(&pad).unwrap(), None);
+}
+
+#[test]
+fn de_debugweergave_van_de_kluis_toont_geen_sleutelmateriaal() {
+    let (_map, k) = nieuwe_kluis();
+    let weergave = format!("{k:?}");
+    // De publieke sleutel staat er afgekapt in; de volledige waarde niet, en
+    // sleutelmateriaal al helemaal niet.
+    assert!(weergave.contains(&k.installatiesleutel()[..16]));
+    assert!(!weergave.contains(k.installatiesleutel()));
+}
+
+// --------------------------------------------------------------------------
 // Schemaversie
 // --------------------------------------------------------------------------
 

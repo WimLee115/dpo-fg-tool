@@ -25,6 +25,7 @@ pub enum Handeling {
     SleutelGeroteerd,
     CompartimentAangemaakt,
     ParametersVerzwaard,
+    InstallatiesleutelAangemaakt,
 
     // --- gegevens ---
     RecordAangemaakt,
@@ -81,6 +82,7 @@ impl Handeling {
                 | Self::AnkerGeplaatst
                 | Self::IntegriteitsfoutVastgesteld
                 | Self::KlokafwijkingVastgesteld
+                | Self::InstallatiesleutelAangemaakt
         )
     }
 

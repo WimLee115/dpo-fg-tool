@@ -99,7 +99,15 @@ De handtekening is Ed25519 over:
 
 `sleutel` is de publieke sleutel (32 bytes, hex), `handtekening` de handtekening (64 bytes, hex).
 
+**Wat valt binnen en buiten de handtekening.** Binnen: `kluis_id`, `volgnummer`, `hash` en `tijdstip`. Buiten: `sleutel`, `handtekening` en `bewaarplaats`. Dat `bewaarplaats` erbuiten valt, betekent dat die aanduiding na ondertekening kan worden aangepast zonder dat de handtekening breekt; wie op de bewaarplaats afgaat, gaat af op een niet-ondertekende mededeling. Dat wordt in een volgende formaatversie rechtgezet.
+
 **Wat een anker wel en niet aantoont.** Het toont aan dat de houder van de bijbehorende privésleutel heeft verklaard dat de keten op dat punt stond. Of die sleutel toebehoort aan wie u verwacht, volgt hier niet uit — dat volgt uit de plaats waar het anker buiten het systeem is bewaard.
+
+**De installatiesleutel.** Sinds de uitgave met vast sleutelbeheer draagt `sleutel` één vaste waarde per kluisbestand: elk anker en elk dossiermanifest van dezelfde kluis is met dezelfde sleutel ondertekend. De organisatie publiceert die sleutel langs een ander kanaal — `dpofg kluis sleutel` toont hem. De vergelijking van `sleutel` met de gepubliceerde waarde is een **expliciete stap van de ontvanger**; zij volgt niet uit het bestand, want de sleutel staat erin en wie het bestand maakt, kiest die sleutel. `dpofg-verify --sleutel <64 hex>` doet die vergelijking.
+
+Ankers van vóór die uitgave dragen een sleutelpaar dat per anker is aangemaakt en daarna weggegooid. Die kunnen dus nooit met een gepubliceerde installatiesleutel overeenkomen. Zonder `--sleutel` blijven zij onverkort controleerbaar.
+
+Een ankerbestand met een veld dat niet in de opsomming hierboven staat, wordt geweigerd als onleesbaar. Een handtekening controleren over een object waaruit stilzwijgend iets is weggevallen, is geen controle.
 
 ---
 
@@ -155,9 +163,15 @@ De handtekening is Ed25519 over:
 "dpo-fg-tool dossiermanifest v1" ‖ len_be64(manifest_json) ‖ manifest_json
 ```
 
+`manifest_json` is het `manifest`-object, geserialiseerd in de veldvolgorde zoals hierboven, zonder toegevoegde witruimte. Optionele velden die geen waarde hebben, worden als `null` geschreven en niet weggelaten: `"periode_van": null` hoort erin te staan.
+
 De hash van elk stuk is `BLAKE3` over de bytes zoals ze in de bundel staan, hexadecimaal in kleine letters.
 
-**Het voorbehoud wordt meegetekend.** Wie de tekst afzwakt, verbreekt de handtekening. Dat is bewust: een dossier dat meer suggereert dan het waarmaakt, is bij een inspectie erger dan geen dossier.
+**Wat valt binnen en buiten de handtekening.** Binnen: het volledige `manifest`-object, inclusief het voorbehoud en de weglatingen. Buiten: `ondertekenaar` en `handtekening`. Wie `ondertekenaar` vervangt én opnieuw ondertekent met de bijbehorende sleutel, levert een zelfconsistent manifest op; alleen vergelijking met een langs een ander kanaal verkregen sleutel haalt dat eruit. Zie de installatiesleutel bij §2 — `ondertekenaar` draagt dezelfde waarde als `sleutel` in het anker van diezelfde kluis.
+
+Een manifest met een veld dat niet in het voorbeeld hierboven staat, wordt geweigerd als onleesbaar (afsluitcode 1) in plaats van dat het veld stilzwijgend wordt genegeerd.
+
+**Het voorbehoud wordt meegetekend.** Wie de tekst ná het ondertekenen afzwakt, verbreekt de handtekening. Wie hem *vóór* het ondertekenen afzwakt, levert een zelfconsistent manifest op — en juist dat geval heeft de aanleverende organisatie zelf in de hand. `dpofg-verify` vergelijkt de tekst daarom letterlijk met de vaste formulering en meldt een afwijking als een afwijking. Dat is bewust: een dossier dat meer suggereert dan het waarmaakt, is bij een inspectie erger dan geen dossier.
 
 **Weglatingen horen erin.** Wat bewust buiten het dossier is gelaten, staat met aantal en reden in het manifest. Verzwijgen wat er ontbreekt is de snelste manier om het vertrouwen in een dossier te verliezen.
 
@@ -168,20 +182,31 @@ De hash van elk stuk is `BLAKE3` over de bytes zoals ze in de bundel staan, hexa
 De meegeleverde binary `dpofg-verify` doet dit alles, leest uitsluitend, en vraagt geen wachtwoord:
 
 ```sh
-dpofg-verify dossier pad/naar/manifest.json
-dpofg-verify logboek pad/naar/logboek.json --anker pad/naar/anker.json
-dpofg-verify anker pad/naar/anker.json
+dpofg-verify dossier pad/naar/manifest.json [--sleutel <64 hex>]
+dpofg-verify logboek pad/naar/logboek.json --anker pad/naar/anker.json [--sleutel <64 hex>]
+dpofg-verify anker pad/naar/anker.json [--sleutel <64 hex>]
 ```
+
+`--sleutel` is de publieke installatiesleutel waarvan u het stuk verwacht, zoals de organisatie die heeft gepubliceerd. De vlag mag worden herhaald; één treffer volstaat. Zonder de vlag wordt de handtekening wel gecontroleerd, maar de herkomst niet — en dat wordt dan met zoveel woorden gemeld.
 
 Afsluitcodes:
 
 | Code | Betekenis |
 |---|---|
 | `0` | de controle is geslaagd |
-| `1` | een bestand kon niet worden gelezen of is niet leesbaar |
+| `1` | een bestand kon niet worden gelezen of is niet leesbaar, of de aanroep sluit zichzelf uit |
 | `2` | het dossier is gelezen maar klopt niet |
+| `3` | het stuk is gelezen en de handtekening klopt, maar niet van de opgegeven ondertekenaar |
 
-Het onderscheid tussen 1 en 2 telt voor wie dit in een script draait: een onleesbaar bestand is iets anders dan een dossier dat niet klopt.
+Het onderscheid tussen 1 en 2 telt voor wie dit in een script draait: een onleesbaar bestand is iets anders dan een dossier dat niet klopt. Code 3 is daar een derde geval naast: het stuk is niet gewijzigd, het komt alleen van een andere installatie.
+
+`--sleutel` bij `logboek` zonder `--anker` levert code 1 op en geen controle: in een logboek staat geen handtekening, alleen een anker draagt er een. Groen melden zou daar het gevaarlijkst zijn — wie dit in een script zet, leest het als "de herkomst is vastgesteld".
+
+De codes 0, 1 en 2 behouden hun betekenis. Code 3 kan uitsluitend optreden wanneer `--sleutel` is meegegeven; een script dat die vlag niet gebruikt, ziet nooit iets anders dan voorheen.
+
+Klopt er zowel iets aan de inhoud níet als aan de ondertekenaar, dan wint code 2. Wie een gewijzigd stuk in handen heeft, moet dát lezen en niet de mededeling dat het van iemand anders komt.
+
+Ankers en dossiers van vóór de uitgave met vast sleutelbeheer zijn met een wegwerpsleutel ondertekend en kunnen dus nooit met een gepubliceerde installatiesleutel overeenkomen. Zonder `--sleutel` blijven zij gewoon controleerbaar.
 
 Wie de binary niet vertrouwt, programmeert de controle na op basis van dit document. Dat is de bedoeling.
 
@@ -196,11 +221,21 @@ Het kluisbestand hoeft niet gecontroleerd te worden door een derde — het gaat 
 | Sleutelafleiding uit de wachtwoordzin | Argon2id, parameters in het kluishoofd |
 | Wikkeling van de kluissleutel | XChaCha20-Poly1305 |
 | Wikkeling van elke compartimentsleutel | XChaCha20-Poly1305, met de kluissleutel |
+| Wikkeling van het ondertekenzaad van de installatie | XChaCha20-Poly1305, met de kluissleutel |
 | Versleuteling van records en bijlagen | XChaCha20-Poly1305, met de compartimentsleutel |
 
 Elke envelop is gebonden aan veld, record en compartiment. Die drie waarden gaan als bijbehorende gegevens (AAD) mee in de authenticatie, met lengteprefixen. Een versleuteld veld dat naar een ander record wordt gekopieerd, is daardoor onleesbaar.
 
 Compacte weergave van een envelop: `versie(1) ‖ nonce(24) ‖ cijfertekst+tag`.
+
+Het ondertekenzaad hangt aan de **kluissleutel** en niet aan de sleutel die uit de wachtwoordzin volgt. Daardoor overleeft de ondertekenidentiteit een wachtwoordwijziging: die vervangt uitsluitend de wikkeling van de kluissleutel. Zou het anders zijn, dan veranderde de publieke sleutel van de organisatie zodra iemand zijn wachtwoord aanpast, en was elk eerder uitgeleverd dossier niet meer aan de installatie toe te schrijven.
+
+De publieke helft staat onversleuteld in het kluisbestand, zodat `dpofg kluis sleutel` hem kan voorlezen zonder wachtwoord. Die kolom is daarmee te wijzigen door iemand die het bestand kan beschrijven maar het wachtwoord niet kent, en dat wordt op twee plaatsen afgevangen:
+
+* bij het **openen** van de kluis moet de kolom overeenkomen met de sleutel die uit het gewikkelde zaad volgt; wijkt zij af, dan gaat de kluis niet open;
+* bij het **voorlezen** zonder wachtwoord moet de kolom overeenkomen met de sleutel die in het ketenlogboek staat — die staat in de hashketen en is dus niet te wijzigen zonder de keten te breken. Wijkt zij af, dan weigert `dpofg kluis sleutel` de waarde te tonen.
+
+Wie zowel de kolom als de logregel aanpast, komt langs de tweede controle en breekt daarmee de keten. Dat is wat `dpofg logboek verifieer` aantoont, en waarvoor het anker bestaat.
 
 ---
 

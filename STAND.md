@@ -1,6 +1,6 @@
 # Stand van de bouw
 
-Bijgewerkt op 18 augustus 2026.
+Bijgewerkt op 19 augustus 2026.
 
 Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen liggen. Het is bewust nuchter: een overzicht dat meer suggereert dan er staat, kost bij de eerste inspectie meer dan het oplevert.
 
@@ -35,6 +35,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Dossiers | werkt | Ondertekend manifest, weglatingen zichtbaar, voorbehoud meegetekend |
 | Verificatiebinary | werkt | Leest uitsluitend, geen wachtwoord, geen kluis nodig |
 | Bedieningsschil | werkt | Volledig werkproces via de opdrachtregel |
+| Installatiesleutel | werkt | Eén vaste ondertekenidentiteit per kluis; overleeft een wachtwoordwissel |
 
 ---
 
@@ -60,11 +61,18 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 **De juridische inhoud is niet vastgesteld.** Het meegeleverde kennispakket is een vertrekpunt. De termijnen, feestdagen en grondslagen zijn niet door een jurist gecontroleerd tegen de geconsolideerde wettekst. `dpofg pakket voorbehoud` toont wat er te verifiëren valt.
 
-**Sleutelbeheer voor handtekeningen ontbreekt.** Ankers en dossiermanifesten worden per stuk met een nieuw sleutelpaar ondertekend. Dat toont aan dát er is ondertekend en dat de inhoud niet is gewijzigd, maar niet dat het van deze installatie komt. Een vaste installatiesleutel is nodig voordat dit bij een toezichthouder standhoudt.
+**De installatiesleutel is er; rotatie en intrekking niet.** Ankers en dossiermanifesten dragen sinds deze uitgave één vaste sleutel per kluisbestand, te tonen met `dpofg kluis sleutel` en te controleren met `dpofg-verify --sleutel`. Wat daar niet in zit:
+
+* **Geen rotatie en geen intrekking.** Raakt de sleutel weg, dan is de enige weg een nieuwe publiceren en de oude ernaast blijven vermelden. Het schema draagt al een generatiekolom en de verificatiebinary aanvaardt al meerdere sleutels, dus rotatie is later toe te voegen zonder formaatwijziging.
+* **"Installatie" betekent dit kluisbestand.** Twee kluizen op één machine krijgen twee identiteiten. Een kopie van een kluis draagt dezelfde privésleutel en is er cryptografisch niet van te onderscheiden. Wat er wél bij komt: twee kopieën die doortekenen leveren twee ankers op met hetzelfde volgnummer, een verschillende hash en dezelfde ondertekenaar — die vork is nu aan de installatie toe te schrijven.
+* **De sleutel is zo sterk als kluisbestand plus wachtwoordzin.** Wie beide heeft, kan ondertekenen namens de organisatie. Vóór deze uitgave viel er niets te stelen; nu wel.
+* **De bewaarplaats van een anker valt buiten de handtekening** en is dus na ondertekening aan te passen. Dat wacht op een formaatversie 2, samen met een installatie-identificatie in de ondertekende bytes; twee formaatbumps waar één volstaat, is de duurste manier om een gepubliceerde specificatie te onderhouden.
 
 **Compartimenten hangen aan één wachtwoord.** De scheiding is cryptografisch echt — elk compartiment heeft een eigen sleutel — maar alle sleutels hangen aan dezelfde kluissleutel. Het persoonlijke dossier van de functionaris, dat de organisatie níet moet kunnen openen, vereist een tweede wachtwoord.
 
 **De regelcatalogus is groter dan wat er draait.** 55 regels gedefinieerd, 21 met een evaluatiefunctie. `dpofg controle --dekking` toont welke nog niet draaien. Het aantal regels zegt niets over wat er wordt bewaakt; die opdracht wel.
+
+**Schemaversie 2 is eenrichtingsverkeer.** Een kluis die één keer met deze uitgave is geopend, staat op schemaversie 2 en wordt door uitgave 0.1.0 geweigerd — met de juiste melding, want het bestandsmerk blijft gelijk. Terug kan alleen met een reservekopie. Een logboek van een kluis die uit schemaversie 1 is gemigreerd, draagt bovendien de handelingsnaam `installatiesleutel_aangemaakt`; een oudere `dpofg-verify` loopt daarop stuk met afsluitcode 1 — luidruchtig, en dus acceptabel. Een kluis die met deze uitgave is aangemaakt, kent die regel niet: daar staat de sleutel in de omschrijving van `kluis_aangemaakt`, en dat leest een oudere binary gewoon.
 
 **Geen hardwaretoken.** Het platformhoofdstuk beschrijft hoe FIDO2 en PIV per besturingssysteem werken; de implementatie ontbreekt.
 
@@ -76,9 +84,9 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 | | |
 |---|---|
-| Rust-code | ~9.800 regels, zonder commentaar en lege regels |
-| Tests | 319 testfuncties, 323 uitgevoerde tests |
-| Documentatie | ~4.600 regels |
+| Rust-code | ~10.650 regels, zonder commentaar en lege regels |
+| Tests | 370 testfuncties, 374 uitgevoerde tests |
+| Documentatie | ~4.700 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
 
@@ -99,3 +107,8 @@ Deze staan hier omdat ze laten zien waar het misging, en waarom de tests er zijn
 | Het signaalmoment van een incident was niet op te geven, waardoor een melding van gisteren niet te registreren was | bedieningsschil |
 | De duurweergave rondde twintig minuten af tot "0 uur", precies waar precisie telt | bedieningsschil |
 | De voortgangsbalk kon onderlopen bij een teller boven het totaal | bedieningsschil |
+| De publicatieroute van de installatiesleutel gaf de klare-tekstkolom ongetoetst terug, zodat één databasebewerking zónder wachtwoord de organisatie een vreemde sleutel liet publiceren | opslaglaag |
+| `dpofg-verify logboek --sleutel` zonder `--anker` meldde groen terwijl de sleutel nergens mee was vergeleken | verificatiebinary |
+| Een gemanipuleerd dossier van de eigen installatie werd gemeld als "ondertekend met een andere sleutel", wat de lezer naar de onschuldige verklaring duwt | verificatiebinary |
+| Het wachtwoordloos voorlezen van de sleutel legde toch een WAL-index aan en brak daarmee op een alleen-lezen medium — precies het geval waarvoor die opdracht bestaat | opslaglaag |
+| `logboek toon` brak af op een dossierpad met een accent, doordat er op bytes en niet op tekens werd afgekapt | bedieningsschil |

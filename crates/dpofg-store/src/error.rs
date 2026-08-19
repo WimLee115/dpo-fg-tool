@@ -33,6 +33,24 @@ pub enum StoreFout {
     GeenKluisbestand(String),
     /// Een blob komt niet overeen met zijn hash.
     BlobBeschadigd { hash: String },
+    /// De kluis draagt geen ondertekenidentiteit terwijl die er hoort te zijn.
+    GeenInstallatiesleutel,
+    /// De publieke sleutel in de kluis komt niet overeen met de sleutel die uit
+    /// het gewikkelde zaad volgt.
+    ///
+    /// De publieke helft staat in klare tekst zodat zij zonder wachtwoord te
+    /// lezen is. Dat betekent dat iemand hem in het bestand kan aanpassen, en
+    /// dan zou de organisatie een andere sleutel publiceren dan zij gebruikt.
+    /// Deze fout is de prijs van die leesbaarheid.
+    InstallatiesleutelWijktAf { in_kluis: String, uit_zaad: String },
+    /// De publieke sleutel in de kluis komt niet overeen met de sleutel die in
+    /// het ketenlogboek is vastgelegd.
+    ///
+    /// De logregel zit in de hashketen; de kolom niet. Wijken ze af, dan is de
+    /// kolom aangepast door iemand die het bestand kon beschrijven maar het
+    /// wachtwoord niet kende — en dan zou de organisatie een vreemde sleutel
+    /// publiceren.
+    InstallatiesleutelWijktAfVanLogboek { in_kluis: String, in_logboek: String },
 }
 
 impl fmt::Display for StoreFout {
@@ -68,6 +86,21 @@ impl fmt::Display for StoreFout {
             Self::BlobBeschadigd { hash } => write!(
                 f,
                 "de bijlage met hash {hash} komt niet overeen met haar inhoud en is beschadigd"
+            ),
+            Self::InstallatiesleutelWijktAfVanLogboek { in_kluis, in_logboek } => write!(
+                f,
+                "de publieke installatiesleutel in de kluis ({in_kluis}) komt niet overeen met de \
+                 sleutel die in het ketenlogboek staat ({in_logboek}); publiceer deze waarde niet \
+                 en controleer het logboek met 'dpofg logboek verifieer'"
+            ),
+            Self::GeenInstallatiesleutel => write!(
+                f,
+                "deze kluis heeft nog geen ondertekenidentiteit; open hem eenmaal met deze uitgave"
+            ),
+            Self::InstallatiesleutelWijktAf { in_kluis, uit_zaad } => write!(
+                f,
+                "de publieke installatiesleutel in de kluis ({in_kluis}) komt niet overeen met de \
+                 sleutel die uit het gewikkelde zaad volgt ({uit_zaad}); het bestand is gewijzigd"
             ),
         }
     }

@@ -37,12 +37,27 @@
 
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::{
     aead::{self, Binding, Envelop, Gegevenssleutel, SLEUTEL_LENGTE},
+    identiteit::{Installatiesleutel, ZAAD_LENGTE},
     kdf::{self, KdfParameters, Zout, ZOUT_LENGTE},
     CryptoFout, Geheim, Resultaat, Wachtwoordzin,
 };
+
+/// Kopieert een ontsleutelde buffer in een geheimtype en overschrijft daarna
+/// het origineel.
+///
+/// `aead::ontsleutel` levert een gewone `Vec<u8>`; die blijft anders als
+/// leesbaar sleutelmateriaal in het geheugen staan tot de allocator hem
+/// hergebruikt. Deze helper bestaat zodat het nullen niet vergeten kan worden
+/// bij de volgende wikkeling die erbij komt.
+fn geheim_uit_vec<const N: usize>(mut ruw: Vec<u8>) -> Resultaat<Geheim<N>> {
+    let geheim = Geheim::<N>::uit_slice(&ruw);
+    ruw.zeroize();
+    geheim
+}
 
 /// De sleutel die alle compartimentsleutels ontsluit.
 pub type Kluissleutel = Geheim<SLEUTEL_LENGTE>;
@@ -115,6 +130,15 @@ impl Compartimenthoofd {
     }
 }
 
+/// De binding van het ondertekenzaad van de installatie.
+///
+/// Vrije functie en geen methode, omdat het zaad — anders dan een compartiment
+/// — geen eigen hoofdstruct heeft: wat er van op schijf staat is de envelop en
+/// het generatienummer, en dat laatste komt uit de opslaglaag.
+fn installatiebinding(generatie: u32) -> Binding {
+    Binding::nieuw("installatie.ondertekenzaad", format!("generatie-{generatie}"), "kluishoofd")
+}
+
 /// Een geopende kluis: de kluissleutel staat in het geheugen.
 ///
 /// Zodra deze waarde wordt opgeruimd, wordt het sleutelmateriaal overschreven.
@@ -167,7 +191,7 @@ impl GeopendeKluis {
         let zout = hoofd.zout_bytes()?;
         let hoofdsleutel = kdf::leid_hoofdsleutel_af(wachtwoord, &zout, hoofd.kdf)?;
         let ruw = aead::ontsleutel(&hoofdsleutel, &hoofd.binding(), &hoofd.kluissleutel)?;
-        let kluissleutel = Kluissleutel::uit_slice(&ruw)?;
+        let kluissleutel = geheim_uit_vec::<SLEUTEL_LENGTE>(ruw)?;
         Ok(Self { hoofd, kluissleutel })
     }
 
@@ -207,7 +231,7 @@ impl GeopendeKluis {
     /// Ontsluit de sleutel van een compartiment.
     pub fn compartiment_openen(&self, hoofd: &Compartimenthoofd) -> Resultaat<Compartimentsleutel> {
         let ruw = aead::ontsleutel(&self.kluissleutel, &hoofd.binding(), &hoofd.sleutel)?;
-        Compartimentsleutel::uit_slice(&ruw)
+        geheim_uit_vec::<SLEUTEL_LENGTE>(ruw)
     }
 
     /// Wijzigt de wachtwoordzin.
@@ -236,6 +260,37 @@ impl GeopendeKluis {
             aead::versleutel(&hoofdsleutel, &voorlopig.binding(), self.kluissleutel.bytes())?;
         self.hoofd = Kluishoofd { kluissleutel: gewikkeld, ..voorlopig };
         Ok(())
+    }
+
+    /// Maakt de ondertekenidentiteit van deze installatie aan.
+    ///
+    /// Levert het gewikkelde zaad op — te bewaren naast de kluis — plus de
+    /// bruikbare sleutel. De wikkeling gebeurt met de **kluissleutel** en niet
+    /// met de hoofdsleutel: daardoor overleeft de identiteit een
+    /// wachtwoordwijziging zonder dat er iets herwikkeld hoeft te worden.
+    pub fn installatie_aanmaken(&self, generatie: u32) -> Resultaat<(Envelop, Installatiesleutel)> {
+        let mut zaad = [0u8; ZAAD_LENGTE];
+        rand::thread_rng().fill_bytes(&mut zaad);
+
+        let gewikkeld = aead::versleutel(&self.kluissleutel, &installatiebinding(generatie), &zaad);
+        let sleutel = Installatiesleutel::uit_zaad(&zaad);
+        zaad.zeroize();
+
+        Ok((gewikkeld?, sleutel))
+    }
+
+    /// Ontsluit de ondertekenidentiteit uit het gewikkelde zaad.
+    ///
+    /// De generatie gaat mee in de binding: een zaad dat als een andere
+    /// generatie wordt aangeboden, ontsleutelt niet.
+    pub fn installatie_openen(
+        &self,
+        envelop: &Envelop,
+        generatie: u32,
+    ) -> Resultaat<Installatiesleutel> {
+        let ruw = aead::ontsleutel(&self.kluissleutel, &installatiebinding(generatie), envelop)?;
+        let zaad = geheim_uit_vec::<{ ZAAD_LENGTE }>(ruw)?;
+        Ok(Installatiesleutel::uit_zaad(zaad.bytes()))
     }
 
     /// Roteert de sleutel van één compartiment.
@@ -334,6 +389,69 @@ mod tests {
             &Wachtwoordzin::nieuw("een lange wachtwoordzin")
         )
         .is_err());
+    }
+
+    #[test]
+    fn de_installatiesleutel_overleeft_een_wachtwoordwijziging() {
+        // Hierop staat of valt de hele constructie: als de ondertekenidentiteit
+        // een wachtwoordwissel niet overleeft, verandert de publieke sleutel
+        // van de organisatie zodra iemand zijn wachtwoord aanpast, en is elk
+        // eerder uitgeleverd dossier niet meer aan de installatie toe te
+        // schrijven.
+        let mut k = kluis();
+        let (envelop, sleutel) = k.installatie_aanmaken(1).unwrap();
+        let publiek = sleutel.publieke_sleutel().to_string();
+
+        let nieuw = Wachtwoordzin::nieuw("een heel ander wachtwoord");
+        k.wachtwoord_wijzigen(&nieuw, TEST).unwrap();
+
+        let heropend = GeopendeKluis::openen(k.hoofd().clone(), &nieuw).unwrap();
+        let terug = heropend.installatie_openen(&envelop, 1).unwrap();
+        assert_eq!(terug.publieke_sleutel(), publiek);
+    }
+
+    #[test]
+    fn een_gewikkeld_ondertekenzaad_is_geen_compartimentsleutel() {
+        let k = kluis();
+        let (envelop, _) = k.installatie_aanmaken(1).unwrap();
+        let (mut hoofd, _) = k.compartiment_aanmaken("algemeen").unwrap();
+
+        // Het zaad voordoen als compartimentsleutel.
+        hoofd.sleutel = envelop.clone();
+        assert_eq!(k.compartiment_openen(&hoofd).unwrap_err(), CryptoFout::Ontsleuteling);
+
+        // En omgekeerd: een compartimentwikkeling voordoen als zaad.
+        let (hoofd2, _) = k.compartiment_aanmaken("vertrouwelijk").unwrap();
+        assert_eq!(
+            k.installatie_openen(&hoofd2.sleutel, 1).unwrap_err(),
+            CryptoFout::Ontsleuteling
+        );
+    }
+
+    #[test]
+    fn een_zaad_van_generatie_1_wordt_geweigerd_als_generatie_2() {
+        let k = kluis();
+        let (envelop, _) = k.installatie_aanmaken(1).unwrap();
+        assert!(k.installatie_openen(&envelop, 1).is_ok());
+        assert_eq!(k.installatie_openen(&envelop, 2).unwrap_err(), CryptoFout::Ontsleuteling);
+    }
+
+    #[test]
+    fn twee_installaties_krijgen_verschillende_sleutels() {
+        let k = kluis();
+        let (_, a) = k.installatie_aanmaken(1).unwrap();
+        let (_, b) = k.installatie_aanmaken(1).unwrap();
+        assert_ne!(a.publieke_sleutel(), b.publieke_sleutel());
+    }
+
+    #[test]
+    fn het_gewikkelde_zaad_bevat_het_zaad_niet_in_klare_tekst() {
+        let k = kluis();
+        let (envelop, sleutel) = k.installatie_aanmaken(1).unwrap();
+        // De publieke helft is publiek; de envelop mag hem niet dragen, want
+        // dat zou betekenen dat er iets ongewikkelds in staat.
+        let bytes = envelop.naar_bytes();
+        assert!(!hex::encode(&bytes).contains(sleutel.publieke_sleutel()));
     }
 
     #[test]

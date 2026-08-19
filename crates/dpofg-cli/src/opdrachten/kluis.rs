@@ -24,6 +24,13 @@ pub enum Kluisopdracht {
     },
     /// Toon de stand van de kluis.
     Status,
+    /// Toon de publieke installatiesleutel waarmee ankers en dossiers worden
+    /// ondertekend. Vraagt geen wachtwoord.
+    Sleutel {
+        /// Schrijf de sleutel naar een bestand in plaats van naar het scherm.
+        #[arg(long)]
+        uitvoer: Option<PathBuf>,
+    },
     /// Wijzig de wachtwoordzin. Er wordt niets herversleuteld.
     Wachtwoord,
     /// Maak een compartiment aan.
@@ -41,6 +48,7 @@ pub fn draai(o: Kluisopdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
     match o {
         Kluisopdracht::Nieuw { zwaar, licht } => nieuw(&pad, zwaar, licht, nu),
         Kluisopdracht::Status => status(&pad, nu),
+        Kluisopdracht::Sleutel { uitvoer } => sleutel(&pad, uitvoer),
         Kluisopdracht::Wachtwoord => wachtwoord(&pad, nu),
         Kluisopdracht::Compartiment { naam, omschrijving } => {
             compartiment(&pad, &naam, &omschrijving, nu)
@@ -114,6 +122,7 @@ fn status(pad: &std::path::Path, nu: DateTime<Utc>) -> Result<()> {
     t.add_row(vec!["schemaversie", &dpofg_store::SCHEMAVERSIE.to_string()]);
     t.add_row(vec!["compartimenten", &kluis.compartimenten().join(", ")]);
     t.add_row(vec!["logboekregels", &kluis.ketenstand().volgnummer.to_string()]);
+    t.add_row(vec!["installatiesleutel", &format!("{}…", &kluis.installatiesleutel()[..16])]);
     if let Some(anker) = kluis.laatste_anker()? {
         t.add_row(vec![
             "laatste anker",
@@ -153,6 +162,63 @@ fn status(pad: &std::path::Path, nu: DateTime<Utc>) -> Result<()> {
              einde van het logboek regels zijn verwijderd. Plaats er een met 'dpofg logboek anker'.",
         );
     }
+    Ok(())
+}
+
+fn sleutel(pad: &std::path::Path, uitvoer: Option<PathBuf>) -> Result<()> {
+    if !pad.exists() {
+        anyhow::bail!(
+            "er staat geen kluis op {}. Maak er een aan met 'dpofg kluis nieuw'",
+            pad.display()
+        );
+    }
+
+    let kop_gegevens = Kluis::installatiesleutel_lezen(pad)
+        .with_context(|| format!("de kluis op {} kon niet worden gelezen", pad.display()))?;
+
+    let Some(k) = kop_gegevens else {
+        kop("Installatiesleutel");
+        let_op(
+            "Deze kluis is met een oudere uitgave aangemaakt en draagt nog geen \
+             ondertekenidentiteit. Die wordt aangemaakt zodra u de kluis met deze uitgave \
+             opent; daarna toont deze opdracht hem.",
+        );
+        return Ok(());
+    };
+
+    if let Some(bestand) = uitvoer {
+        std::fs::write(&bestand, format!("{}\n", k.publieke_sleutel)).with_context(|| {
+            format!("de sleutel kon niet naar {} worden geschreven", bestand.display())
+        })?;
+        gelukt(&format!("Installatiesleutel weggeschreven naar {}", bestand.display()));
+        return Ok(());
+    }
+
+    kop("Installatiesleutel");
+    let mut t = tabel(&["", ""]);
+    t.add_row(vec!["publieke sleutel", &k.publieke_sleutel]);
+    t.add_row(vec!["aangemaakt op", &k.aangemaakt_op.format("%d-%m-%Y %H:%M").to_string()]);
+    t.add_row(vec!["generatie", &k.generatie.to_string()]);
+    println!("{t}");
+
+    terzijde(&format!(
+        "De ontvanger van een dossier stelt de herkomst vast met:\n  dpofg-verify dossier <manifestpad> --sleutel {}",
+        k.publieke_sleutel
+    ));
+    let_op(
+        "Publiceer deze sleutel langs een ánder kanaal dan het dossier — op de website van de \
+         organisatie, in een briefhoofd, in een eerder ondertekend stuk. Een sleutel die met het \
+         dossier meekomt, toont niets aan: wie het dossier maakt, maakt dan ook de sleutel.",
+    );
+    terzijde(
+        "'Installatie' betekent hier dit kluisbestand. Een kopie van de kluis draagt dezelfde \
+         sleutel en is er cryptografisch niet van te onderscheiden.",
+    );
+    terzijde(
+        "Deze waarde is gehouden tegen de sleutel die in het ketenlogboek staat, zodat een \
+         wijziging buiten het programma om hier niet ongemerkt doorheen komt. Of de keten zelf \
+         nog klopt, toont 'dpofg logboek verifieer'.",
+    );
     Ok(())
 }
 

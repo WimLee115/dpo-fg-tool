@@ -57,6 +57,12 @@ cargo build --release
 
 # …dat de ontvanger controleert zonder de kluis en zonder wachtwoord
 ./target/release/dpofg-verify dossier ./uitvraag/manifest.json
+
+# De publieke installatiesleutel, om langs een ander kanaal te publiceren
+./target/release/dpofg kluis sleutel
+
+# Met die sleutel stelt de ontvanger ook de herkomst vast
+./target/release/dpofg-verify dossier ./uitvraag/manifest.json --sleutel <64 hex>
 ```
 
 Het wachtwoord wordt nooit als argument aangenomen: het wordt gevraagd, of gelezen uit `DPOFG_WACHTWOORD` voor geautomatiseerd gebruik.
@@ -78,6 +84,8 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Kennispakketten met handtekening en terugrolbescherming | werkt |
 | Dossiers samenstellen en ondertekenen | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
+| Vaste installatiesleutel onder ankers en dossiers | werkt |
+| Rotatie en intrekking van die sleutel | nog niet |
 | Betrokkenenverzoeken, DPIA, leveranciersregister | nog niet |
 | Grafische schil | nog niet |
 

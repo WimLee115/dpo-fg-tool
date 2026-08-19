@@ -64,7 +64,7 @@ fn toon(kluis: &dpofg_store::Kluis, aantal: usize, onderwerp: Option<String>) ->
             format!(
                 "{}/{}",
                 r.gebeurtenis.onderwerp_soort,
-                &r.gebeurtenis.onderwerp_id[..r.gebeurtenis.onderwerp_id.len().min(8)]
+                &r.gebeurtenis.onderwerp_id.chars().take(8).collect::<String>()
             ),
             r.gebeurtenis.omschrijving.clone(),
         ]);
@@ -127,6 +127,19 @@ fn verifieer(kluis: &dpofg_store::Kluis) -> Result<()> {
         _ => {}
     }
 
+    // Een aanwijzing, geen oordeel: dit raakt de samenhang van de keten niet.
+    if let Some(anker) = kluis.laatste_anker()? {
+        if !anker.sleutel.eq_ignore_ascii_case(kluis.installatiesleutel()) {
+            println!();
+            let_op(
+                "Het laatste anker is met een andere sleutel ondertekend dan de huidige \
+                 installatiesleutel. Ankers van vóór deze uitgave dragen een wegwerpsleutel en \
+                 zijn daarom niet aan deze installatie toe te schrijven. Plaats een nieuw anker \
+                 met 'dpofg logboek anker'.",
+            );
+        }
+    }
+
     if !rapport.is_ongeschonden() {
         anyhow::bail!("het logboek is niet ongeschonden");
     }
@@ -143,11 +156,10 @@ fn anker(
         anyhow::bail!("het logboek is leeg; er valt nog niets te ankeren");
     }
 
-    // De ondertekensleutel hoort bij de installatie. Zolang er geen sleutelbeheer
-    // is, wordt er per anker een sleutelpaar gemaakt en wordt de publieke sleutel
-    // meegegeven — dat is eerlijk maar zwakker, en het staat er dus bij.
-    let sleutel = dpofg_audit::anker::nieuw_sleutelpaar();
-    let mut a = dpofg_audit::Anker::plaats(&sleutel, "kluis", kluis.ketenstand(), nu)?;
+    // De stand eerst kopiëren: `onderteken_met` leent de kluis uit, en dan kan
+    // de ketenstand er niet tegelijk uit worden gelezen.
+    let stand = kluis.ketenstand().clone();
+    let mut a = kluis.onderteken_met(|s| dpofg_audit::Anker::plaats(s, "kluis", &stand, nu))?;
     if let Some(p) = bewaarplaats {
         a = a.met_bewaarplaats(p);
     }
@@ -159,6 +171,7 @@ fn anker(
     t.add_row(vec!["regel", &a.volgnummer.to_string()]);
     t.add_row(vec!["hash", &a.hash[..16]]);
     t.add_row(vec!["tijdstip", &a.tijdstip.format("%d-%m-%Y %H:%M UTC").to_string()]);
+    t.add_row(vec!["sleutel", &format!("{}…", &a.sleutel[..16])]);
     if let Some(p) = &a.bewaarplaats {
         t.add_row(vec!["bewaarplaats", p]);
     }
@@ -181,8 +194,11 @@ fn anker(
          de regels die het zou moeten beschermen.",
     );
     terzijde(
-        "Deze uitgave maakt per anker een nieuw sleutelpaar. Dat toont aan dat de keten op dit \
-         punt stond, maar niet dat dit anker van deze installatie komt. Vast sleutelbeheer volgt.",
+        "Dit anker is ondertekend met de vaste installatiesleutel van deze kluis; elk anker en \
+         elk dossier draagt dezelfde. De ontvanger stelt de herkomst vast door die sleutel te \
+         vergelijken met de sleutel die de organisatie langs een ander kanaal heeft gepubliceerd \
+         — zonder die vergelijking is de herkomst nog steeds niet vastgesteld. Toon hem met \
+         'dpofg kluis sleutel'.",
     );
     Ok(())
 }

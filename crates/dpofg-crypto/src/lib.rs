@@ -49,6 +49,7 @@
 pub mod aead;
 pub mod blind_index;
 mod error;
+pub mod identiteit;
 pub mod kdf;
 pub mod keys;
 mod secret;

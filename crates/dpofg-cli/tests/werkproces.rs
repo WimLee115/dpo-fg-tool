@@ -623,3 +623,388 @@ fn een_onleesbaar_bestand_is_iets_anders_dan_een_onjuist_dossier() {
     assert!(fouttekst.contains("niet leesbaar"), "kreeg: {fouttekst}");
     assert!(fouttekst.contains("unknown variant"), "de oorzaak hoort erbij: {fouttekst}");
 }
+
+// --------------------------------------------------------------------------
+// De installatiesleutel
+// --------------------------------------------------------------------------
+
+/// Een kluis is nooit zonder ondertekenidentiteit: er is geen moment waarop de
+/// gebruiker eraan moet denken er een aan te maken.
+#[test]
+fn elke_kluis_heeft_meteen_een_installatiesleutel() {
+    let p = Proef::nieuw();
+    let status = p.moet("kluis status");
+    let sleutel = p.moet("kluis sleutel");
+
+    assert!(status.contains("installatiesleutel"));
+    assert!(sleutel.contains("publieke sleutel"));
+
+    let hex = sleutel_uit(&sleutel);
+    assert_eq!(hex.len(), 64);
+    // De afgekapte weergave in `kluis status` hoort bij dezelfde sleutel.
+    assert!(status.contains(&hex[..16]), "status toont een andere sleutel:\n{status}");
+}
+
+/// De publieke sleutel is publiek. Er een wachtwoordzin voor laten intypen
+/// kweekt de gewoonte om die zin overal in te typen.
+#[test]
+fn de_sleutel_is_te_tonen_zonder_wachtwoord() {
+    let p = Proef::nieuw();
+    let uit = Command::new(env!("CARGO_BIN_EXE_dpofg"))
+        .args(["kluis", "sleutel"])
+        .env("DPOFG_KLUIS", &p.kluis)
+        .env("DPOFG_WACHTWOORD", "")
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+
+    assert!(uit.status.success(), "kreeg: {tekst}{}", String::from_utf8_lossy(&uit.stderr));
+    assert_eq!(sleutel_uit(&tekst).len(), 64);
+}
+
+#[test]
+fn de_sleutel_is_naar_een_bestand_te_schrijven() {
+    let p = Proef::nieuw();
+    let pad = p._map.path().join("sleutel.txt");
+    p.moet(&format!("kluis sleutel --uitvoer {}", pad.display()));
+
+    let inhoud = std::fs::read_to_string(&pad).unwrap();
+    assert_eq!(inhoud.len(), 65, "64 tekens plus een regelovergang");
+    assert!(inhoud.ends_with('\n'));
+    assert_eq!(inhoud.trim(), sleutel_uit(&p.moet("kluis sleutel")));
+}
+
+/// De kern van deze bouwslag: één sleutel onder alles wat de deur uitgaat.
+#[test]
+fn dezelfde_installatiesleutel_ondertekent_anker_en_dossier() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+
+    let ankerpad = p._map.path().join("anker1.json");
+    p.moet(&format!("logboek anker --bewaarplaats notulen --uitvoer {}", ankerpad.display()));
+    let anker2pad = p._map.path().join("anker2.json");
+    p.moet(&format!("logboek anker --bewaarplaats kluisje --uitvoer {}", anker2pad.display()));
+
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let eigen = sleutel_uit(&p.moet("kluis sleutel"));
+    for (pad, veld) in [
+        (ankerpad, "sleutel"),
+        (anker2pad, "sleutel"),
+        (map.join("manifest.json"), "ondertekenaar"),
+    ] {
+        let inhoud = std::fs::read_to_string(&pad).unwrap();
+        let waarde: serde_json::Value = serde_json::from_str(&inhoud).unwrap();
+        let gevonden = waarde
+            .get(veld)
+            .or_else(|| waarde.get("manifest").and_then(|_| waarde.get(veld)))
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("{} heeft geen veld {veld}", pad.display()));
+        assert_eq!(gevonden, eigen, "{} draagt een andere sleutel", pad.display());
+    }
+}
+
+#[test]
+fn de_installatiesleutel_overleeft_een_wachtwoordwissel() {
+    let p = Proef::nieuw();
+    let voor = sleutel_uit(&p.moet("kluis sleutel"));
+
+    // `kluis wachtwoord` vraagt om de nieuwe zin; die komt uit de omgeving.
+    let uit = Command::new(env!("CARGO_BIN_EXE_dpofg"))
+        .args(["kluis", "wachtwoord"])
+        .env("DPOFG_KLUIS", &p.kluis)
+        .env("DPOFG_WACHTWOORD", WACHTWOORD)
+        .env("DPOFG_GEBRUIKER", "a.devries")
+        .output()
+        .unwrap();
+    assert!(
+        uit.status.success(),
+        "wachtwoord wijzigen faalde:\n{}{}",
+        String::from_utf8_lossy(&uit.stdout),
+        String::from_utf8_lossy(&uit.stderr)
+    );
+
+    assert_eq!(sleutel_uit(&p.moet("kluis sleutel")), voor);
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    let ankerpad = p._map.path().join("anker.json");
+    p.moet(&format!("logboek anker --uitvoer {}", ankerpad.display()));
+    let waarde: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&ankerpad).unwrap()).unwrap();
+    assert_eq!(waarde["sleutel"].as_str().unwrap(), voor);
+}
+
+#[test]
+fn een_dossier_is_aan_de_installatie_toe_te_schrijven() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let eigen = sleutel_uit(&p.moet("kluis sleutel"));
+    let uit = Command::new(verify_binary())
+        .args(["dossier", map.join("manifest.json").to_str().unwrap(), "--sleutel", &eigen])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+
+    assert_eq!(uit.status.code(), Some(0), "kreeg:\n{tekst}");
+    assert!(tekst.contains("het manifest komt van die"), "kreeg:\n{tekst}");
+    // De grens blijft benoemd: herkomst is geen inhoudelijk oordeel.
+    assert!(tekst.contains("Dat toont niet aan dat de inhoud juist of volledig is"));
+}
+
+#[test]
+fn een_dossier_van_een_andere_installatie_valt_door_de_mand() {
+    let eerste = Proef::nieuw();
+    let vreemde_sleutel = sleutel_uit(&eerste.moet("kluis sleutel"));
+
+    let tweede = Proef::nieuw();
+    tweede.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    tweede.moet("logboek anker --bewaarplaats notulen");
+    let map = tweede._map.path().join("uitvraag");
+    tweede.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let uit = Command::new(verify_binary())
+        .args([
+            "dossier",
+            map.join("manifest.json").to_str().unwrap(),
+            "--sleutel",
+            &vreemde_sleutel,
+        ])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+
+    assert_eq!(uit.status.code(), Some(3), "een vreemde ondertekenaar hoort code 3:\n{tekst}");
+    assert!(tekst.contains("ondertekend met een andere sleutel dan u hebt opgegeven"));
+    // Een historisch feit hoort niet als manipulatie gelezen te worden.
+    assert!(tekst.contains("wegwerpsleutel"));
+    assert!(tekst.contains("komt van een andere installatie"));
+}
+
+/// De voorrangsregel: gewijzigde inhoud weegt zwaarder dan een vreemde sleutel.
+#[test]
+fn een_gewijzigd_stuk_weegt_zwaarder_dan_een_vreemde_sleutel() {
+    let eerste = Proef::nieuw();
+    let vreemde_sleutel = sleutel_uit(&eerste.moet("kluis sleutel"));
+
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let logboekpad = map.join("logboek.json");
+    let inhoud = std::fs::read_to_string(&logboekpad).unwrap();
+    std::fs::write(&logboekpad, format!("{inhoud} ")).unwrap();
+
+    let uit = Command::new(verify_binary())
+        .args([
+            "dossier",
+            map.join("manifest.json").to_str().unwrap(),
+            "--sleutel",
+            &vreemde_sleutel,
+        ])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+
+    assert_eq!(uit.status.code(), Some(2), "een gewijzigd stuk hoort code 2:\n{tekst}");
+}
+
+/// De uitgebrachte werkwijze mag niet regresseren: zonder `--sleutel` verandert
+/// er niets aan de afsluitcode, en de eerlijke grens blijft staan.
+#[test]
+fn zonder_sleutel_meldt_de_controle_dat_er_niet_is_vastgezet() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let uit = Command::new(verify_binary())
+        .args(["dossier", map.join("manifest.json").to_str().unwrap()])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+
+    assert_eq!(uit.status.code(), Some(0));
+    assert!(tekst.contains("Of die sleutel toebehoort aan wie u verwacht"));
+    assert!(tekst.contains("--sleutel"));
+}
+
+#[test]
+fn een_anker_is_aan_de_installatie_toe_te_schrijven() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    let ankerpad = p._map.path().join("anker.json");
+    p.moet(&format!("logboek anker --uitvoer {}", ankerpad.display()));
+    let eigen = sleutel_uit(&p.moet("kluis sleutel"));
+
+    let goed = Command::new(verify_binary())
+        .args(["anker", ankerpad.to_str().unwrap(), "--sleutel", &eigen])
+        .output()
+        .unwrap();
+    assert_eq!(goed.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&goed.stdout).contains("komt van de installatie"));
+
+    let vreemd = Command::new(verify_binary())
+        .args(["anker", ankerpad.to_str().unwrap(), "--sleutel", &"a".repeat(64)])
+        .output()
+        .unwrap();
+    assert_eq!(vreemd.status.code(), Some(3));
+}
+
+#[test]
+fn een_onbruikbare_sleutel_wordt_geweigerd_voordat_er_iets_wordt_gecontroleerd() {
+    let uit = Command::new(verify_binary())
+        .args(["anker", "bestaat-niet.json", "--sleutel", "te-kort"])
+        .output()
+        .unwrap();
+    let fouttekst = String::from_utf8_lossy(&uit.stderr).to_string();
+    assert_eq!(uit.status.code(), Some(2), "clap meldt een onbruikbaar argument met code 2");
+    assert!(fouttekst.contains("64 hexadecimale tekens"), "kreeg: {fouttekst}");
+}
+
+/// Een logboek draagt geen handtekening; alleen een anker doet dat. Een
+/// opgegeven sleutel zonder anker mag daarom niet groen melden.
+#[test]
+fn een_sleutel_zonder_anker_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let uit = Command::new(verify_binary())
+        .args([
+            "logboek",
+            map.join("logboek.json").to_str().unwrap(),
+            "--sleutel",
+            &sleutel_uit(&p.moet("kluis sleutel")),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(uit.status.code(), Some(1), "zonder anker valt er niets te vergelijken");
+    assert!(String::from_utf8_lossy(&uit.stderr).contains("--anker"));
+}
+
+#[test]
+fn een_logboek_met_anker_is_aan_de_installatie_toe_te_schrijven() {
+    let eerste = Proef::nieuw();
+    let vreemde_sleutel = sleutel_uit(&eerste.moet("kluis sleutel"));
+
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+    let eigen = sleutel_uit(&p.moet("kluis sleutel"));
+
+    let draai = |sleutel: &str| {
+        Command::new(verify_binary())
+            .args([
+                "logboek",
+                map.join("logboek.json").to_str().unwrap(),
+                "--anker",
+                map.join("anker.json").to_str().unwrap(),
+                "--sleutel",
+                sleutel,
+            ])
+            .output()
+            .unwrap()
+    };
+
+    let goed = draai(&eigen);
+    assert_eq!(goed.status.code(), Some(0), "{}", String::from_utf8_lossy(&goed.stdout));
+    assert!(String::from_utf8_lossy(&goed.stdout).contains("komt van de installatie"));
+
+    let vreemd = draai(&vreemde_sleutel);
+    assert_eq!(vreemd.status.code(), Some(3));
+    assert!(String::from_utf8_lossy(&vreemd.stdout).contains("staat niet in de lijst"));
+}
+
+/// Een gemanipuleerd dossier van de eigen installatie mag niet worden gemeld
+/// als "van een andere sleutel": dat duwt de lezer naar de onschuldige
+/// verklaring terwijl het stuk juist is gewijzigd.
+#[test]
+fn een_gewijzigd_manifest_van_de_eigen_sleutel_meldt_geen_vreemde_ondertekenaar() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("logboek anker --bewaarplaats notulen");
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+
+    let manifestpad = map.join("manifest.json");
+    let inhoud = std::fs::read_to_string(&manifestpad).unwrap();
+    std::fs::write(&manifestpad, inhoud.replacen("toezichthouder", "iemand anders", 1)).unwrap();
+
+    let uit = Command::new(verify_binary())
+        .args([
+            "dossier",
+            manifestpad.to_str().unwrap(),
+            "--sleutel",
+            &sleutel_uit(&p.moet("kluis sleutel")),
+        ])
+        .output()
+        .unwrap();
+    let tekst = String::from_utf8_lossy(&uit.stdout).to_string();
+
+    assert_eq!(uit.status.code(), Some(2), "kreeg:\n{tekst}");
+    assert!(tekst.contains("de handtekening klopt niet met de inhoud"));
+    assert!(
+        !tekst.contains("ondertekend met een andere sleutel"),
+        "de melding spreekt zichzelf tegen:\n{tekst}"
+    );
+}
+
+/// Een pad met een letter met een accent is geen bijzonder geval maar de
+/// Nederlandse praktijk.
+#[test]
+fn een_pad_met_een_accent_laat_het_logboek_heel() {
+    let p = Proef::nieuw();
+    let map = p._map.path().join("dossiér-uitvraag");
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+    let uit = p.moet("logboek toon --aantal 25");
+    assert!(uit.contains("Logboek"));
+}
+
+/// Haalt de 64 hexadecimale tekens uit de uitvoer van `kluis sleutel`.
+fn sleutel_uit(uitvoer: &str) -> String {
+    uitvoer
+        .split(|c: char| !c.is_ascii_hexdigit())
+        .find(|w| w.len() == 64 && w.chars().all(|c| c.is_ascii_hexdigit()))
+        .unwrap_or_else(|| panic!("geen sleutel gevonden in:\n{uitvoer}"))
+        .to_string()
+}

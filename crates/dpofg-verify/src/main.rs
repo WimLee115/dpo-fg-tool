@@ -43,6 +43,69 @@ use std::path::PathBuf;
 struct Opdrachtregel {
     #[command(subcommand)]
     opdracht: Opdracht,
+
+    /// De publieke installatiesleutel waarvan u een stuk verwacht, 64
+    /// hexadecimale tekens. Herhaalbaar. Zonder deze vlag wordt de
+    /// handtekening wel gecontroleerd maar de herkomst niet.
+    ///
+    /// Uitsluitend de sleutel zelf, geen bestandspad: een bestand uit dezelfde
+    /// levering aanwijzen als bron van vertrouwen, is geen controle.
+    #[arg(
+        long = "sleutel",
+        global = true,
+        value_name = "64 HEX",
+        value_parser = sleutel_uit_tekst
+    )]
+    sleutels: Vec<String>,
+}
+
+/// Aanvaardt uitsluitend 64 hexadecimale tekens; normaliseert naar kleine
+/// letters zodat de vergelijking verderop letterlijk kan.
+fn sleutel_uit_tekst(ruw: &str) -> Result<String, String> {
+    let s = ruw.trim().to_ascii_lowercase();
+    if s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!(
+            "een installatiesleutel bestaat uit 64 hexadecimale tekens; gekregen: {} teken(s)",
+            s.chars().count()
+        ));
+    }
+    Ok(s)
+}
+
+/// De uitkomst van een controle.
+///
+/// Drie uitkomsten en geen twee, omdat "het stuk is gewijzigd" en "het stuk is
+/// van een andere installatie" verschillende gevolgen hebben voor wie het leest.
+/// Code 3 kan alleen optreden wanneer `--sleutel` is meegegeven; een script dat
+/// die vlag niet gebruikt, ziet nooit iets anders dan voorheen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Uitkomst {
+    Geslaagd,
+    Afwijking,
+    VreemdeOndertekenaar,
+}
+
+impl Uitkomst {
+    fn afsluitcode(self) -> i32 {
+        match self {
+            Self::Geslaagd => 0,
+            Self::Afwijking => 2,
+            Self::VreemdeOndertekenaar => 3,
+        }
+    }
+
+    /// Een echte afwijking weegt zwaarder dan een vreemde ondertekenaar: wie
+    /// een gewijzigd stuk in handen heeft, moet dát lezen en niet de mededeling
+    /// dat het van iemand anders komt.
+    fn samen(self, andere: Self) -> Self {
+        match (self, andere) {
+            (Self::Afwijking, _) | (_, Self::Afwijking) => Self::Afwijking,
+            (Self::VreemdeOndertekenaar, _) | (_, Self::VreemdeOndertekenaar) => {
+                Self::VreemdeOndertekenaar
+            }
+            _ => Self::Geslaagd,
+        }
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -72,9 +135,10 @@ enum Opdracht {
 
 fn main() {
     match draai() {
-        Ok(geslaagd) => {
-            if !geslaagd {
-                std::process::exit(2);
+        Ok(uitkomst) => {
+            let code = uitkomst.afsluitcode();
+            if code != 0 {
+                std::process::exit(code);
             }
         }
         Err(fout) => {
@@ -89,19 +153,24 @@ fn main() {
     }
 }
 
-/// Levert `false` wanneer de controle inhoudelijk faalt, en `Err` wanneer er
-/// iets misging bij het lezen. Dat onderscheid telt: een onleesbaar bestand is
-/// iets anders dan een dossier dat niet klopt.
-fn draai() -> Result<bool> {
+/// Levert een [`Uitkomst`] wanneer de controle is uitgevoerd, en `Err` wanneer
+/// er iets misging bij het lezen. Dat onderscheid telt: een onleesbaar bestand
+/// is iets anders dan een dossier dat niet klopt.
+fn draai() -> Result<Uitkomst> {
     let args = Opdrachtregel::parse();
+    let sleutels = args.sleutels;
     match args.opdracht {
-        Opdracht::Dossier { manifest, stukken } => dossier(&manifest, stukken),
-        Opdracht::Logboek { regels, anker } => logboek(&regels, anker),
-        Opdracht::Anker { bestand } => anker_alleen(&bestand),
+        Opdracht::Dossier { manifest, stukken } => dossier(&manifest, stukken, &sleutels),
+        Opdracht::Logboek { regels, anker } => logboek(&regels, anker, &sleutels),
+        Opdracht::Anker { bestand } => anker_alleen(&bestand, &sleutels),
     }
 }
 
-fn dossier(manifestpad: &PathBuf, stukkenmap: Option<PathBuf>) -> Result<bool> {
+fn dossier(
+    manifestpad: &PathBuf,
+    stukkenmap: Option<PathBuf>,
+    sleutels: &[String],
+) -> Result<Uitkomst> {
     let tekst = std::fs::read_to_string(manifestpad)
         .with_context(|| format!("kon {} niet lezen", manifestpad.display()))?;
     let ondertekend: OndertekendManifest =
@@ -126,25 +195,48 @@ fn dossier(manifestpad: &PathBuf, stukkenmap: Option<PathBuf>) -> Result<bool> {
     );
     println!("  programmaversie   : {}", m.programmaversie);
 
-    let mut geslaagd = true;
+    let mut uitkomst = Uitkomst::Geslaagd;
 
     println!("\nHandtekening");
     match ondertekend.controleer() {
         Ok(()) => println!("  ✓ het manifest is niet gewijzigd na ondertekening"),
         Err(e) => {
             println!("  ✗ {e}");
-            geslaagd = false;
+            uitkomst = uitkomst.samen(Uitkomst::Afwijking);
         }
     }
-    println!(
-        "  ondertekenaar: {}",
-        &ondertekend.ondertekenaar[..16.min(ondertekend.ondertekenaar.len())]
-    );
-    println!(
-        "  Let op: deze controle toont aan dat de houder van deze sleutel het manifest heeft\n  \
-         ondertekend. Of die sleutel toebehoort aan wie u verwacht, is een vraag die dit\n  \
-         programma niet kan beantwoorden."
-    );
+    println!("  ondertekenaar: {}", ondertekend.ondertekenaar);
+
+    if sleutels.is_empty() {
+        println!(
+            "  Let op: deze controle toont aan dat de houder van deze sleutel het manifest heeft\n  \
+             ondertekend. Of die sleutel toebehoort aan wie u verwacht, is een vraag die dit\n  \
+             programma niet kan beantwoorden. Geef de gepubliceerde sleutel mee met --sleutel om\n  \
+             dat wél vast te stellen."
+        );
+    } else if sleutels.iter().any(|k| k.eq_ignore_ascii_case(&ondertekend.ondertekenaar)) {
+        // Alleen de sleutel vergelijken, niet de handtekening: die is hierboven
+        // al beoordeeld. Zouden we hier `controleer_ondertekenaar` gebruiken,
+        // dan meldde een gemanipuleerd manifest van de júiste installatie dat
+        // het "van een andere sleutel" komt — en dat duwt de lezer naar de
+        // onschuldige verklaring terwijl het stuk is gewijzigd.
+        println!(
+            "  ✓ deze sleutel is de sleutel die u hebt opgegeven; het manifest komt van die\n  \
+             installatie. Dat toont niet aan dat de inhoud juist of volledig is."
+        );
+    } else {
+        println!(
+            "  ✗ ondertekend met een andere sleutel dan u hebt opgegeven. Bestanden van vóór de\n  \
+             uitgave met vast sleutelbeheer dragen een wegwerpsleutel; die kunnen nooit\n  \
+             overeenkomen."
+        );
+        uitkomst = uitkomst.samen(Uitkomst::VreemdeOndertekenaar);
+    }
+
+    if let Err(e) = ondertekend.controleer_voorbehoud() {
+        println!("  ✗ {e}");
+        uitkomst = uitkomst.samen(Uitkomst::Afwijking);
+    }
 
     let map = stukkenmap.unwrap_or_else(|| {
         manifestpad.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
@@ -165,7 +257,7 @@ fn dossier(manifestpad: &PathBuf, stukkenmap: Option<PathBuf>) -> Result<bool> {
     if afwijkingen.is_empty() {
         println!("  ✓ alle {} stukken komen overeen met het manifest", m.stukken.len());
     } else {
-        geslaagd = false;
+        uitkomst = uitkomst.samen(Uitkomst::Afwijking);
         for a in &afwijkingen {
             println!("  ✗ {a}");
         }
@@ -191,15 +283,31 @@ fn dossier(manifestpad: &PathBuf, stukkenmap: Option<PathBuf>) -> Result<bool> {
     }
 
     println!();
-    if geslaagd {
-        println!("UITKOMST: de controle is geslaagd.");
-    } else {
-        println!("UITKOMST: de controle is NIET geslaagd. Zie de punten hierboven.");
+    match uitkomst {
+        Uitkomst::Geslaagd => println!("UITKOMST: de controle is geslaagd."),
+        Uitkomst::VreemdeOndertekenaar => println!(
+            "UITKOMST: het dossier is niet gewijzigd, maar komt van een andere installatie dan \
+             de sleutel die u hebt opgegeven."
+        ),
+        Uitkomst::Afwijking => {
+            println!("UITKOMST: de controle is NIET geslaagd. Zie de punten hierboven.")
+        }
     }
-    Ok(geslaagd)
+    Ok(uitkomst)
 }
 
-fn logboek(regelpad: &PathBuf, ankerpad: Option<PathBuf>) -> Result<bool> {
+fn logboek(regelpad: &PathBuf, ankerpad: Option<PathBuf>, sleutels: &[String]) -> Result<Uitkomst> {
+    // Een opgegeven sleutel zonder anker is een vergelijking zonder tegenpartij.
+    // Groen melden zou hier het gevaarlijkst zijn: wie dit in een script zet,
+    // leest het als "de herkomst is vastgesteld".
+    if !sleutels.is_empty() && ankerpad.is_none() {
+        anyhow::bail!(
+            "er is een sleutel opgegeven maar geen anker. In een logboek staat geen \
+             handtekening; alleen een anker draagt er een. Geef het ankerbestand mee met \
+             --anker, of laat --sleutel weg."
+        );
+    }
+
     let tekst = std::fs::read_to_string(regelpad)
         .with_context(|| format!("kon {} niet lezen", regelpad.display()))?;
     let regels: Vec<Ketenregel> =
@@ -216,6 +324,20 @@ fn logboek(regelpad: &PathBuf, ankerpad: Option<PathBuf>) -> Result<bool> {
             )
         }
     };
+
+    // De pin vóór de ketenverificatie: een anker van een vreemde installatie
+    // hoort als zodanig gemeld te worden en niet eerst als geldig bevonden.
+    let mut uitkomst = Uitkomst::Geslaagd;
+    let mut vreemd = None;
+    if let (Some(a), false) = (anker.as_ref(), sleutels.is_empty()) {
+        // Uitsluitend de sleutelvergelijking: een gebroken handtekening meldt
+        // `verifieer` hieronder al als `AnkerOngeldig`, en die melding twee keer
+        // afdrukken met verschillende bewoordingen helpt niemand.
+        if !sleutels.iter().any(|k| k.eq_ignore_ascii_case(&a.sleutel)) {
+            vreemd = Some(a.sleutel.to_ascii_lowercase());
+            uitkomst = uitkomst.samen(Uitkomst::VreemdeOndertekenaar);
+        }
+    }
 
     let rapport = dpofg_audit::verifieer(&regels, anker.as_ref())?;
 
@@ -255,23 +377,46 @@ fn logboek(regelpad: &PathBuf, ankerpad: Option<PathBuf>) -> Result<bool> {
         ),
         Ankerstatus::AnkerOngeldig(reden) => println!("  ✗ het anker is niet bruikbaar: {reden}"),
     }
+    match (&vreemd, anker.is_some(), sleutels.is_empty()) {
+        (Some(sleutel), _, _) => println!(
+            "  ✗ dit anker is ondertekend met sleutel {sleutel}; die staat niet in de lijst \
+             sleutels waarmee u vergelijkt.\n    Ankers van vóór de uitgave met vast \
+             sleutelbeheer dragen een wegwerpsleutel; die kunnen nooit overeenkomen."
+        ),
+        (None, true, false) => {
+            println!("  ✓ het anker komt van de installatie waarvan u de sleutel hebt opgegeven")
+        }
+        (None, true, true) => println!(
+            "  Let op: van wie dit anker komt, is hiermee niet vastgesteld. Geef de gepubliceerde \
+             sleutel mee met --sleutel."
+        ),
+        _ => {}
+    }
 
     println!("\nReikwijdte");
     for regel in wikkel(&rapport.reikwijdte(), 76) {
         println!("  {regel}");
     }
 
-    println!();
-    if rapport.is_ongeschonden() {
-        println!("UITKOMST: de controle is geslaagd.");
-        Ok(true)
-    } else {
-        println!("UITKOMST: de controle is NIET geslaagd. Zie de punten hierboven.");
-        Ok(false)
+    if !rapport.is_ongeschonden() {
+        uitkomst = uitkomst.samen(Uitkomst::Afwijking);
     }
+
+    println!();
+    match uitkomst {
+        Uitkomst::Geslaagd => println!("UITKOMST: de controle is geslaagd."),
+        Uitkomst::VreemdeOndertekenaar => println!(
+            "UITKOMST: de keten is samenhangend, maar het anker komt van een andere installatie \
+             dan de sleutel die u hebt opgegeven."
+        ),
+        Uitkomst::Afwijking => {
+            println!("UITKOMST: de controle is NIET geslaagd. Zie de punten hierboven.")
+        }
+    }
+    Ok(uitkomst)
 }
 
-fn anker_alleen(pad: &PathBuf) -> Result<bool> {
+fn anker_alleen(pad: &PathBuf, sleutels: &[String]) -> Result<Uitkomst> {
     let tekst = std::fs::read_to_string(pad)
         .with_context(|| format!("kon {} niet lezen", pad.display()))?;
     let anker: dpofg_audit::Anker =
@@ -282,26 +427,48 @@ fn anker_alleen(pad: &PathBuf) -> Result<bool> {
     println!("  regel     : {}", anker.volgnummer);
     println!("  hash      : {}", anker.hash);
     println!("  tijdstip  : {}", anker.tijdstip.format("%d-%m-%Y %H:%M UTC"));
+    println!("  sleutel   : {}", anker.sleutel);
     if let Some(p) = &anker.bewaarplaats {
         println!("  bewaard in: {p}");
     }
 
     println!();
+    let mut uitkomst = Uitkomst::Geslaagd;
+    if !sleutels.is_empty() {
+        if let Err(e) = anker.controleer_ondertekenaar(sleutels) {
+            if matches!(e, dpofg_audit::AuditFout::OnbekendeOndertekenaar { .. }) {
+                println!(
+                    "✗ {e}\n  Ankers van vóór de uitgave met vast sleutelbeheer dragen een \
+                     wegwerpsleutel; die kunnen nooit overeenkomen."
+                );
+                uitkomst = uitkomst.samen(Uitkomst::VreemdeOndertekenaar);
+            }
+        } else {
+            println!("✓ dit anker komt van de installatie waarvan u de sleutel hebt opgegeven.");
+        }
+    }
+
     match anker.controleer_handtekening() {
         Ok(()) => {
             println!("✓ de handtekening klopt: dit anker is niet gewijzigd.");
+            if sleutels.is_empty() {
+                println!(
+                    "  Van wie dit anker komt, is hiermee niet vastgesteld. Geef de gepubliceerde \
+                     sleutel mee met --sleutel."
+                );
+            }
             println!(
                 "\nLet op: het tijdstip hierboven komt van de machine die het anker maakte.\n\
                  Dat het anker vóór een bepaald moment bestond, blijkt niet uit dit bestand\n\
                  maar uit de plaats waar het buiten het systeem is bewaard."
             );
-            Ok(true)
         }
         Err(e) => {
             println!("✗ {e}");
-            Ok(false)
+            uitkomst = uitkomst.samen(Uitkomst::Afwijking);
         }
     }
+    Ok(uitkomst)
 }
 
 /// Breekt tekst af op woordgrenzen.

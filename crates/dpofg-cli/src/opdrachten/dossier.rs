@@ -112,10 +112,9 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
         manifest.voeg_toe("anker.json", "anker", "anker", 1, &ankerjson);
     }
 
-    // Ondertekenen. Zolang er geen vast sleutelbeheer is, wordt er per dossier
-    // een sleutelpaar gemaakt; dat staat er dus bij.
-    let sleutel = dpofg_report::nieuw_sleutelpaar();
-    let ondertekend = OndertekendManifest::onderteken(manifest, &sleutel)?;
+    // Ondertekenen met de vaste installatiesleutel: dezelfde die onder elk
+    // anker van deze kluis staat.
+    let ondertekend = kluis.onderteken_met(|s| OndertekendManifest::onderteken(manifest, s))?;
     let manifestpad = o.map.join("manifest.json");
     std::fs::write(&manifestpad, serde_json::to_vec_pretty(&ondertekend)?)?;
 
@@ -157,13 +156,15 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
     gelukt(&format!("manifest weggeschreven naar {}", manifestpad.display()));
     println!();
     terzijde(&format!(
-        "De ontvanger controleert dit met:  dpofg-verify dossier {}",
-        manifestpad.display()
+        "De ontvanger controleert dit met:\n  dpofg-verify dossier {} --sleutel {}",
+        manifestpad.display(),
+        ondertekend.ondertekenaar
     ));
     let_op(
-        "Deze uitgave maakt per dossier een nieuw sleutelpaar. De handtekening toont daarmee \
-         aan dat het manifest niet is gewijzigd, maar niet dat het van deze organisatie komt. \
-         Vast sleutelbeheer volgt.",
+        "Geef de sleutel langs een ánder kanaal door dan dit dossier. Het dossier bevat hem niet \
+         als losstaande vermelding en hoort dat ook niet te doen: een sleutel die met het stuk \
+         meekomt, toont niets aan. Publiceer hem op de website van de organisatie of in een \
+         eerder ondertekend stuk; 'dpofg kluis sleutel' toont hem.",
     );
     Ok(())
 }

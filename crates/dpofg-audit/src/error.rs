@@ -16,6 +16,11 @@ pub enum AuditFout {
     TijdLooptTerug { volgnummer: u64, vorige: String, deze: String },
     /// Een zegel of anker is niet geldig.
     OngeldigZegel(String),
+    /// Het anker is geldig ondertekend, maar niet door een sleutel waarmee de
+    /// controleur vergelijkt. Dit is een ándere uitkomst dan een gebroken
+    /// handtekening: het stuk is niet gewijzigd, het komt alleen niet van de
+    /// installatie waarvan de sleutel is opgegeven.
+    OnbekendeOndertekenaar { gekregen: String },
     /// Het logboek is leeg terwijl er een regel werd verwacht.
     LeegLogboek,
     /// Serialisatie is mislukt.
@@ -42,6 +47,10 @@ impl fmt::Display for AuditFout {
                 "tijdstip van regel {volgnummer} ({deze}) ligt vóór dat van de voorgaande regel ({vorige})"
             ),
             Self::OngeldigZegel(m) => write!(f, "ongeldig zegel: {m}"),
+            Self::OnbekendeOndertekenaar { gekregen } => write!(
+                f,
+                "het anker is ondertekend met sleutel {gekregen}; die staat niet in de lijst met sleutels waarmee u vergelijkt"
+            ),
             Self::LeegLogboek => write!(f, "het logboek bevat geen regels"),
             Self::Serialisatie(m) => write!(f, "serialisatie mislukt: {m}"),
         }

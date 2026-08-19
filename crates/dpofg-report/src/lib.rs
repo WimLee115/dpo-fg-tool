@@ -38,6 +38,7 @@ dossier als zodanig aangemerkt.";
 
 /// Eén stuk in het dossier.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Dossierstuk {
     /// Bestandsnaam binnen de bundel.
     pub naam: String,
@@ -57,7 +58,14 @@ pub struct Dossierstuk {
 }
 
 /// Het manifest van een dossier.
+///
+/// `deny_unknown_fields` op dit type en op [`Dossierstuk`] en [`Weglating`]:
+/// een manifest met een veld dat deze uitgave niet kent, wordt geweigerd in
+/// plaats van uitgekleed ingelezen. Zonder die regel zou de handtekening
+/// worden gecontroleerd over een object waaruit stilzwijgend iets is
+/// weggevallen, en dan is een geslaagde controle een vals groen vinkje.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub formaatversie: u8,
     /// Waarvoor het dossier is samengesteld.
@@ -100,6 +108,7 @@ pub struct Manifest {
 
 /// Iets dat bewust niet in het dossier zit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Weglating {
     pub omschrijving: String,
     pub reden: String,
@@ -194,6 +203,7 @@ impl Manifest {
 
 /// Een ondertekend dossiermanifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OndertekendManifest {
     pub manifest: Manifest,
     pub ondertekenaar: String,
@@ -212,6 +222,12 @@ impl OndertekendManifest {
     }
 
     /// Controleert de handtekening.
+    ///
+    /// **Dit toont uitsluitend zelfconsistentie aan.** De sleutel waartegen
+    /// wordt gecontroleerd, staat in het manifest zelf. Om vast te stellen dat
+    /// het dossier van een bepaalde installatie komt, is
+    /// [`OndertekendManifest::controleer_ondertekenaar`] nodig, met een sleutel
+    /// die langs een ander kanaal is verkregen dan het dossier.
     pub fn controleer(&self) -> Result<(), String> {
         let sleutelbytes =
             hex::decode(&self.ondertekenaar).map_err(|e| format!("sleutel is geen hex: {e}"))?;
@@ -232,6 +248,37 @@ impl OndertekendManifest {
             self.manifest.te_ondertekenen().map_err(|e| format!("serialisatie: {e}"))?;
         vk.verify(&boodschap, &sig)
             .map_err(|_| "de handtekening klopt niet met de inhoud".to_string())
+    }
+
+    /// Controleert dat dit manifest van een van de opgegeven installaties komt.
+    ///
+    /// Eerst de sleutel, dan pas de handtekening — anders meldt de controle een
+    /// dossier van een vreemde installatie eerst als geldig.
+    pub fn controleer_ondertekenaar(&self, vertrouwde: &[String]) -> Result<(), String> {
+        let deze = self.ondertekenaar.to_ascii_lowercase();
+        if !vertrouwde.iter().any(|v| v.trim().to_ascii_lowercase() == deze) {
+            return Err(format!(
+                "het manifest is ondertekend met sleutel {deze}; die staat niet in de lijst met sleutels waarmee u vergelijkt"
+            ));
+        }
+        self.controleer()
+    }
+
+    /// Controleert dat het vaste voorbehoud niet is afgezwakt.
+    ///
+    /// Het voorbehoud wordt meegetekend, dus wie de tekst ná het ondertekenen
+    /// aanpast, verbreekt de handtekening. Wie hem *vóór* het ondertekenen
+    /// aanpast, komt door [`OndertekendManifest::controleer`] heen — en juist
+    /// dat is het geval dat telt, want dat is het geval dat de aanleverende
+    /// organisatie zelf in de hand heeft.
+    pub fn controleer_voorbehoud(&self) -> Result<(), String> {
+        if self.manifest.voorbehoud == VOORBEHOUD {
+            Ok(())
+        } else {
+            Err("het voorbehoud in dit manifest wijkt af van de vaste tekst; \
+                 de tekst is vóór het ondertekenen aangepast"
+                .to_string())
+        }
     }
 
     /// Controleert of de bijgeleverde stukken overeenkomen met het manifest.
@@ -263,6 +310,10 @@ impl OndertekendManifest {
 }
 
 /// Maakt een nieuw ondertekensleutelpaar aan.
+///
+/// In productie tekent de tool met de vaste installatiesleutel uit de kluis;
+/// die overleeft een wachtwoordwissel en is via `dpofg kluis sleutel` te
+/// publiceren. Deze functie bestaat voor tests en voorbeelden.
 pub fn nieuw_sleutelpaar() -> SigningKey {
     SigningKey::generate(&mut rand::rngs::OsRng)
 }
@@ -318,6 +369,158 @@ mod tests {
         let mut o = OndertekendManifest::onderteken(manifest(), &sleutel).unwrap();
         o.manifest.voorbehoud = "alles is aantoonbaar".into();
         assert!(o.controleer().is_err(), "het voorbehoud is meegetekend");
+    }
+
+    #[test]
+    fn een_manifest_van_een_vreemde_sleutel_wordt_geweigerd() {
+        let vreemde = nieuw_sleutelpaar();
+        let eigen = nieuw_sleutelpaar();
+        let o = OndertekendManifest::onderteken(manifest(), &vreemde).unwrap();
+
+        assert!(o.controleer().is_ok());
+        let publiek_eigen = hex::encode(eigen.verifying_key().to_bytes());
+        let fout = o.controleer_ondertekenaar(&[publiek_eigen]).unwrap_err();
+        assert!(fout.contains(&hex::encode(vreemde.verifying_key().to_bytes())));
+    }
+
+    #[test]
+    fn een_manifest_van_de_eigen_sleutel_wordt_aanvaard() {
+        let sleutel = nieuw_sleutelpaar();
+        let o = OndertekendManifest::onderteken(manifest(), &sleutel).unwrap();
+        let publiek = hex::encode(sleutel.verifying_key().to_bytes());
+
+        assert!(o.controleer_ondertekenaar(std::slice::from_ref(&publiek)).is_ok());
+        assert!(o.controleer_ondertekenaar(&[format!(" {} ", publiek.to_uppercase())]).is_ok());
+        assert!(o.controleer_ondertekenaar(&[]).is_err());
+    }
+
+    #[test]
+    fn een_vervangen_ondertekenaar_valt_door_de_pin() {
+        // Dit is het gat dat de pin moet dichten: wie het manifest opnieuw
+        // ondertekent met een eigen sleutel én het veld `ondertekenaar`
+        // meeverandert, komt vandaag ongehinderd door `controleer()`.
+        let vervalser = nieuw_sleutelpaar();
+        let echte = nieuw_sleutelpaar();
+        let echt = OndertekendManifest::onderteken(manifest(), &echte).unwrap();
+
+        let mut vervalst =
+            OndertekendManifest::onderteken(echt.manifest.clone(), &vervalser).unwrap();
+        vervalst.manifest.bestemd_voor = "een andere ontvanger".into();
+        let vervalst = OndertekendManifest::onderteken(vervalst.manifest, &vervalser).unwrap();
+
+        assert!(vervalst.controleer().is_ok(), "zelfconsistent, dus geldig");
+        let publiek_echt = hex::encode(echte.verifying_key().to_bytes());
+        assert!(vervalst.controleer_ondertekenaar(&[publiek_echt]).is_err());
+    }
+
+    #[test]
+    fn een_vooraf_afgezwakt_voorbehoud_wordt_geweigerd() {
+        let sleutel = nieuw_sleutelpaar();
+        let mut m = manifest();
+        m.voorbehoud = "de integriteit van dit dossier staat vast".into();
+        let o = OndertekendManifest::onderteken(m, &sleutel).unwrap();
+
+        assert!(o.controleer().is_ok(), "de afgezwakte tekst is netjes meegetekend");
+        assert!(o.controleer_voorbehoud().is_err());
+    }
+
+    #[test]
+    fn het_vaste_voorbehoud_komt_door_de_controle() {
+        let sleutel = nieuw_sleutelpaar();
+        let o = OndertekendManifest::onderteken(manifest(), &sleutel).unwrap();
+        assert!(o.controleer_voorbehoud().is_ok());
+    }
+
+    /// Met de hand vastgelegd, niet met de huidige code gegenereerd: deze test
+    /// moet blijven falen wanneer iemand de veldnamen of de vorm van het
+    /// manifest wijzigt, ook als de code dan nog met zichzelf overweg kan.
+    #[test]
+    fn een_manifest_van_formaatversie_1_blijft_leesbaar() {
+        let json = format!(
+            r#"{{
+              "manifest": {{
+                "formaatversie": 1,
+                "aanleiding": "uitvraag van 12 augustus 2026",
+                "bestemd_voor": "de toezichthouder",
+                "samengesteld_op": "2026-08-18T09:00:00Z",
+                "samengesteld_door": "A. de Vries",
+                "periode_van": null,
+                "periode_tot": null,
+                "keten_volgnummer": 412,
+                "keten_hash": "{hash}",
+                "anker_omschrijving": null,
+                "reikwijdte": "De keten is bevestigd tot en met regel 400.",
+                "kennispakket_code": "nl-start",
+                "kennispakket_versie": "0.1-start",
+                "kennispakket_consolidatiedatum": "2026-08-18",
+                "programmaversie": "0.1.0",
+                "stukken": [
+                  {{
+                    "naam": "verwerking-0412-K.json",
+                    "soort": "verwerking",
+                    "bron_id": "0198f2c1",
+                    "bron_versie": 3,
+                    "hash": "{hash}",
+                    "omvang": 2481,
+                    "bewerkt": false,
+                    "bewerking_grondslag": null
+                  }}
+                ],
+                "weggelaten": [
+                  {{
+                    "omschrijving": "verwerkingen met de status concept",
+                    "reden": "concepten zijn nog niet vastgesteld",
+                    "aantal": 3
+                  }}
+                ],
+                "voorbehoud": {voorbehoud}
+              }},
+              "ondertekenaar": "{hash}",
+              "handtekening": "{handtekening}"
+            }}"#,
+            hash = "a".repeat(64),
+            handtekening = "b".repeat(128),
+            voorbehoud = serde_json::to_string(VOORBEHOUD).unwrap(),
+        );
+
+        let gelezen: OndertekendManifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(gelezen.manifest.formaatversie, 1);
+        assert_eq!(gelezen.manifest.stukken.len(), 1);
+        assert_eq!(gelezen.manifest.weggelaten[0].aantal, 3);
+        assert!(gelezen.controleer_voorbehoud().is_ok());
+    }
+
+    #[test]
+    fn een_onbekend_veld_in_het_manifest_wordt_geweigerd() {
+        let sleutel = nieuw_sleutelpaar();
+        let o = OndertekendManifest::onderteken(manifest(), &sleutel).unwrap();
+        let mut waarde: serde_json::Value = serde_json::to_value(&o).unwrap();
+        waarde["manifest"]["toegevoegd_veld"] = serde_json::json!("iets");
+        assert!(serde_json::from_value::<OndertekendManifest>(waarde).is_err());
+    }
+
+    #[test]
+    fn een_onbekend_veld_naast_het_manifest_wordt_geweigerd() {
+        // Het buitenste niveau valt per constructie buiten de ondertekende
+        // bytes. Juist daarom mag er niets stilzwijgend bij: een lezer die de
+        // gepubliceerde specificatie heeft nagebouwd, weigert zo'n bestand, en
+        // dan hoort de meegeleverde binary dat ook te doen.
+        let sleutel = nieuw_sleutelpaar();
+        let o = OndertekendManifest::onderteken(manifest(), &sleutel).unwrap();
+        let mut waarde: serde_json::Value = serde_json::to_value(&o).unwrap();
+        waarde["opmerking_van_de_organisatie"] = serde_json::json!("door de AP goedgekeurd");
+        assert!(serde_json::from_value::<OndertekendManifest>(waarde).is_err());
+    }
+
+    #[test]
+    fn een_onbekend_veld_in_een_stuk_wordt_geweigerd() {
+        let sleutel = nieuw_sleutelpaar();
+        let mut m = manifest();
+        m.voeg_toe("register.json", "verwerking", "0412-K", 3, b"inhoud");
+        let o = OndertekendManifest::onderteken(m, &sleutel).unwrap();
+        let mut waarde: serde_json::Value = serde_json::to_value(&o).unwrap();
+        waarde["manifest"]["stukken"][0]["extra"] = serde_json::json!(1);
+        assert!(serde_json::from_value::<OndertekendManifest>(waarde).is_err());
     }
 
     #[test]
