@@ -14,32 +14,39 @@ ignore = []
 
 [licenses]
 # Een expliciete lijst, geen uitsluitingslijst: een onbekende licentie hoort
-# een besluit te vergen, niet stilzwijgend door te glippen.
+# een besluit te vergen, niet stilzwijgend door te glippen. De lijst bevat
+# uitsluitend licenties die in de huidige graaf voorkomen; een licentie die er
+# niet in staat laat de bouwstraat vastlopen, en dat is de bedoeling. Ook een
+# ongebruikte toestemming is een waarschuwing, en waarschuwingen die blijven
+# staan leren iedereen waarschuwingen negeren.
 allow = [
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
-    "ISC",
     "Unicode-3.0",
-    "Zlib",
     "CC0-1.0",
-    "MPL-2.0",
     "Unlicense",
 ]
 confidence-threshold = 0.9
 
-[[licenses.exceptions]]
-# Het eigen product valt buiten de lijst hierboven.
-name = "dpofg-crypto"
-allow = ["LicenseRef-Proprietary"]
+[licenses.private]
+# De eigen crates dragen `LicenseRef-Proprietary` en zijn `publish = false`.
+# Dat is geen licentiekeuze over andermans code maar eigendom van dit product;
+# de controle hierboven gaat over wat er van buiten binnenkomt.
+ignore = true
 
 [bans]
 # Twee versies van dezelfde crate betekenen twee keer patchen bij een lek, en
 # bij crypto-crates twee verschillende implementaties in hetzelfde proces.
 multiple-versions = "warn"
 wildcards = "deny"
+# De interne crates verwijzen naar elkaar met een pad en zonder versie. Een
+# versienummer op twee plaatsen bijhouden levert geen enkele bescherming op
+# zolang niets van dit alles wordt gepubliceerd; het wildcardverbod blijft
+# staan voor alles wat wél van buiten komt.
+allow-wildcard-paths = true
 highlight = "all"
 
 [[bans.deny]]

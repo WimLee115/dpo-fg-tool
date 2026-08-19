@@ -20,6 +20,9 @@ rust-version = "1.82"
 authors = ["WimLee115"]
 license = "LicenseRef-Proprietary"
 repository = "https://github.com/WimLee115/dpo-fg-tool"
+# De crates zijn propriëtair en horen niet op een openbaar register te belanden.
+# Dit maakt `cargo publish` onmogelijk in plaats van onwenselijk.
+publish = false
 
 [workspace.dependencies]
 # --- interne crates ---
