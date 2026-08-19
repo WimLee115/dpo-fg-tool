@@ -1001,6 +1001,246 @@ fn een_pad_met_een_accent_laat_het_logboek_heel() {
 }
 
 // --------------------------------------------------------------------------
+// De effectbeoordeling
+// --------------------------------------------------------------------------
+
+/// Een dossier bouwen dat klaar is om te worden vastgesteld.
+fn dpia_opzetten(p: &Proef, kenmerk: &str) {
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet(&format!("dpia nieuw {kenmerk} Verzuimregistratie --verwerking 0412-K"));
+    p.moet(&format!(
+        "dpia voortoets {kenmerk} --uitkomst vereist --motivering 'twee criteria worden geraakt: bijzondere gegevens en grootschaligheid'"
+    ));
+    p.moet(&format!("dpia uitvoeren {kenmerk} 2026-06-01T09:00:00Z --door 'A. de Vries' --methode WP248 --vooraf true"));
+    p.moet(&format!("dpia vul {kenmerk} --veld systematische-beschrijving --waarde 'verzuimregistratie voor loondoorbetaling'"));
+    p.moet(&format!("dpia vul {kenmerk} --veld noodzaak-en-evenredigheid --waarde 'geen minder ingrijpend alternatief beschikbaar'"));
+    p.moet(&format!("dpia vul {kenmerk} --veld risico --waarde 'onbevoegde inzage door collega'"));
+    p.moet(&format!("dpia vul {kenmerk} --veld maatregel --waarde 'toegang op rolbasis'"));
+    p.moet(&format!(
+        "dpia vul {kenmerk} --veld advies-fg --waarde 'de beoordeling is navolgbaar en volledig'"
+    ));
+}
+
+#[test]
+fn een_effectbeoordeling_koppelt_zich_aan_een_registerregel() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    let uit = p.moet("dpia nieuw DPIA-0412 Verzuimregistratie --verwerking 0412-K");
+
+    assert!(uit.contains("aangemaakt bij 0412-K"));
+    // Het dossier vraagt eerst om de voortoets en niet meteen om alles.
+    assert!(uit.contains("voortoets"));
+    assert!(uit.contains("0 van de 2"), "kreeg:\n{uit}");
+
+    // En het register meldt de ontbrekende verwijzing niet meer.
+    let register = p.moet("register toon 0412-K");
+    assert!(!register.contains("dpia —"), "de koppeling hoort nu te staan:\n{register}");
+}
+
+#[test]
+fn koppelen_aan_een_onbekende_registerregel_wordt_geweigerd_bij_de_dpia() {
+    let p = Proef::nieuw();
+    let uit = p.moet_falen("dpia nieuw DPIA-0412 Verzuim --verwerking bestaat-niet");
+    assert!(uit.contains("geen registerregel met kenmerk"));
+    assert!(uit.contains("register lijst"));
+}
+
+/// Een gemotiveerd besluit dat er geen beoordeling nodig is, sluit het dossier.
+/// Dat is geen ontsnapping: het besluit staat vast en gaat mee in elke export.
+#[test]
+fn de_voortoets_niet_nodig_sluit_het_dossier_met_twee_onderdelen() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("dpia nieuw DPIA-0412 Verzuimregistratie --verwerking 0412-K");
+
+    let uit = p.moet(
+        "dpia voortoets DPIA-0412 --uitkomst niet-nodig --motivering 'geen van de negen criteria wordt geraakt; kleinschalige verwerking zonder bijzondere gegevens'",
+    );
+    assert!(uit.contains("2 van de 2"), "kreeg:\n{uit}");
+    assert!(uit.contains("alle verplichte onderdelen zijn ingevuld"));
+
+    p.moet("dpia vaststellen DPIA-0412");
+}
+
+/// Een restrisico is per definitie wat er ná de maatregelen overblijft.
+#[test]
+fn een_restrisico_zonder_maatregelen_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("dpia nieuw DPIA-0412 Verzuimregistratie --verwerking 0412-K");
+    p.moet(
+        "dpia voortoets DPIA-0412 --uitkomst vereist --motivering 'twee criteria worden geraakt'",
+    );
+    p.moet("dpia uitvoeren DPIA-0412 2026-06-01T09:00:00Z --door 'A. de Vries'");
+    p.moet("dpia vul DPIA-0412 --veld risico --waarde 'onbevoegde inzage'");
+
+    let uit = p.moet_falen("dpia restrisico DPIA-0412 --niveau laag --motivering 'beperkte kring'");
+    assert!(uit.contains("overblijft ná de maatregelen"), "kreeg:\n{uit}");
+    assert!(uit.contains("art. 35 lid 7 onder d"));
+}
+
+/// De hele klok: indienen, opschorten, hervatten, verlengen, advies.
+#[test]
+fn de_raadplegingsklok_staat_stil_tijdens_een_informatieverzoek() {
+    let p = Proef::nieuw();
+    dpia_opzetten(&p, "DPIA-0412");
+    p.moet("dpia restrisico DPIA-0412 --niveau hoog --motivering 'het risico blijft groot ondanks de maatregelen'");
+
+    let ingediend = p.moet("dpia raadpleging DPIA-0412 2026-06-05T09:00:00Z");
+    assert!(ingediend.contains("8 weken"));
+    assert!(ingediend.contains("art. 36 lid 2 AVG"), "de grondslag hoort te kloppen:\n{ingediend}");
+    assert!(ingediend.contains("geen goedkeuring"));
+
+    let voor = p.moet("dpia toon DPIA-0412");
+    let deadline_voor = regel_met(&voor, "verstrijkt");
+
+    p.moet("dpia raadpleging-opschorten DPIA-0412 2026-06-12T09:00:00Z --opgevraagd 'de onderliggende risicoanalyse'");
+    p.moet("dpia raadpleging-hervatten DPIA-0412 2026-06-26T09:00:00Z");
+
+    let na = p.moet("dpia toon DPIA-0412");
+    let deadline_na = regel_met(&na, "verstrijkt");
+    assert_ne!(
+        deadline_voor, deadline_na,
+        "veertien dagen opschorting hoort de deadline te verschuiven"
+    );
+    assert!(na.contains("opgeschort van"));
+    assert!(na.contains("informatieverzoek van de toezichthouder"));
+}
+
+#[test]
+fn de_toezichthouder_kan_de_termijn_verlengen() {
+    let p = Proef::nieuw();
+    dpia_opzetten(&p, "DPIA-0412");
+    p.moet("dpia restrisico DPIA-0412 --niveau hoog --motivering 'het risico blijft groot ondanks de maatregelen'");
+    p.moet("dpia raadpleging DPIA-0412 2026-06-05T09:00:00Z");
+
+    let uit = p.moet("dpia raadpleging-verlengen DPIA-0412 2026-06-20T09:00:00Z");
+    assert!(uit.contains("verlenging vastgelegd"));
+    assert!(uit.contains("1 keer"));
+
+    // Een tweede verlenging kent de verordening niet.
+    let tweede = p.moet_falen("dpia raadpleging-verlengen DPIA-0412 2026-06-25T09:00:00Z");
+    assert!(tweede.contains("maximum"));
+}
+
+#[test]
+fn het_advies_van_de_toezichthouder_rondt_de_klok_af() {
+    let p = Proef::nieuw();
+    dpia_opzetten(&p, "DPIA-0412");
+    p.moet("dpia restrisico DPIA-0412 --niveau hoog --motivering 'het risico blijft groot ondanks de maatregelen'");
+    p.moet("dpia raadpleging DPIA-0412 2026-06-05T09:00:00Z");
+    p.moet("dpia advies DPIA-0412 2026-07-15T09:00:00Z --referentie AP-2026-1234");
+
+    let uit = p.moet("dpia toon DPIA-0412");
+    assert!(uit.contains("afgerond met advies"));
+    assert!(uit.contains("AP-2026-1234"));
+
+    p.moet("dpia vaststellen DPIA-0412");
+}
+
+/// Wijzigt het risicoprofiel van de verwerking, dan is de beoordeling niet meer
+/// vanzelfsprekend actueel (art. 35 lid 11 AVG).
+#[test]
+fn een_gewijzigde_verwerking_vraagt_om_herbeoordeling() {
+    let p = Proef::nieuw();
+    dpia_opzetten(&p, "DPIA-0412");
+    p.moet(
+        "dpia restrisico DPIA-0412 --niveau laag --motivering 'beperkte kring van geadresseerden'",
+    );
+    p.moet("dpia vaststellen DPIA-0412");
+
+    let uit = p.moet("register vul 0412-K --veld bijzondere-gegevens --waarde gezondheid");
+    assert!(uit.contains("DPIA-0412"), "de gekoppelde beoordeling hoort genoemd te worden:\n{uit}");
+    assert!(uit.contains("herziening nodig"));
+    assert!(uit.contains("art. 35 lid 11 AVG"));
+
+    let dossier = p.moet("dpia toon DPIA-0412");
+    assert!(dossier.contains("herziening nodig"));
+}
+
+#[test]
+fn de_effectbeoordeling_komt_mee_in_een_dossier() {
+    let p = Proef::nieuw();
+    dpia_opzetten(&p, "DPIA-0412");
+    p.moet(
+        "dpia restrisico DPIA-0412 --niveau laag --motivering 'beperkte kring van geadresseerden'",
+    );
+    p.moet("dpia vaststellen DPIA-0412");
+    p.moet("logboek anker --bewaarplaats notulen");
+
+    let map = p._map.path().join("uitvraag");
+    p.moet(&format!(
+        "dossier {} --aanleiding uitvraag --bestemd-voor toezichthouder --met-concepten",
+        map.display()
+    ));
+    assert!(map.join("dpia-DPIA-0412.json").exists(), "de beoordeling hoort in de bundel");
+
+    // En de weglatingstekst leest als Nederlands.
+    let manifest = std::fs::read_to_string(map.join("manifest.json")).unwrap();
+    assert!(!manifest.contains("dpiaen"), "geen verzonnen meervoud in een dossier");
+}
+
+/// Een afgesloten termijn schuift niet meer. Zou dat wel kunnen, dan zou een
+/// dossier dat al is uitgeleverd achteraf een andere einddatum krijgen.
+#[test]
+fn een_afgeronde_raadpleging_is_niet_meer_te_verschuiven() {
+    let p = Proef::nieuw();
+    dpia_opzetten(&p, "DPIA-0412");
+    p.moet("dpia restrisico DPIA-0412 --niveau hoog --motivering 'het risico blijft groot ondanks de maatregelen'");
+    p.moet("dpia raadpleging DPIA-0412 2026-06-05T09:00:00Z");
+    p.moet("dpia advies DPIA-0412 2026-07-15T09:00:00Z --referentie AP-2026-1234");
+
+    for opdracht in [
+        "dpia raadpleging-opschorten DPIA-0412 2026-07-20T09:00:00Z",
+        "dpia raadpleging-hervatten DPIA-0412 2026-07-25T09:00:00Z",
+        "dpia raadpleging-verlengen DPIA-0412 2026-07-20T09:00:00Z",
+    ] {
+        let uit = p.moet_falen(opdracht);
+        assert!(uit.contains("afgesloten termijn schuift niet meer"), "'{opdracht}' gaf:\n{uit}");
+    }
+}
+
+/// Twee beoordelingen op één registerregel zou betekenen dat een
+/// risicowijziging stilzwijgend aan één van beide voorbijgaat.
+#[test]
+fn een_registerregel_draagt_maar_een_effectbeoordeling() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("dpia nieuw DPIA-0412 Verzuimregistratie --verwerking 0412-K");
+
+    let uit = p.moet_falen("dpia nieuw DPIA-0413 Nogeens --verwerking 0412-K");
+    assert!(uit.contains("al gekoppeld aan effectbeoordeling DPIA-0412"), "kreeg:\n{uit}");
+}
+
+/// Een tijdstip in de toekomst is een invoerfout, en bij het advies zet hij
+/// bovendien de bewaking van de termijn uit.
+#[test]
+fn tijdstippen_in_de_toekomst_worden_overal_geweigerd() {
+    let p = Proef::nieuw();
+    dpia_opzetten(&p, "DPIA-0412");
+    p.moet("dpia restrisico DPIA-0412 --niveau hoog --motivering 'het risico blijft groot ondanks de maatregelen'");
+    p.moet("dpia raadpleging DPIA-0412 2026-06-05T09:00:00Z");
+
+    for (opdracht, woord) in [
+        ("dpia raadpleging-hervatten DPIA-0412 2099-01-01T09:00:00Z", "toekomst"),
+        ("dpia raadpleging-verlengen DPIA-0412 2099-01-01T09:00:00Z", "toekomst"),
+        ("dpia advies DPIA-0412 2099-01-01T09:00:00Z --referentie AP-1", "toekomst"),
+    ] {
+        let uit = p.moet_falen(opdracht);
+        assert!(uit.contains(woord), "'{opdracht}' gaf:\n{uit}");
+    }
+}
+
+/// Haalt de eerste regel met een bepaald woord uit de uitvoer.
+fn regel_met(uitvoer: &str, woord: &str) -> String {
+    uitvoer
+        .lines()
+        .find(|r| r.contains(woord))
+        .unwrap_or_else(|| panic!("geen regel met '{woord}' in:\n{uitvoer}"))
+        .to_string()
+}
+
+// --------------------------------------------------------------------------
 // De regelcatalogus: bevindingen moeten wegneembaar zijn
 // --------------------------------------------------------------------------
 
@@ -1100,7 +1340,7 @@ fn de_dekking_meldt_wat_er_werkelijk_draait() {
     let p = Proef::nieuw();
     let uit = p.moet("controle --dekking");
     assert!(uit.contains("van de 55 regels"));
-    assert!(uit.contains("30 van de 55"), "kreeg:\n{uit}");
+    assert!(uit.contains("33 van de 55"), "kreeg:\n{uit}");
     // En wat er níet draait, staat er met naam bij.
     assert!(uit.contains("Nog zonder evaluatie"));
     assert!(uit.contains("VWO-02"));

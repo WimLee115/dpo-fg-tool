@@ -223,6 +223,12 @@ impl LopendeTermijn {
         grond: impl Into<String>,
         door: impl Into<String>,
     ) -> Resultaat<()> {
+        if let Some(op) = self.afgerond_op {
+            return Err(TermijnFout::OpschortingNietToegestaan(format!(
+                "de termijn is op {} afgerond; een afgesloten termijn schuift niet meer",
+                op.to_rfc3339()
+            )));
+        }
         if !self.soort.opschortbaar {
             return Err(TermijnFout::OpschortingNietToegestaan(format!(
                 "termijn {} ({}) is niet opschortbaar",
@@ -250,6 +256,12 @@ impl LopendeTermijn {
 
     /// Hervat de termijn.
     pub fn hervat(&mut self, op: DateTime<Utc>) -> Resultaat<()> {
+        if let Some(op) = self.afgerond_op {
+            return Err(TermijnFout::OpschortingNietToegestaan(format!(
+                "de termijn is op {} afgerond; een afgesloten termijn schuift niet meer",
+                op.to_rfc3339()
+            )));
+        }
         let lopend = self
             .opschortingen
             .iter_mut()
@@ -275,6 +287,12 @@ impl LopendeTermijn {
         zone: chrono_tz::Tz,
         kalender: &Feestdagenkalender,
     ) -> Resultaat<()> {
+        if let Some(op) = self.afgerond_op {
+            return Err(TermijnFout::OpschortingNietToegestaan(format!(
+                "de termijn is op {} afgerond; een afgesloten termijn schuift niet meer",
+                op.to_rfc3339()
+            )));
+        }
         let recht = self.soort.verlenging.clone().ok_or_else(|| {
             TermijnFout::OpschortingNietToegestaan(format!(
                 "termijn {} kent geen verlengingsrecht",
@@ -316,7 +334,15 @@ impl LopendeTermijn {
     }
 
     /// Rondt het dossier af.
+    ///
+    /// Een opschorting die op dat moment nog loopt, wordt meteen beëindigd.
+    /// Zou dat niet gebeuren, dan zou de berekende einddatum van een afgesloten
+    /// dossier elke dag verder opschuiven — ook in een dossier dat al bij een
+    /// toezichthouder ligt.
     pub fn rond_af(&mut self, op: DateTime<Utc>) {
+        for o in self.opschortingen.iter_mut().filter(|o| o.tot.is_none()) {
+            o.tot = Some(op);
+        }
         self.afgerond_op = Some(op);
     }
 

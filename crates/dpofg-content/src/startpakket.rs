@@ -34,8 +34,8 @@ pub fn startpakket(consolidatiedatum: NaiveDate) -> Pakketinhoud {
     Pakketinhoud {
         code: "nl-start".into(),
         naam: "Startpakket Nederland — te verifiëren vóór gebruik".into(),
-        versie: 1,
-        versienaam: "0.1-start".into(),
+        versie: 2,
+        versienaam: "0.2-start".into(),
         consolidatiedatum,
         jurisdictie: "NL".into(),
         minimaal_aanbevolen_programmaversie: "0.1.0".into(),
@@ -88,7 +88,13 @@ fn termijnen() -> Vec<Termijnsoort> {
             Eenheid::Weken,
             Rechtsstelsel::Unierecht,
             Aanvang::VanafGebeurtenis,
-            "art. 36 lid 3 AVG",
+            // Lid 2 en niet lid 3: de acht weken, de verlenging met zes weken,
+            // de berichttermijn van één maand en de opschortingsgrond staan
+            // alle in lid 2. Lid 3 somt op welke stukken bij het verzoek gaan.
+            // Deze tekst reist via de verantwoording mee naar elk dossier, dus
+            // een verkeerde verwijzing komt uiteindelijk bij een toezichthouder
+            // op tafel.
+            "art. 36 lid 2 AVG",
         )
         .opschortbaar()
         .met_verlenging(Verlengingsrecht {
@@ -96,7 +102,7 @@ fn termijnen() -> Vec<Termijnsoort> {
             eenheid: Eenheid::Weken,
             aantal_keer: 1,
             bericht_binnen_oorspronkelijke_termijn: false,
-            grondslag: "art. 36 lid 3, tweede volzin, AVG".into(),
+            grondslag: "art. 36 lid 2, tweede en derde volzin, AVG".into(),
         }),
         // --- Zorgplichtketen ---
         // De duren hieronder zijn de gangbare waarden uit de meldketen. Zij
@@ -204,6 +210,42 @@ fn feestdagen_nl() -> Feestdagenkalender {
         (2027, 5, 17),
         (2027, 12, 25),
         (2027, 12, 26),
+        // 2028
+        (2028, 1, 1),
+        (2028, 4, 14),
+        (2028, 4, 16),
+        (2028, 4, 17),
+        (2028, 4, 27),
+        (2028, 5, 5),
+        (2028, 5, 25),
+        (2028, 6, 4),
+        (2028, 6, 5),
+        (2028, 12, 25),
+        (2028, 12, 26),
+        // 2029
+        (2029, 1, 1),
+        (2029, 3, 30),
+        (2029, 4, 1),
+        (2029, 4, 2),
+        (2029, 4, 27),
+        (2029, 5, 5),
+        (2029, 5, 10),
+        (2029, 5, 20),
+        (2029, 5, 21),
+        (2029, 12, 25),
+        (2029, 12, 26),
+        // 2030
+        (2030, 1, 1),
+        (2030, 4, 19),
+        (2030, 4, 21),
+        (2030, 4, 22),
+        (2030, 4, 27),
+        (2030, 5, 5),
+        (2030, 5, 30),
+        (2030, 6, 9),
+        (2030, 6, 10),
+        (2030, 12, 25),
+        (2030, 12, 26),
     ]
     .into_iter()
     .map(|(j, m, dag)| d(j, m, dag))
@@ -212,7 +254,7 @@ fn feestdagen_nl() -> Feestdagenkalender {
     Feestdagenkalender {
         jurisdictie: "NL".into(),
         dekking_van: 2026,
-        dekking_tot_en_met: 2027,
+        dekking_tot_en_met: 2030,
         bron: "startpakket; te verifiëren tegen de Algemene termijnenwet".into(),
         dagen,
     }
@@ -277,9 +319,65 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                 "de feestdagenkalender, in het bijzonder de variabele dagen",
                 "de datums in de rechtsfeiten",
                 "de status van elk doorgifte-instrument",
-                "of voor uw entiteitstype een verkorte meldtermijn geldt"
+                "of voor uw entiteitstype een verkorte meldtermijn geldt",
+                "het lidnummer waarop de termijn voor de voorafgaande raadpleging berust",
+                "de negen criteria voor een effectbeoordeling en de drempel van twee",
+                "de zesendertig maanden voor de herbeoordeling van een effectbeoordeling"
             ]
         }),
+    );
+    uit.insert(
+        "dpia_criteria_richtsnoeren".into(),
+        serde_json::json!({
+            "toelichting": "De criteria uit de richtsnoeren over de effectbeoordeling. Twee of \
+                            meer geraakte criteria wijzen op een waarschijnlijk hoog risico. Dat \
+                            is een aanwijzing en geen rekensom: één criterium kan volstaan en \
+                            twee hoeven niet altijd te betekenen dat de beoordeling verplicht is.",
+            "drempel": 2,
+            "criteria": [
+                { "nummer": 1, "naam": "evaluatie of scoretoekenning",
+                  "voorbeeld": "profilering, kredietwaardigheid, gedragsvoorspelling" },
+                { "nummer": 2, "naam": "geautomatiseerde besluitvorming met rechtsgevolg",
+                  "voorbeeld": "een besluit dat uitsluitend door een systeem wordt genomen" },
+                { "nummer": 3, "naam": "stelselmatige monitoring",
+                  "voorbeeld": "cameratoezicht in de openbare ruimte, monitoring van medewerkers" },
+                { "nummer": 4, "naam": "bijzondere of zeer persoonlijke gegevens",
+                  "voorbeeld": "gezondheid, strafrechtelijke gegevens, financiële gegevens" },
+                { "nummer": 5, "naam": "grootschalige verwerking",
+                  "voorbeeld": "naar aantal betrokkenen, hoeveelheid gegevens, duur of bereik" },
+                { "nummer": 6, "naam": "matching of samenvoeging van gegevensverzamelingen",
+                  "voorbeeld": "koppeling van bestanden uit verschillende verwerkingen" },
+                { "nummer": 7, "naam": "gegevens van kwetsbare betrokkenen",
+                  "voorbeeld": "kinderen, patiënten, werknemers, asielzoekers" },
+                { "nummer": 8, "naam": "nieuwe technologie of nieuw gebruik",
+                  "voorbeeld": "gezichtsherkenning, gecombineerde sensoren" },
+                { "nummer": 9, "naam": "het blokkeren van een recht, dienst of overeenkomst",
+                  "voorbeeld": "een screening die toegang tot een dienst kan onthouden" }
+            ]
+        }),
+    );
+    uit.insert(
+        "dpia_inhoudseisen".into(),
+        serde_json::json!([
+            { "onderdeel": "systematische_beschrijving",
+              "bepaling": "art. 35 lid 7 onder a AVG",
+              "eis": "een systematische beschrijving van de beoogde verwerkingen en de \
+                      verwerkingsdoeleinden, waaronder, in voorkomend geval, het gerechtvaardigde \
+                      belang dat door de verwerkingsverantwoordelijke wordt behartigd" },
+            { "onderdeel": "noodzaak_en_evenredigheid",
+              "bepaling": "art. 35 lid 7 onder b AVG",
+              "eis": "een beoordeling van de noodzaak en de evenredigheid van de verwerkingen met \
+                      betrekking tot de doeleinden" },
+            { "onderdeel": "risicos",
+              "bepaling": "art. 35 lid 7 onder c AVG",
+              "eis": "een beoordeling van de risico's voor de rechten en vrijheden van betrokkenen" },
+            { "onderdeel": "maatregelen",
+              "bepaling": "art. 35 lid 7 onder d AVG",
+              "eis": "de beoogde maatregelen om de risico's aan te pakken, waaronder waarborgen, \
+                      veiligheidsmaatregelen en mechanismen om de bescherming van \
+                      persoonsgegevens te verzekeren en aan te tonen dat aan deze verordening is \
+                      voldaan" }
+        ]),
     );
     uit.insert(
         "oorzaakcategorieen".into(),

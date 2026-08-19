@@ -575,6 +575,10 @@ De tool onderscheidt het informatieverzoek van het inzageverzoek scherp: andere 
 **DPIA**
 `id, verwerking_id, prescan_uitkomst, methode, uitgevoerd_door, datum, restrisico, art36_raadpleging_nodig, art36_ingediend_op, art36_termijn_verplichting_id, art36_opschorting_van, art36_opschorting_tot, art36_verlenging_toegepast, advies_ap_ref, besluit_door, herbeoordelingsdatum`
 
+*Afwijkingen in de bouw, met reden.* `art36_raadpleging_nodig` is geen veld maar een afleiding uit het restrisico: twee velden voor één feit kunnen uit elkaar lopen. De vijf velden `art36_ingediend_op`, `art36_termijn_verplichting_id`, `art36_opschorting_van`, `art36_opschorting_tot` en `art36_verlenging_toegepast` zijn vervangen door één lopende termijn uit de termijnenmotor, die haar hele geschiedenis draagt — meer opschortingen dan één, met grond en met wie ze inriep, wat in vijf platte velden niet past. `besluit_door` is de bestaande vaststellingsherkomst; `herbeoordelingsdatum` volgt uit de beoordelingsdatum plus de termijn uit het kennispakket en wordt niet apart bewaard. Toegevoegd ten opzichte van het plan: de vier onderdelen van artikel 35 lid 7 als eigen velden, en `vooraf_uitgevoerd` als drieledig antwoord — nog niet beantwoord is iets anders dan nee.
+
+Nog niet in het model: het standpunt van betrokkenen (art. 35 lid 9, dat "in voorkomend geval" geldt en dus een oordeel vergt dat de tool niet kan vellen) en het besluit op grond van de beoordeling (art. 24 lid 1).
+
 ### 7.4 FG-positie, advies en onafhankelijkheid
 
 **ADVIES**

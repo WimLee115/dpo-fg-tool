@@ -27,8 +27,8 @@
 use chrono::{DateTime, Duration, Utc};
 use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
-    avg::Grondslag, Bewaartermijn, Incident, Meldbesluit, Risiconiveau, Status, Verwerking,
-    Volledig,
+    avg::Grondslag, Bewaartermijn, Dpia, Incident, Meldbesluit, Risiconiveau, Status, Verwerking,
+    Volledig, Voortoets,
 };
 use dpofg_terms::Deadline;
 
@@ -75,7 +75,7 @@ pub fn geimplementeerd() -> &'static [&'static str] {
         "REG-01", "REG-02", "REG-03", "REG-04", "REG-05", "GRO-01", "GRO-02", "GRO-03", "GRO-04",
         "GRO-05", "BEW-01", "BEW-02", "BEW-04", "VWO-01", "EER-01", "DPIA-01", "LEK-01", "LEK-02",
         "LEK-03", "LEK-04", "LEK-06", "LEK-07", "LEK-08", "LEK-09", "LEK-12", "LEK-13", "LEK-15",
-        "SYS-04", "SYS-06", "SYS-10",
+        "DPIA-03", "DPIA-06", "DPIA-07", "SYS-04", "SYS-06", "SYS-10",
     ]
 }
 
@@ -381,9 +381,14 @@ fn effectbeoordeling() -> Vec<Regel> {
             "de effectbeoordeling is uitgevoerd nadat de verwerking al liep",
             Signalerend, Functionaris, "art. 35 lid 1 AVG", false),
         // Signalerend en niet blokkerend: of een restrisico hoog is en of raadpleging nodig is, is een oordeel.
-        Regel::nieuw("DPIA-06", "effectbeoordeling", "Hoog restrisico zonder raadpleging",
-            "een hoog restrisico zonder voorafgaande raadpleging",
-            Signalerend, Functionaris, "art. 36 lid 1 AVG", false),
+        //
+        // Twee vormen onder één code, net als DPIA-07: geen verzoek ingediend
+        // waar dat wel moest, en een verzoek waarvan de termijn zonder advies
+        // is verstreken. De omschrijving dekt ze allebei, want de titel en de
+        // grondslag reizen mee met elke bevinding.
+        Regel::nieuw("DPIA-06", "effectbeoordeling", "Voorafgaande raadpleging niet op orde",
+            "een hoog restrisico zonder voorafgaande raadpleging, of een raadplegingstermijn die zonder advies is verstreken",
+            Signalerend, Functionaris, "art. 36 lid 1 en lid 2 AVG", false),
         Regel::nieuw("DPIA-07", "effectbeoordeling", "Beoordeling verouderd",
             "de effectbeoordeling is ouder dan zesendertig maanden of de verwerking is gewijzigd",
             Signalerend, Functionaris, "art. 35 lid 11 AVG", true),
@@ -898,6 +903,116 @@ pub fn beoordeel_incident(motor: &Regelmotor, i: &Incident, nu: DateTime<Utc>) -
     }
 
     uit
+}
+
+/// Beoordeelt één effectbeoordeling (DPIA-03, DPIA-06 en DPIA-07).
+///
+/// De herbeoordelingsdrempel komt uit het kennispakket en niet uit deze code:
+/// zesendertig maanden is een norm, en normen horen in de inhoud te staan waar
+/// een jurist ze kan bijstellen.
+pub fn beoordeel_dpia(
+    motor: &Regelmotor,
+    d: &Dpia,
+    herbeoordeling_maanden: i64,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+    let kenmerk = Some(d.kenmerk.as_str());
+    let id = d.id.to_string();
+
+    let mut voeg = |code: &str, toelichting: String| {
+        if let Some(b) = motor.bevind(code, "dpia", &id, kenmerk, toelichting, nu) {
+            uit.push(b);
+        }
+    };
+
+    // DPIA-03: de beoordeling is uitgevoerd nadat de verwerking al liep.
+    //
+    // Alleen bij een vereiste beoordeling: bij een vrijwillige is er geen
+    // moment waarvóór zij had moeten plaatsvinden. `None` slaat niet aan — dat
+    // is een onbeantwoorde vraag, geen "nee".
+    if d.voortoets == Some(Voortoets::Vereist) && d.vooraf_uitgevoerd == Some(false) {
+        let wanneer = d
+            .datum
+            .map(|t| t.format("%d-%m-%Y").to_string())
+            .unwrap_or_else(|| "onbekende datum".into());
+        voeg(
+            "DPIA-03",
+            format!(
+                "de beoordeling van {wanneer} is uitgevoerd nadat de verwerking al liep; artikel 35 lid 1 vraagt haar vóór de verwerking"
+            ),
+        );
+    }
+
+    // DPIA-06, eerste vorm: hoog restrisico en geen verzoek ingediend.
+    if d.raadpleging_nodig() && d.raadpleging.is_none() {
+        voeg(
+            "DPIA-06",
+            "het restrisico is als hoog beoordeeld en er is geen verzoek om voorafgaande raadpleging ingediend"
+                .into(),
+        );
+    }
+
+    // DPIA-07, eerste tak: de beoordeling is verouderd.
+    if d.status.is_actief() {
+        if let Some(maanden) = d.maanden_sinds_beoordeling(nu) {
+            if maanden >= herbeoordeling_maanden {
+                voeg("DPIA-07", format!("laatst beoordeeld {maanden} maanden geleden"));
+            }
+        }
+    }
+
+    // DPIA-07, tweede tak: de onderliggende verwerking is gewijzigd.
+    if d.status == Status::HerzieningNodig {
+        // De reden staat in de herkomst, maar alleen zolang niemand het dossier
+        // sindsdien heeft aangeraakt: `wijzig` overschrijft dat veld bij elke
+        // bewerking. De prefix "systeem: " wordt uitsluitend door
+        // `markeer_herziening_nodig` geschreven en is dus een betrouwbare toets.
+        let toelichting = d
+            .herkomst
+            .gewijzigd_door
+            .strip_prefix("systeem: ")
+            .map(|reden| format!("de onderliggende verwerking is gewijzigd: {reden}"))
+            .unwrap_or_else(|| {
+                "de onderliggende verwerking is gewijzigd; het dossier staat op herziening nodig"
+                    .into()
+            });
+        voeg("DPIA-07", toelichting);
+    }
+
+    uit
+}
+
+/// Beoordeelt de lopende raadplegingstermijn van één effectbeoordeling (DPIA-06).
+///
+/// Anders dan bij de meldtermijn is er géén herinnering vóór het verstrijken:
+/// zolang de termijn van de toezichthouder loopt, valt er voor de organisatie
+/// niets te doen. Wat er wél toe doet is het moment waarop hij verstrijkt zonder
+/// antwoord — want stilzitten van de toezichthouder is geen goedkeuring.
+pub fn beoordeel_raadplegingstermijn(
+    motor: &Regelmotor,
+    d: &Dpia,
+    deadline: &Deadline,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    if d.advies_ontvangen_op().is_some() || nu <= deadline.moment {
+        return Vec::new();
+    }
+
+    motor
+        .bevind(
+            "DPIA-06",
+            "dpia",
+            &d.id.to_string(),
+            Some(&d.kenmerk),
+            format!(
+                "de termijn van {} voor de voorafgaande raadpleging is op {} verstreken zonder dat er advies van de toezichthouder is vastgelegd. Het verstrijken van deze termijn is geen goedkeuring: de verordening verbindt aan stilzitten van de toezichthouder geen instemming.",
+                deadline.duur, deadline.lokaal
+            ),
+            nu,
+        )
+        .into_iter()
+        .collect()
 }
 
 /// Beoordeelt de meldtermijn van één incident (LEK-02).

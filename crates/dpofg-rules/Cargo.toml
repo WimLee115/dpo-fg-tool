@@ -23,3 +23,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 chrono.workspace = true
+# Alleen voor de tests: die halen de raadplegingstermijn uit het
+# startpakket in plaats van hem na te bouwen, zodat een wijziging in de
+# inhoud hier zichtbaar wordt.
+dpofg-content.workspace = true

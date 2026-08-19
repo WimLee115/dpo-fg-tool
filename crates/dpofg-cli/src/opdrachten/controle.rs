@@ -4,13 +4,14 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::Args;
 use dpofg_audit::Handeling;
-use dpofg_domain::{Incident, Verwerking};
+use dpofg_domain::{Dpia, Incident, Verwerking};
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
-        beoordeel_budget, beoordeel_incident, beoordeel_logboek, beoordeel_meldtermijn,
-        beoordeel_oorzaakpatroon, beoordeel_verwerking, standaardmotor,
+        beoordeel_budget, beoordeel_dpia, beoordeel_incident, beoordeel_logboek,
+        beoordeel_meldtermijn, beoordeel_oorzaakpatroon, beoordeel_raadplegingstermijn,
+        beoordeel_verwerking, standaardmotor,
     },
 };
 use std::path::PathBuf;
@@ -82,8 +83,14 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
     let pad = super::kluispad(kluispad)?;
     let kluis = super::open_kluis(&pad, nu)?;
 
+    // Termijnen worden hier berekend en niet in de regels: de duren staan in
+    // het kennispakket, en een regel die zijn eigen termijn uitrekent gaat een
+    // tweede waarheid voeren naast de termijnenmotor.
+    let pakket = dpofg_content::startpakket(nu.date_naive());
+
     let mut bevindingen = Vec::new();
     let mut beoordeeld = 0usize;
+    let mut onberekenbaar: Vec<String> = Vec::new();
 
     for k in kluis.lijst("verwerking")? {
         let v: Verwerking = kluis.laad("verwerking", &k.id)?;
@@ -91,20 +98,36 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
         beoordeeld += 1;
     }
 
-    // De meldtermijn wordt hier berekend en niet in de regel: de tweeënzeventig
-    // uur staat in het kennispakket, en een regel die zijn eigen termijn
-    // uitrekent gaat een tweede waarheid voeren naast de termijnenmotor.
-    let pakket = dpofg_content::startpakket(nu.date_naive());
+    let herbeoordeling = herbeoordelingsdrempel(&pakket);
+    for k in kluis.lijst("dpia")? {
+        let d: Dpia = kluis.laad("dpia", &k.id)?;
+        bevindingen.extend(beoordeel_dpia(&motor, &d, herbeoordeling, nu));
+        match raadplegingstermijn_van(&pakket, &d, nu) {
+            Ok(Some(deadline)) => {
+                bevindingen.extend(beoordeel_raadplegingstermijn(&motor, &d, &deadline, nu));
+                beoordeeld += 1;
+            }
+            Ok(None) => beoordeeld += 1,
+            // Niet stilzwijgend overslaan: een termijn die niet te berekenen is,
+            // is iets anders dan een termijn die in orde is. Het dossier telt
+            // dan ook niet als beoordeeld.
+            Err(fout) => onberekenbaar.push(format!("{}: {fout}", d.kenmerk)),
+        }
+    }
 
     let mut incidenten = Vec::new();
     for k in kluis.lijst("incident")? {
         let i: Incident = kluis.laad("incident", &k.id)?;
         bevindingen.extend(beoordeel_incident(&motor, &i, nu));
-        if let Some(deadline) = meldtermijn_van(&pakket, &i) {
-            bevindingen.extend(beoordeel_meldtermijn(&motor, &i, &deadline, nu));
+        match meldtermijn_van(&pakket, &i) {
+            Ok(Some(deadline)) => {
+                bevindingen.extend(beoordeel_meldtermijn(&motor, &i, &deadline, nu));
+                beoordeeld += 1;
+            }
+            Ok(None) => beoordeeld += 1,
+            Err(fout) => onberekenbaar.push(format!("{}: {fout}", i.kenmerk)),
         }
         incidenten.push(i);
-        beoordeeld += 1;
     }
     // Het patroon over incidenten heen: drie maanden terug.
     let kwartaalgrens = nu - chrono::Duration::days(92);
@@ -136,6 +159,18 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
     }
 
     let rapport = motor.rapporteer(bevindingen, beoordeeld, nu);
+
+    if !onberekenbaar.is_empty() {
+        kop("Niet beoordeeld");
+        for regel in &onberekenbaar {
+            blokkade(regel);
+        }
+        terzijde(
+            "Deze dossiers dragen een termijn die met het huidige kennispakket niet te \
+             berekenen is. Zij tellen niet mee in de ronde hieronder; zwijgen zou hier \
+             betekenen dat een onberekenbare termijn als in orde geldt.",
+        );
+    }
 
     kop("Controleronde");
     terzijde(&format!(
@@ -237,10 +272,46 @@ fn toon_dekking(motor: &dpofg_rules::Regelmotor) -> Result<()> {
 fn meldtermijn_van(
     pakket: &dpofg_content::Pakketinhoud,
     i: &Incident,
-) -> Option<dpofg_terms::Deadline> {
-    let anker = i.anker_meldklok()?;
-    let soort = pakket.termijn("AVG-33-MELDING").ok()?;
-    let kalender = pakket.kalender("NL").ok()?;
-    let zone = dpofg_terms::tijdzone(dpofg_terms::TIJDZONE_NL).ok()?;
-    dpofg_terms::bereken(soort, anker, zone, kalender).ok()
+) -> Result<Option<dpofg_terms::Deadline>> {
+    // `Ok(None)`: de klok loopt nog niet, er valt niets te rekenen. Een `Err`
+    // betekent dat er wél een termijn is maar dat hij niet te berekenen is, en
+    // dat is geen "in orde" — zie `raadplegingstermijn_van`.
+    let Some(anker) = i.anker_meldklok() else { return Ok(None) };
+    let soort = pakket.termijn("AVG-33-MELDING")?;
+    let kalender = pakket.kalender("NL")?;
+    let zone = dpofg_terms::tijdzone(dpofg_terms::TIJDZONE_NL)?;
+    Ok(Some(dpofg_terms::bereken(soort, anker, zone, kalender)?))
+}
+
+/// De lopende raadplegingstermijn van één effectbeoordeling.
+///
+/// `Ok(None)` betekent: er loopt geen raadpleging, dus er valt niets te
+/// beoordelen. Een `Err` betekent iets anders — de termijn bestaat maar is niet
+/// te berekenen — en dat mag niet als "in orde" worden gelezen. Vandaar geen
+/// `.ok()` op de berekening zelf.
+fn raadplegingstermijn_van(
+    pakket: &dpofg_content::Pakketinhoud,
+    d: &Dpia,
+    nu: DateTime<Utc>,
+) -> Result<Option<dpofg_terms::Deadline>> {
+    let Some(klok) = d.raadpleging.as_ref() else { return Ok(None) };
+    let kalender = pakket.kalender("NL")?;
+    let zone = dpofg_terms::tijdzone(dpofg_terms::TIJDZONE_NL)?;
+    // Het peilmoment komt van buiten: de hele opdracht rekent met één `nu`,
+    // zodat twee regels in dezelfde ronde nooit op verschillende klokken
+    // berusten.
+    Ok(Some(klok.deadline_volledig(nu, zone, kalender)?))
+}
+
+/// Na hoeveel maanden een effectbeoordeling om herbeoordeling vraagt.
+///
+/// Uit het kennispakket, zodat de norm bij te stellen is zonder de
+/// programmacode te raken.
+fn herbeoordelingsdrempel(pakket: &dpofg_content::Pakketinhoud) -> i64 {
+    pakket
+        .termijn("INTERN-DPIA-HERBEOORDELING")
+        .ok()
+        .filter(|t| t.eenheid == dpofg_terms::Eenheid::Maanden)
+        .map(|t| i64::from(t.duur))
+        .unwrap_or(36)
 }

@@ -55,6 +55,10 @@ enum Opdracht {
     #[command(subcommand)]
     Incident(opdrachten::incident::Incidentopdracht),
 
+    /// Gegevensbeschermingseffectbeoordelingen.
+    #[command(subcommand)]
+    Dpia(opdrachten::dpia::Dpiaopdracht),
+
     /// De controleregels over de hele verzameling draaien.
     Controle(opdrachten::controle::Controleopties),
 
@@ -105,6 +109,7 @@ fn draai() -> Result<()> {
         Opdracht::Kluis(o) => opdrachten::kluis::draai(o, args.kluis, nu),
         Opdracht::Register(o) => opdrachten::register::draai(o, args.kluis, nu),
         Opdracht::Incident(o) => opdrachten::incident::draai(o, args.kluis, nu),
+        Opdracht::Dpia(o) => opdrachten::dpia::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),

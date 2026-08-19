@@ -339,6 +339,9 @@ fn vul(
     nu: DateTime<Utc>,
 ) -> Result<()> {
     let mut v = zoek(kluis, kenmerk)?;
+    // De criteria vóór de wijziging, om te zien of de effectbeoordeling
+    // hierdoor op losse schroeven komt te staan (art. 35 lid 11 AVG).
+    let criteria_voor = v.getelde_dpia_criteria();
     let id = v.id.to_string();
     let lijst: Vec<String> =
         waarde.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
@@ -456,6 +459,32 @@ fn vul(
     )?;
 
     gelukt(&format!("'{veld}' vastgelegd"));
+
+    // Verandert het risicoprofiel, dan is de effectbeoordeling niet meer
+    // vanzelfsprekend actueel. Artikel 35 lid 11 vraagt om herbeoordeling
+    // wanneer het risico van de verwerking wijzigt; de tool markeert dat en
+    // beslist niets.
+    let criteria_na = v.getelde_dpia_criteria();
+    if criteria_na != criteria_voor {
+        let gemarkeerd = super::dpia::herziening_nodig_na_registerwijziging(
+            kluis,
+            &v,
+            &format!("de criteria van registerregel {} zijn gewijzigd", v.kenmerk),
+            nu,
+        )?;
+        if !gemarkeerd.is_empty() {
+            println!();
+            let_op(&format!(
+                "De criteria voor een effectbeoordeling zijn veranderd van {} naar {}. \
+                 Effectbeoordeling {} staat daarom op 'herziening nodig'.",
+                criteria_voor.len(),
+                criteria_na.len(),
+                gemarkeerd.join(", ")
+            ));
+            terzijde("art. 35 lid 11 AVG");
+        }
+    }
+
     toon_ontbrekend(&v);
     Ok(())
 }

@@ -4,15 +4,16 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use dpofg_domain::{
     avg::{BijzondereCategorie, Grondslag, Rol},
     incident::Herkomstkanaal,
-    Aantasting, Bewaartermijn, Id, Incident, Motivering, Ontvanger, Overgenomen, Risiconiveau,
-    Termijneenheid, Verwerking,
+    Aantasting, Bewaartermijn, Dpia, Id, Incident, Motivering, Ontvanger, Overgenomen,
+    Restrisiconiveau, Risiconiveau, Status, Termijneenheid, Verwerking, Voortoets,
 };
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
-        beoordeel_budget, beoordeel_incident, beoordeel_logboek, beoordeel_meldtermijn,
-        beoordeel_oorzaakpatroon, beoordeel_verwerking, catalogus, geimplementeerd, standaardmotor,
+        beoordeel_budget, beoordeel_dpia, beoordeel_incident, beoordeel_logboek,
+        beoordeel_meldtermijn, beoordeel_oorzaakpatroon, beoordeel_raadplegingstermijn,
+        beoordeel_verwerking, catalogus, geimplementeerd, standaardmotor,
     },
 };
 
@@ -767,4 +768,228 @@ fn onderbrekingen_van_verschillende_gebruikers_tellen_apart() {
         budget.onderbreking("b.jansen", nu() - Duration::days(dag));
     }
     assert!(beoordeel_budget(&motor, &budget, nu()).is_empty());
+}
+
+// --------------------------------------------------------------------------
+// De effectbeoordeling
+// --------------------------------------------------------------------------
+
+const HERBEOORDELING: i64 = 36;
+
+fn dpia() -> Dpia {
+    let mut d = Dpia::nieuw("DPIA-0412", "Verzuimregistratie", Id::nieuw(), "u1", nu());
+    d.voortoets = Some(Voortoets::Vereist);
+    d.voortoets_motivering = Some(motivering("twee criteria worden geraakt"));
+    d.leg_beoordeling_vast(nu(), "A. de Vries", Some(true), nu()).unwrap();
+    d.systematische_beschrijving = Some("verzuimregistratie voor loondoorbetaling".into());
+    d.noodzaak_en_evenredigheid = Some("geen minder ingrijpend alternatief".into());
+    d.risicos.push("onbevoegde inzage door collega's".into());
+    d.maatregelen.push("toegang op rolbasis".into());
+    d.stel_restrisico_vast(Restrisiconiveau::Laag, motivering("beperkte kring"), nu()).unwrap();
+    d
+}
+
+#[test]
+fn een_volledige_effectbeoordeling_levert_geen_bevindingen() {
+    let motor = standaardmotor();
+    assert!(beoordeel_dpia(&motor, &dpia(), HERBEOORDELING, nu()).is_empty());
+}
+
+#[test]
+fn dpia_03_slaat_aan_bij_een_beoordeling_na_aanvang() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.vooraf_uitgevoerd = Some(false);
+    let b = beoordeel_dpia(&motor, &d, HERBEOORDELING, nu());
+    let bev = b.iter().find(|x| x.regelcode == "DPIA-03").expect("DPIA-03 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Signalerend);
+    assert!(bev.toelichting.contains("nadat de verwerking al liep"));
+}
+
+/// Bij een vrijwillige beoordeling is er geen moment waarvóór zij had moeten
+/// plaatsvinden; de regel hoort dan te zwijgen.
+#[test]
+fn dpia_03_zwijgt_bij_een_vrijwillige_beoordeling() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.voortoets = Some(Voortoets::Vrijwillig);
+    d.vooraf_uitgevoerd = Some(false);
+    assert!(!codes(&beoordeel_dpia(&motor, &d, HERBEOORDELING, nu())).contains(&"DPIA-03"));
+}
+
+/// Een onbeantwoorde vraag is geen "nee".
+#[test]
+fn dpia_03_zwijgt_zolang_de_vraag_niet_is_beantwoord() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.vooraf_uitgevoerd = None;
+    assert!(!codes(&beoordeel_dpia(&motor, &d, HERBEOORDELING, nu())).contains(&"DPIA-03"));
+}
+
+#[test]
+fn dpia_06_slaat_aan_bij_hoog_restrisico_zonder_raadpleging() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.restrisico = None;
+    d.stel_restrisico_vast(Restrisiconiveau::Hoog, motivering("het risico blijft groot"), nu())
+        .unwrap();
+    let b = beoordeel_dpia(&motor, &d, HERBEOORDELING, nu());
+    let bev = b.iter().find(|x| x.regelcode == "DPIA-06").expect("DPIA-06 hoort aan te slaan");
+    assert!(bev.toelichting.contains("geen verzoek om voorafgaande raadpleging"));
+}
+
+#[test]
+fn dpia_06_zwijgt_bij_een_gemiddeld_restrisico() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.restrisico = None;
+    d.stel_restrisico_vast(Restrisiconiveau::Gemiddeld, motivering("hanteerbaar"), nu()).unwrap();
+    assert!(!codes(&beoordeel_dpia(&motor, &d, HERBEOORDELING, nu())).contains(&"DPIA-06"));
+}
+
+/// De kern van DPIA-06 in zijn tweede vorm: het verstrijken van de termijn is
+/// geen goedkeuring. Die zin is de inhoud van de regel, niet de opsmuk.
+#[test]
+fn dpia_06_zegt_dat_stilzitten_geen_goedkeuring_is() {
+    let motor = standaardmotor();
+    let d = dpia();
+    let deadline = raadplegingstermijn(nu() - Duration::days(1));
+    let b = beoordeel_raadplegingstermijn(&motor, &d, &deadline, nu());
+    let bev = b.first().expect("DPIA-06 hoort aan te slaan");
+    assert_eq!(bev.regelcode, "DPIA-06");
+    assert!(
+        bev.toelichting.contains("Het verstrijken van deze termijn is geen goedkeuring"),
+        "kreeg: {}",
+        bev.toelichting
+    );
+}
+
+#[test]
+fn dpia_06_zwijgt_zolang_de_termijn_loopt() {
+    let motor = standaardmotor();
+    let d = dpia();
+    let deadline = raadplegingstermijn(nu() + Duration::days(14));
+    assert!(beoordeel_raadplegingstermijn(&motor, &d, &deadline, nu()).is_empty());
+}
+
+#[test]
+fn dpia_06_zwijgt_zodra_er_advies_is() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    let klok = lopende_raadpleging();
+    d.dien_raadpleging_in(klok, nu()).unwrap();
+    let later = nu() + Duration::days(3);
+    d.leg_advies_vast(later, "AP-2026-1234", later).unwrap();
+
+    let deadline = raadplegingstermijn(nu() - Duration::days(1));
+    assert!(beoordeel_raadplegingstermijn(&motor, &d, &deadline, nu()).is_empty());
+}
+
+#[test]
+fn dpia_07_slaat_aan_na_de_herbeoordelingstermijn() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.status = Status::Vastgesteld;
+    let later = nu() + Duration::days(40 * 30);
+    let b = beoordeel_dpia(&motor, &d, HERBEOORDELING, later);
+    let bev = b.iter().find(|x| x.regelcode == "DPIA-07").expect("DPIA-07 hoort aan te slaan");
+    assert!(bev.toelichting.contains("maanden geleden"));
+}
+
+#[test]
+fn dpia_07_zwijgt_binnen_de_herbeoordelingstermijn() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.status = Status::Vastgesteld;
+    let later = nu() + Duration::days(30 * 30);
+    assert!(!codes(&beoordeel_dpia(&motor, &d, HERBEOORDELING, later)).contains(&"DPIA-07"));
+}
+
+/// De drempel komt uit het kennispakket; met een andere norm verschuift de
+/// regel mee zonder dat er code verandert.
+#[test]
+fn de_herbeoordelingsdrempel_komt_van_buiten_de_regel() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.status = Status::Vastgesteld;
+    let later = nu() + Duration::days(13 * 30);
+    assert!(!codes(&beoordeel_dpia(&motor, &d, 36, later)).contains(&"DPIA-07"));
+    assert!(codes(&beoordeel_dpia(&motor, &d, 12, later)).contains(&"DPIA-07"));
+}
+
+#[test]
+fn dpia_07_slaat_aan_wanneer_de_verwerking_is_gewijzigd() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.status = Status::Vastgesteld;
+    d.markeer_herziening_nodig("de criteria van registerregel 0412-K zijn gewijzigd", nu());
+
+    let b = beoordeel_dpia(&motor, &d, HERBEOORDELING, nu());
+    let bev = b.iter().find(|x| x.regelcode == "DPIA-07").expect("DPIA-07 hoort aan te slaan");
+    assert!(
+        bev.toelichting.contains("0412-K"),
+        "de reden hoort in de melding: {}",
+        bev.toelichting
+    );
+}
+
+/// De reden staat in de herkomst, en die wordt bij elke bewerking overschreven.
+/// Pakt de gebruiker de herziening op, dan mag de melding niet ineens
+/// "beoordeling vastgelegd" als reden noemen onder de kop "Beoordeling
+/// verouderd".
+#[test]
+fn dpia_07_blijft_waar_nadat_het_dossier_is_aangeraakt() {
+    let motor = standaardmotor();
+    let mut d = dpia();
+    d.status = Status::Vastgesteld;
+    d.markeer_herziening_nodig("de criteria van registerregel 0412-K zijn gewijzigd", nu());
+    // De gebruiker pakt de herziening op en werkt een onderdeel bij.
+    d.leg_beoordeling_vast(nu(), "A. de Vries", Some(true), nu()).unwrap();
+
+    let b = beoordeel_dpia(&motor, &d, HERBEOORDELING, nu());
+    let bev = b.iter().find(|x| x.regelcode == "DPIA-07").expect("DPIA-07 hoort aan te slaan");
+    assert!(
+        bev.toelichting.contains("de onderliggende verwerking is gewijzigd"),
+        "kreeg: {}",
+        bev.toelichting
+    );
+    assert!(
+        !bev.toelichting.contains("beoordeling vastgelegd"),
+        "de laatste bewerking is niet de reden van de herziening: {}",
+        bev.toelichting
+    );
+}
+
+/// De regel draagt twee vormen; de omschrijving en de grondslag horen ze
+/// allebei te dekken.
+#[test]
+fn dpia_06_dekt_beide_vormen_in_zijn_omschrijving() {
+    let motor = standaardmotor();
+    let regel = motor.regel("DPIA-06").expect("DPIA-06 staat in de catalogus");
+    assert!(regel.controleert.contains("zonder voorafgaande raadpleging"));
+    assert!(regel.controleert.contains("verstreken"));
+    assert!(regel.grondslag.contains("lid 2"), "de tweede vorm berust op lid 2");
+}
+
+fn lopende_raadpleging() -> dpofg_terms::LopendeTermijn {
+    let pakket = dpofg_content::startpakket(nu().date_naive());
+    let soort = pakket.termijn("AVG-36-RAADPLEGING").unwrap().clone();
+    let kalender = pakket.kalender("NL").unwrap();
+    let zone = dpofg_terms::tijdzone(dpofg_terms::TIJDZONE_NL).unwrap();
+    dpofg_terms::LopendeTermijn::start(soort, nu(), zone, kalender).unwrap()
+}
+
+fn raadplegingstermijn(verstrijkt: DateTime<Utc>) -> dpofg_terms::Deadline {
+    dpofg_terms::Deadline {
+        moment: verstrijkt,
+        lokaal: "14-10-2026 00:00 (Europe/Amsterdam)".into(),
+        tijdzone: "Europe/Amsterdam".into(),
+        anker: verstrijkt - Duration::weeks(8),
+        code: "AVG-36-RAADPLEGING".into(),
+        duur: "8 weken".into(),
+        grondslag: "art. 36 lid 2 AVG".into(),
+        verlenging: dpofg_terms::ToegepasteVerlenging::GeenNodig,
+        verlengingsbepaling: "art. 36 lid 2, tweede en derde volzin, AVG".into(),
+        verantwoording: "8 weken na ontvangst van het verzoek".into(),
+    }
 }

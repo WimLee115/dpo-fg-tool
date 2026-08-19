@@ -8,7 +8,7 @@
 //! wordt gekozen, welke verplichtingen ontstaan — staan bij de betreffende
 //! module en zijn hier met een verwijzing vermeld.
 
-use chrono::{DateTime, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use dpofg_terms::{
     bereken, tijdzone, Aanvang, Eenheid, Feestdagenkalender, LopendeTermijn, Rechtsstelsel,
@@ -544,4 +544,73 @@ fn gehaald_en_niet_gehaald() {
 
     let loopt_nog = LopendeTermijn::start(melding_72u(), anker, zone(), &kalender()).unwrap();
     assert_eq!(loopt_nog.is_gehaald(zone(), &kalender()).unwrap(), None);
+}
+
+// --------------------------------------------------------------------------
+// Een afgeronde termijn staat stil
+// --------------------------------------------------------------------------
+
+/// De raadplegingstermijn van artikel 36 lid 2 AVG: acht weken, eenmaal
+/// verlengbaar met zes, opschortbaar zolang de toezichthouder op informatie
+/// wacht. Hier expliciet opgebouwd; in het product komt zij uit het
+/// kennispakket.
+fn raadpleging_8weken() -> Termijnsoort {
+    Termijnsoort::kalender(
+        "AVG-36-RAADPLEGING",
+        "voorafgaande raadpleging van de toezichthouder",
+        8,
+        Eenheid::Weken,
+        Rechtsstelsel::Unierecht,
+        Aanvang::VanafGebeurtenis,
+        "art. 36 lid 2 AVG",
+    )
+    .opschortbaar()
+    .met_verlenging(Verlengingsrecht {
+        duur: 6,
+        eenheid: Eenheid::Weken,
+        aantal_keer: 1,
+        bericht_binnen_oorspronkelijke_termijn: false,
+        grondslag: "art. 36 lid 2, tweede en derde volzin, AVG".into(),
+    })
+}
+
+fn raadplegingsanker() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 8, 19, 9, 0, 0).unwrap()
+}
+
+/// Een afgesloten termijn schuift niet meer. Zou dat wel kunnen, dan zou een
+/// dossier dat al bij een toezichthouder ligt achteraf een andere einddatum
+/// krijgen — en dat is precies wat de hele keten moet uitsluiten.
+#[test]
+fn een_afgeronde_termijn_is_niet_meer_op_te_schorten_of_te_verlengen() {
+    let mut t =
+        LopendeTermijn::start(raadpleging_8weken(), raadplegingsanker(), zone(), &kalender())
+            .unwrap();
+    t.rond_af(raadplegingsanker() + Duration::days(10));
+
+    let opschorten =
+        t.schort_op(raadplegingsanker() + Duration::days(12), "informatieverzoek", "u1");
+    assert!(opschorten.is_err(), "opschorten na afronding hoort te falen");
+    assert!(opschorten.unwrap_err().to_string().contains("afgesloten termijn schuift niet meer"));
+
+    assert!(t.hervat(raadplegingsanker() + Duration::days(14)).is_err());
+    assert!(t.verleng(raadplegingsanker() + Duration::days(14), zone(), &kalender()).is_err());
+}
+
+/// Een opschorting die nog loopt wordt bij het afronden gesloten. Zonder dat
+/// zou de opgeschorte tijd met elke dag groeien en de einddatum meeschuiven.
+#[test]
+fn afronden_sluit_een_lopende_opschorting() {
+    let mut t =
+        LopendeTermijn::start(raadpleging_8weken(), raadplegingsanker(), zone(), &kalender())
+            .unwrap();
+    t.schort_op(raadplegingsanker() + Duration::days(3), "informatieverzoek", "u1").unwrap();
+
+    let afgerond = raadplegingsanker() + Duration::days(10);
+    t.rond_af(afgerond);
+    assert_eq!(t.opschortingen[0].tot, Some(afgerond));
+
+    let vroeg = t.deadline_volledig(afgerond, zone(), &kalender()).unwrap();
+    let laat = t.deadline_volledig(afgerond + Duration::days(60), zone(), &kalender()).unwrap();
+    assert_eq!(vroeg.moment, laat.moment, "de einddatum van een afgesloten dossier ligt vast");
 }

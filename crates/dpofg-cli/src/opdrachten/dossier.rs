@@ -68,7 +68,7 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
     }
 
     let soorten: Vec<String> = if o.soort.is_empty() {
-        vec!["verwerking".into(), "incident".into()]
+        vec!["verwerking".into(), "dpia".into(), "incident".into()]
     } else {
         o.soort.clone()
     };
@@ -92,7 +92,7 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
         }
         if overgeslagen > 0 {
             manifest.laat_weg(
-                format!("{soort}en met de status concept"),
+                format!("{} met de status concept", meervoud(soort)),
                 "concepten zijn nog niet vastgesteld en geven geen beeld van de werkelijkheid; \
                  hun aantal staat hier zodat zichtbaar is dat zij bestaan",
                 overgeslagen,
@@ -167,4 +167,18 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
          eerder ondertekend stuk; 'dpofg kluis sleutel' toont hem.",
     );
     Ok(())
+}
+
+/// Het meervoud van een recordsoort, voor gebruik in een zin.
+///
+/// "dpiaen" is geen woord; een tekst die in een dossier voor een toezichthouder
+/// terechtkomt, hoort te lezen als Nederlands.
+fn meervoud(soort: &str) -> &str {
+    match soort {
+        "verwerking" => "verwerkingen",
+        "dpia" => "effectbeoordelingen",
+        "incident" => "incidenten",
+        "verzoek" => "verzoeken",
+        andere => andere,
+    }
 }

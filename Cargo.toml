@@ -79,3 +79,24 @@ overflow-checks = true
 
 [profile.dev]
 overflow-checks = true
+
+# De sleutelafleiding is met opzet duur. In een ongeoptimaliseerde bouw is zij
+# dat nog eens tien keer over, en omdat elke opdracht in de integratietests de
+# kluis opent, kost dat minuten per testronde. Hier worden uitsluitend de
+# cryptografische afhankelijkheden geoptimaliseerd: de eigen code blijft
+# ongeoptimaliseerd met alle controles aan, dus de tests draaien nog steeds over
+# precies dezelfde code als de productiebouw, alleen sneller.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake3]
+opt-level = 3
+[profile.dev.package.chacha20poly1305]
+opt-level = 3
+[profile.dev.package.chacha20]
+opt-level = 3
+[profile.dev.package.poly1305]
+opt-level = 3
+[profile.dev.package.sha2]
+opt-level = 3
+[profile.dev.package.curve25519-dalek]
+opt-level = 3

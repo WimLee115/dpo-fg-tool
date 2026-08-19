@@ -44,6 +44,11 @@ cargo build --release
 ./target/release/dpofg incident kennisname 2026-0041 2026-08-18T09:20:00Z
 ./target/release/dpofg incident toon 2026-0041
 
+# Een effectbeoordeling bij die registerregel; de tool telt de criteria, u oordeelt
+./target/release/dpofg dpia nieuw DPIA-0412 "Verzuimregistratie" --verwerking 0412-K
+./target/release/dpofg dpia voortoets DPIA-0412 --uitkomst vereist --motivering "twee criteria geraakt"
+./target/release/dpofg dpia toon DPIA-0412
+
 # De controleregels over de hele verzameling
 ./target/release/dpofg controle
 
@@ -80,13 +85,14 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Termijnenmotor met getypeerde termijnen | werkt |
 | Verwerkingsregister (art. 30 AVG) met afgeleide verplichtingen | werkt |
 | Incidentdossier met de vijf klokken en het meldbesluit | werkt |
-| Controleregels over de samenhang | 30 van de 55 regels draaien |
+| Controleregels over de samenhang | 33 van de 55 regels draaien |
 | Kennispakketten met handtekening en terugrolbescherming | werkt |
 | Dossiers samenstellen en ondertekenen | werkt |
+| Effectbeoordeling (DPIA) met de raadplegingsklok van art. 36 | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |
-| Betrokkenenverzoeken, DPIA, leveranciersregister | nog niet |
+| Betrokkenenverzoeken, leveranciersregister, doorgifterecord | nog niet |
 | Grafische schil | nog niet |
 
 Vraag de werkelijke dekking op met `dpofg controle --dekking`. Het aantal regels in de catalogus zegt niets over wat er wordt bewaakt; die opdracht wel.

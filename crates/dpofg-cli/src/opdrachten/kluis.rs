@@ -135,7 +135,7 @@ fn status(pad: &std::path::Path, nu: DateTime<Utc>) -> Result<()> {
 
     kop("Inhoud");
     let mut t = tabel(&["soort", "aantal", "vastgesteld", "concept"]);
-    for soort in ["verwerking", "incident", "verzoek"] {
+    for soort in ["verwerking", "dpia", "incident", "verzoek"] {
         let lijst = kluis.lijst(soort)?;
         if lijst.is_empty() {
             continue;

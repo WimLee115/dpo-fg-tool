@@ -558,6 +558,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dpofg-audit",
+ "dpofg-content",
  "dpofg-domain",
  "dpofg-terms",
  "serde",

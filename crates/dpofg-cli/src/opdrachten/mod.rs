@@ -2,6 +2,7 @@
 
 pub mod controle;
 pub mod dossier;
+pub mod dpia;
 pub mod incident;
 pub mod kluis;
 pub mod logboek;

@@ -219,3 +219,58 @@ fn het_pakket_overleeft_serialisatie() {
     assert_eq!(p, terug);
     assert!(terug.controleer(&vertrouwd).is_ok(), "de handtekening moet serialisatie overleven");
 }
+
+/// De acht weken, de verlenging met zes weken, de berichttermijn en de
+/// opschortingsgrond staan alle in artikel 36 lid 2. Lid 3 somt op welke
+/// stukken bij het verzoek gaan. Deze tekst reist via de verantwoording mee naar
+/// elk dossier, dus een verkeerde verwijzing komt bij een toezichthouder op
+/// tafel.
+#[test]
+fn de_raadplegingstermijn_verwijst_naar_het_tweede_lid() {
+    let p = pakket();
+    let t = p.termijn("AVG-36-RAADPLEGING").unwrap();
+    assert_eq!(t.grondslag, "art. 36 lid 2 AVG");
+    let verlenging = t.verlenging.as_ref().expect("de termijn is verlengbaar");
+    assert!(verlenging.grondslag.starts_with("art. 36 lid 2"), "kreeg: {}", verlenging.grondslag);
+    assert!(t.opschortbaar, "art. 36 lid 2 kent een opschortingsgrond");
+}
+
+/// De kalender is een tikkende randvoorwaarde: valt een berekening buiten de
+/// dekking, dan weigert de termijnenmotor te rekenen. Dat is juist gedrag, maar
+/// het mag niet gebeuren op het moment dat iemand een termijn van acht weken
+/// indient.
+#[test]
+fn de_kalender_dekt_meerdere_jaren_na_de_consolidatiedatum() {
+    let kalender = pakket().kalender("NL").unwrap().clone();
+    assert!(
+        kalender.dekking_tot_en_met - kalender.dekking_van >= 3,
+        "de kalender dekt {} tot en met {}; dat is te kort voor een termijn van acht weken \
+         die tegen het jaareinde wordt gestart",
+        kalender.dekking_van,
+        kalender.dekking_tot_en_met
+    );
+}
+
+/// Elk jaar in de dekking draagt de vaste feestdagen. Een jaar dat stilzwijgend
+/// zonder Kerstmis in de kalender staat, levert een deadline op die een werkdag
+/// te vroeg valt.
+#[test]
+fn elk_gedekt_jaar_draagt_de_vaste_feestdagen() {
+    use chrono::NaiveDate;
+    let kalender = pakket().kalender("NL").unwrap().clone();
+    for jaar in kalender.dekking_van..=kalender.dekking_tot_en_met {
+        for (maand, dag, naam) in [
+            (1, 1, "Nieuwjaarsdag"),
+            (4, 27, "Koningsdag"),
+            (12, 25, "Eerste Kerstdag"),
+            (12, 26, "Tweede Kerstdag"),
+        ] {
+            let datum = NaiveDate::from_ymd_opt(jaar, maand, dag).unwrap();
+            // Koningsdag schuift naar 26 april wanneer 27 april op zondag valt.
+            let alternatief = NaiveDate::from_ymd_opt(jaar, 4, 26).unwrap();
+            let aanwezig = kalender.dagen.contains(&datum)
+                || (maand == 4 && dag == 27 && kalender.dagen.contains(&alternatief));
+            assert!(aanwezig, "{jaar} mist {naam}");
+        }
+    }
+}

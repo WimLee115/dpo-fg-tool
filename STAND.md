@@ -30,12 +30,13 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Volledigheidsmechanisme | werkt | Teller met grondslag; blokkerend onderscheiden van signalerend |
 | Incidentdossier | werkt | Vijf klokken op eigen ankers, meldbesluit met drie lagen |
 | Klokkenmotor | werkt | Leidt verplichtingen af; ankers vallen niet samen |
-| Controleregels | **deels** | 30 van de 55 regels in de catalogus hebben een evaluatiefunctie |
+| Controleregels | **deels** | 33 van de 55 regels in de catalogus hebben een evaluatiefunctie |
 | Kennispakketten | werkt | Ondertekend, met terugrolbescherming en consolidatiedatum |
 | Dossiers | werkt | Ondertekend manifest, weglatingen zichtbaar, voorbehoud meegetekend |
 | Verificatiebinary | werkt | Leest uitsluitend, geen wachtwoord, geen kluis nodig |
 | Bedieningsschil | werkt | Volledig werkproces via de opdrachtregel |
 | Installatiesleutel | werkt | Eén vaste ondertekenidentiteit per kluis; overleeft een wachtwoordwissel |
+| Effectbeoordeling | werkt | Voortoets, de vier onderdelen van art. 35 lid 7, restrisico met weging, raadplegingsklok |
 
 ---
 
@@ -44,7 +45,6 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Onderdeel | Uit fase | Waarom het er nog niet is |
 |---|---|---|
 | Betrokkenenverzoeken | 2 | Vereist zoekorkestratie over systemen en redactieregie; dat is een eigen bouwslag |
-| Effectbeoordeling (DPIA) als dossier | 2 | De criteria worden geteld en getoond; het dossier zelf ontbreekt |
 | Belangenafweging, toestemming, doorgifte als eigen records | 2 | De verwijzingen bestaan in het model; de records nog niet |
 | Leveranciers- en ketenregister | 3 | |
 | Zorgplichtcontrolset | 3 | Vereist de normenkaders in het kennispakket |
@@ -70,13 +70,19 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 **Compartimenten hangen aan één wachtwoord.** De scheiding is cryptografisch echt — elk compartiment heeft een eigen sleutel — maar alle sleutels hangen aan dezelfde kluissleutel. Het persoonlijke dossier van de functionaris, dat de organisatie níet moet kunnen openen, vereist een tweede wachtwoord.
 
-**De regelcatalogus is groter dan wat er draait.** 55 regels gedefinieerd, 30 met een evaluatiefunctie. `dpofg controle --dekking` toont welke nog niet draaien. Het aantal regels zegt niets over wat er wordt bewaakt; die opdracht wel.
+**De regelcatalogus is groter dan wat er draait.** 55 regels gedefinieerd, 33 met een evaluatiefunctie. `dpofg controle --dekking` toont welke nog niet draaien. Het aantal regels zegt niets over wat er wordt bewaakt; die opdracht wel.
 
-De 25 regels die nog niet draaien wachten bijna allemaal op een recordsoort die er niet is, en niet op programmeerwerk. De twee die het meeste opleveren: het verwerkersregister met de leveranciersgegevens ontsluit vijf regels, het effectbeoordelingsdossier drie van de vier DPIA-regels — DPIA-01 draait al. Daarnaast wachten er regels op een systeemregister, een doorgifterecord, een schoningsopdracht, een rollen- en aanstellingsregister, een rapportagespoor en een toezichtdossier.
+De 22 regels die nog niet draaien wachten bijna allemaal op een recordsoort die er niet is, en niet op programmeerwerk. Het verwerkersregister met de leveranciersgegevens levert het meeste op: dat ontsluit vijf regels in één keer. Daarnaast wachten er regels op een systeemregister, een doorgifterecord, een schoningsopdracht, een rollen- en aanstellingsregister, een rapportagespoor en een toezichtdossier.
 
 Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt ook in te vullen zijn. Bewaking certificeren die op producteigen gegevens nooit kan aanslaan, is erger dan een lege plek: het lege vakje vraagt om werk, het gevulde vakje sust.
 
 **Schemaversie 2 is eenrichtingsverkeer.** Een kluis die één keer met deze uitgave is geopend, staat op schemaversie 2 en wordt door uitgave 0.1.0 geweigerd — met de juiste melding, want het bestandsmerk blijft gelijk. Terug kan alleen met een reservekopie. Een logboek van een kluis die uit schemaversie 1 is gemigreerd, draagt bovendien de handelingsnaam `installatiesleutel_aangemaakt`; een oudere `dpofg-verify` loopt daarop stuk met afsluitcode 1 — luidruchtig, en dus acceptabel. Een kluis die met deze uitgave is aangemaakt, kent die regel niet: daar staat de sleutel in de omschrijving van `kluis_aangemaakt`, en dat leest een oudere binary gewoon.
+
+**De inhoud van de effectbeoordeling is niet vastgesteld.** De negen criteria, de drempel van twee, de vier inhoudseisen van artikel 35 lid 7 en de zesendertig maanden voor herbeoordeling staan in het kennispakket en zijn daar als te verifiëren gemarkeerd. Het lidnummer waarop de raadplegingstermijn berust is in deze uitgave gecorrigeerd van lid 3 naar lid 2; die tekst reist mee naar elk dossier en hoort dus tegen de bron te worden gecontroleerd.
+
+**De berichttermijn van artikel 36 lid 2 wordt niet bewaakt.** De verordening verlangt dat de toezichthouder binnen één maand na ontvangst van het verzoek meldt dát zij verlengt. De termijnenmotor kent alleen "binnen de oorspronkelijke termijn" en niet "binnen een eigen termijn na het anker", dus een verlenging wordt op elk moment aanvaard. Een verlenging die te laat is aangekondigd, wordt daarmee niet opgemerkt.
+
+**De feestdagenkalender reikt tot en met 2030.** Een raadpleging die daarna wordt ingediend, laat de berekening luid vastlopen in plaats van een verkeerde datum op te leveren. Dat is de juiste kant om op te falen, maar de gebruiker krijgt het op het slechtste moment; er hoort een signaal te komen zodra de dekking binnen een jaar afloopt.
 
 **Geen hardwaretoken.** Het platformhoofdstuk beschrijft hoe FIDO2 en PIV per besturingssysteem werken; de implementatie ontbreekt.
 
@@ -88,8 +94,8 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 | | |
 |---|---|
-| Rust-code | ~10.950 regels, zonder commentaar en lege regels |
-| Tests | 395 testfuncties, 399 uitgevoerde tests |
+| Rust-code | ~12.600 regels, zonder commentaar en lege regels |
+| Tests | 443 testfuncties, 447 uitgevoerde tests |
 | Documentatie | ~4.700 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
@@ -121,3 +127,11 @@ Deze staan hier omdat ze laten zien waar het misging, en waarom de tests er zijn
 | LEK-12 stond als bewaakt aangemerkt terwijl er geen route was om een incident af te ronden, waardoor de regel op producteigen gegevens nooit kon aanslaan | regelmotor |
 | `register vul --veld bsn --waarde Ja` legde stilzwijgend 'nee' vast, doordat er letterlijk op "ja" werd vergeleken | bedieningsschil |
 | Een lege waarde voor een verplicht veld werd als ingevuld vastgelegd en haalde daarmee de bevinding weg zonder dat er iets was opgelost | bedieningsschil |
+| De termijn voor voorafgaande raadpleging verwees naar artikel 36 lid 3, terwijl de acht weken, de verlenging, de berichttermijn en de opschortingsgrond alle in lid 2 staan; lid 3 somt op welke stukken bij het verzoek gaan | kennispakket |
+| De feestdagenkalender reikte tot en met 2027, waardoor een termijn van acht weken die na half november 2027 werd gestart niet meer te berekenen was | kennispakket |
+| De sleutelafleiding kostte in een ongeoptimaliseerde bouw 2,3 seconden per opdracht, waardoor de integratietests bijna acht minuten liepen; alleen de cryptografische afhankelijkheden optimaliseren bracht dat terug tot 21 seconden zonder één regel eigen code te wijzigen | bouwstraat |
+| Hervatten en verlengen schreven de klok weg vóórdat de nieuwe einddatum was berekend; faalde die berekening, dan stond er een klok in de kluis die het dossier onleesbaar maakte | effectbeoordeling |
+| Een opschorting die nog liep werd bij het afronden niet gesloten, waardoor de einddatum van een afgesloten dossier elke dag verder opschoof — ook in een dossier dat al was uitgeleverd | termijnenmotor |
+| Een tweede effectbeoordeling op dezelfde registerregel kaapte de terugverwijzing, waarna een risicowijziging stilzwijgend aan de eerste voorbijging | effectbeoordeling |
+| Een advies met een datum in de toekomst werd aanvaard en zette daarmee de bewaking van de raadplegingstermijn uit | effectbeoordeling |
+| De controleronde sloeg een termijn die zij niet kon berekenen stilzwijgend over en telde het dossier toch als beoordeeld | regelmotor |

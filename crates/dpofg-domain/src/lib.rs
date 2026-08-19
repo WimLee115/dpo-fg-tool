@@ -62,6 +62,7 @@
 
 pub mod avg;
 pub mod basis;
+pub mod dpia;
 mod error;
 pub mod incident;
 pub mod klokken;
@@ -69,6 +70,7 @@ pub mod verwerking;
 pub mod volledigheid;
 
 pub use basis::{Compartiment, Herkomst, Id, Motivering, Overgenomen, Status};
+pub use dpia::{Dpia, Restrisico, Restrisiconiveau, Voortoets};
 pub use error::{DomeinFout, Resultaat};
 pub use incident::{Aantasting, Herkomstkanaal, Incident, Meldbesluit, Risiconiveau};
 pub use klokken::{
