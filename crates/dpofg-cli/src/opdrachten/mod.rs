@@ -9,6 +9,7 @@ pub mod logboek;
 pub mod pakket;
 pub mod register;
 pub mod termijn;
+pub mod verzoek;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};

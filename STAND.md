@@ -37,6 +37,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Bedieningsschil | werkt | Volledig werkproces via de opdrachtregel |
 | Installatiesleutel | werkt | Eén vaste ondertekenidentiteit per kluis; overleeft een wachtwoordwissel |
 | Effectbeoordeling | werkt | Voortoets, de vier onderdelen van art. 35 lid 7, restrisico met weging, raadplegingsklok |
+| Betrokkenenverzoeken | werkt | Maandtermijn met beide lezingen, vindplaatsen uit het register, art. 19-kennisgeving, art. 12 lid 4-bericht |
 
 ---
 
@@ -44,7 +45,6 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 | Onderdeel | Uit fase | Waarom het er nog niet is |
 |---|---|---|
-| Betrokkenenverzoeken | 2 | Vereist zoekorkestratie over systemen en redactieregie; dat is een eigen bouwslag |
 | Belangenafweging, toestemming, doorgifte als eigen records | 2 | De verwijzingen bestaan in het model; de records nog niet |
 | Leveranciers- en ketenregister | 3 | |
 | Zorgplichtcontrolset | 3 | Vereist de normenkaders in het kennispakket |
@@ -84,6 +84,12 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 **De feestdagenkalender reikt tot en met 2030.** Een raadpleging die daarna wordt ingediend, laat de berekening luid vastlopen in plaats van een verkeerde datum op te leveren. Dat is de juiste kant om op te falen, maar de gebruiker krijgt het op het slechtste moment; er hoort een signaal te komen zodra de dekking binnen een jaar afloopt.
 
+**De lezing van de verzoektermijn is een keuze, geen antwoord.** Of de maand loopt vanaf ontvangst van het verzoek of pas vanaf de vaststelling van de identiteit, is omstreden. De tool toont beide lezingen met hun bron en legt de gekozen lezing met motivering vast; zij kiest niet. Wie de ruimste lezing neemt, kan nooit te laat zijn omdat hij van een later moment uitging.
+
+**De zoekorkestratie reikt tot waar het register reikt.** `dpofg verzoek vindplaatsen` leidt af waar gegevens kunnen staan uit de registerregels, en meldt hoeveel conceptregels zijn overgeslagen. Wat niet in het register staat, wordt hier niet gevonden — en dat is precies de fout die de onderzoeksbasis het vaakst aanwijst. Een koppeling naar systemen buiten het register bestaat nog niet.
+
+**De redactieregie ontbreekt.** Het verzoekdossier legt vast wát er is verstrekt, niet of daaruit is weggelakt wat er niet in hoort. Zolang die terugleescontrole er niet is, blijft verstrekking beperkt tot een profiel dat gecompartimenteerde en als gevoelig gemarkeerde inhoud volledig uitsluit.
+
 **Geen hardwaretoken.** Het platformhoofdstuk beschrijft hoe FIDO2 en PIV per besturingssysteem werken; de implementatie ontbreekt.
 
 **De netwerkstiltetest draait alleen op Linux.** De bouwstraat controleert met `strace` dat het programma geen verbinding opent. Voor macOS en Windows is een gelijkwaardige controle nodig.
@@ -94,8 +100,8 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 | | |
 |---|---|
-| Rust-code | ~12.600 regels, zonder commentaar en lege regels |
-| Tests | 443 testfuncties, 447 uitgevoerde tests |
+| Rust-code | ~14.400 regels, zonder commentaar en lege regels |
+| Tests | 469 testfuncties, 473 uitgevoerde tests |
 | Documentatie | ~4.700 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
@@ -135,3 +141,4 @@ Deze staan hier omdat ze laten zien waar het misging, en waarom de tests er zijn
 | Een tweede effectbeoordeling op dezelfde registerregel kaapte de terugverwijzing, waarna een risicowijziging stilzwijgend aan de eerste voorbijging | effectbeoordeling |
 | Een advies met een datum in de toekomst werd aanvaard en zette daarmee de bewaking van de raadplegingstermijn uit | effectbeoordeling |
 | De controleronde sloeg een termijn die zij niet kon berekenen stilzwijgend over en telde het dossier toch als beoordeeld | regelmotor |
+| De verwachting dat een verzoek van 31 januari op 28 februari verstrijkt bleek te naïef: die dag is een zaterdag, dus komt de maandeindeklem en dáárna de verlenging naar de eerstvolgende werkdag | verzoekdossier |

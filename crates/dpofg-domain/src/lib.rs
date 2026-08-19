@@ -67,6 +67,7 @@ mod error;
 pub mod incident;
 pub mod klokken;
 pub mod verwerking;
+pub mod verzoek;
 pub mod volledigheid;
 
 pub use basis::{Compartiment, Herkomst, Id, Motivering, Overgenomen, Status};
@@ -78,6 +79,10 @@ pub use klokken::{
     Zorgplichtcontext,
 };
 pub use verwerking::{Bewaartermijn, Ontvanger, Verwerking};
+pub use verzoek::{
+    Betrokkenenverzoek, Termijnlezing, Verzoekkanaal, Verzoeksoort, Verzoekuitkomst,
+    Vindplaatsuitkomst,
+};
 pub use volledigheid::{Ontbrekend, Registerrapport, Volledig, Volledigheidsrapport};
 
 /// De eenheid waarin een bewaartermijn is uitgedrukt.

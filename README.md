@@ -49,6 +49,13 @@ cargo build --release
 ./target/release/dpofg dpia voortoets DPIA-0412 --uitkomst vereist --motivering "twee criteria geraakt"
 ./target/release/dpofg dpia toon DPIA-0412
 
+# Een verzoek van een betrokkene; de tool toont beide lezingen van de termijn
+./target/release/dpofg verzoek lezingen
+./target/release/dpofg verzoek nieuw VZ-2026-014 "inzageverzoek" --soort inzage
+./target/release/dpofg verzoek lezing VZ-2026-014 --lezing vanaf-ontvangst --motivering "geen twijfel over de identiteit"
+./target/release/dpofg verzoek termijn VZ-2026-014
+./target/release/dpofg verzoek vindplaatsen VZ-2026-014
+
 # De controleregels over de hele verzameling
 ./target/release/dpofg controle
 
@@ -89,10 +96,11 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Kennispakketten met handtekening en terugrolbescherming | werkt |
 | Dossiers samenstellen en ondertekenen | werkt |
 | Effectbeoordeling (DPIA) met de raadplegingsklok van art. 36 | werkt |
+| Betrokkenenverzoeken (art. 15 t/m 22) met de maandtermijn | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |
-| Betrokkenenverzoeken, leveranciersregister, doorgifterecord | nog niet |
+| Leveranciersregister, doorgifterecord, redactieregie | nog niet |
 | Grafische schil | nog niet |
 
 Vraag de werkelijke dekking op met `dpofg controle --dekking`. Het aantal regels in de catalogus zegt niets over wat er wordt bewaakt; die opdracht wel.

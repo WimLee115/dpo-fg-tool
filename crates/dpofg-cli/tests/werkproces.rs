@@ -1001,6 +1001,176 @@ fn een_pad_met_een_accent_laat_het_logboek_heel() {
 }
 
 // --------------------------------------------------------------------------
+// Verzoeken van betrokkenen
+// --------------------------------------------------------------------------
+
+/// Een verzoek klaarzetten tot en met de lopende termijn.
+fn verzoek_opzetten(p: &Proef, kenmerk: &str, soort: &str, ontvangen: &str) {
+    p.moet(&format!(
+        "verzoek nieuw {kenmerk} 'verzoek van een oud-medewerker' --soort {soort} --ontvangen {ontvangen}"
+    ));
+    p.moet(&format!(
+        "verzoek lezing {kenmerk} --lezing vanaf-ontvangst --motivering 'de ruimste lezing; geen twijfel over de identiteit'"
+    ));
+    p.moet(&format!("verzoek termijn {kenmerk}"));
+}
+
+/// De omstreden lezing wordt aangeboden, niet gekozen.
+#[test]
+fn beide_lezingen_worden_getoond_met_hun_bron() {
+    let p = Proef::nieuw();
+    let uit = p.moet("verzoek lezingen");
+    assert!(uit.contains("vanaf ontvangst van het verzoek"));
+    assert!(uit.contains("vanaf vaststelling van de identiteit"));
+    assert!(uit.contains("art. 12 lid 3"));
+    assert!(uit.contains("art. 12 lid 6"));
+    assert!(uit.contains("De tool kiest niet voor u"));
+}
+
+#[test]
+fn een_inzageverzoek_doorloopt_het_hele_werkproces() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    verzoek_opzetten(&p, "VZ-2026-014", "inzage", "2026-06-01T09:00:00Z");
+
+    let vind = p.moet("verzoek vindplaatsen VZ-2026-014 --met-concepten");
+    assert!(vind.contains("0412-K"));
+    assert!(vind.contains("zo volledig als het register"));
+
+    p.moet("verzoek vindplaats VZ-2026-014 --plaats 0412-K --uitkomst verstrekt");
+    let af = p.moet("verzoek afhandelen VZ-2026-014 --uitkomst voldaan --op 2026-06-20T09:00:00Z");
+    assert!(af.contains("afgehandeld: voldaan"));
+}
+
+/// Wat niet is doorzocht, is niet stilzwijgend leeg.
+#[test]
+fn afhandelen_wordt_geweigerd_zolang_een_vindplaats_openstaat() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    verzoek_opzetten(&p, "VZ-2026-014", "inzage", "2026-06-01T09:00:00Z");
+    p.moet("verzoek vindplaatsen VZ-2026-014 --met-concepten");
+
+    let uit = p.moet_falen("verzoek afhandelen VZ-2026-014 --uitkomst voldaan");
+    assert!(uit.contains("niet stilzwijgend leeg"), "kreeg:\n{uit}");
+}
+
+/// Invariant I18: elke ontvanger krijgt bericht, of er staat opgeschreven
+/// waarom dat niet kan.
+#[test]
+fn een_gehonoreerde_rectificatie_bereikt_elke_ontvanger() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    verzoek_opzetten(&p, "VZ-2026-015", "rectificatie", "2026-06-01T09:00:00Z");
+    p.moet("verzoek vindplaatsen VZ-2026-015 --met-concepten");
+    p.moet("verzoek vindplaats VZ-2026-015 --plaats 0412-K --uitkomst gerectificeerd");
+    p.moet("verzoek ontvanger VZ-2026-015 --naam 'het pensioenfonds'");
+    p.moet("verzoek ontvanger VZ-2026-015 --naam 'de arbodienst'");
+
+    let geweigerd = p.moet_falen("verzoek afhandelen VZ-2026-015 --uitkomst voldaan");
+    assert!(geweigerd.contains("art. 19 AVG"), "kreeg:\n{geweigerd}");
+
+    p.moet("verzoek kennisgeving VZ-2026-015 --naam 'het pensioenfonds' --verzonden 2026-06-10T09:00:00Z --wijze e-mail");
+    // De tweede ontvanger bestaat niet meer; dan hoort de reden er te staan.
+    let zonder_reden =
+        p.moet_falen("verzoek kennisgeving VZ-2026-015 --naam 'de arbodienst' --onmogelijk");
+    assert!(zonder_reden.contains("onevenredig"));
+
+    p.moet("verzoek kennisgeving VZ-2026-015 --naam 'de arbodienst' --onmogelijk --motivering 'de arbodienst is opgeheven en heeft geen rechtsopvolger'");
+    p.moet("verzoek afhandelen VZ-2026-015 --uitkomst voldaan --op 2026-06-20T09:00:00Z");
+}
+
+/// Een weigering zonder klachtrecht en beroepsmogelijkheid is geen bericht in
+/// de zin van artikel 12 lid 4.
+#[test]
+fn een_weigering_vergt_het_volledige_bericht_van_lid_vier() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    verzoek_opzetten(&p, "VZ-2026-016", "wissing", "2026-06-01T09:00:00Z");
+    p.moet("verzoek vindplaatsen VZ-2026-016 --met-concepten");
+    p.moet("verzoek vindplaats VZ-2026-016 --plaats 0412-K --uitkomst geweigerd --toelichting 'wettelijke bewaarplicht'");
+
+    let zonder = p.moet_falen("verzoek afhandelen VZ-2026-016 --uitkomst geweigerd");
+    assert!(zonder.contains("art. 12 lid 4"));
+
+    // Half bericht: wel de redenen, niet het klachtrecht.
+    let half = p.moet("verzoek bericht-lid4 VZ-2026-016 2026-06-10T09:00:00Z --redenen 'wettelijke bewaarplicht op grond van art. 52 AWR' --rechtsmiddel");
+    assert!(half.contains("klachtrecht"));
+    assert!(p
+        .moet_falen("verzoek afhandelen VZ-2026-016 --uitkomst geweigerd")
+        .contains("klachtrecht"));
+
+    p.moet("verzoek bericht-lid4 VZ-2026-016 2026-06-10T09:00:00Z --redenen 'wettelijke bewaarplicht op grond van art. 52 AWR' --klachtrecht --rechtsmiddel");
+    p.moet("verzoek afhandelen VZ-2026-016 --uitkomst geweigerd --op 2026-06-20T09:00:00Z");
+}
+
+/// Anonimiseren is een sterke bewering. Klopt zij niet, dan is er niets gewist.
+#[test]
+fn geanonimiseerd_valt_zonder_toets_terug_op_gepseudonimiseerd() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    verzoek_opzetten(&p, "VZ-2026-017", "wissing", "2026-06-01T09:00:00Z");
+    p.moet("verzoek vindplaatsen VZ-2026-017 --met-concepten");
+
+    let uit = p.moet("verzoek vindplaats VZ-2026-017 --plaats 0412-K --uitkomst geanonimiseerd");
+    assert!(uit.contains("nog persoonsgegevens"), "kreeg:\n{uit}");
+    assert!(uit.contains("er niets gewist"));
+}
+
+/// Randgeval T-12: het verlengingsbericht moest binnen de eerste maand.
+#[test]
+fn een_verlenging_na_de_eerste_maand_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    verzoek_opzetten(&p, "VZ-2026-018", "inzage", "2026-05-01T09:00:00Z");
+
+    let te_laat = p.moet_falen(
+        "verzoek verlengen VZ-2026-018 2026-06-15T09:00:00Z --grond complexiteit --motivering 'het verzoek raakt zeven systemen'",
+    );
+    assert!(te_laat.contains("binnen de oorspronkelijke termijn"), "kreeg:\n{te_laat}");
+
+    let op_tijd = p.moet(
+        "verzoek verlengen VZ-2026-018 2026-05-20T09:00:00Z --grond complexiteit --motivering 'het verzoek raakt zeven systemen'",
+    );
+    assert!(op_tijd.contains("de complexiteit van het verzoek"));
+}
+
+/// Randgevallen T-21 en T-22, achter elkaar. Een verzoek van 31 januari kan
+/// niet op 31 februari verstrijken, dus klemt de maand op 28 februari 2026 —
+/// en dat is een zaterdag, dus schuift de termijn door naar maandag 2 maart.
+/// Twee regels op één datum: eerst de maandeindeklem, dan de verlenging naar de
+/// eerstvolgende werkdag.
+#[test]
+fn de_maandtermijn_klemt_en_schuift_daarna_naar_een_werkdag() {
+    let p = Proef::nieuw();
+    verzoek_opzetten(&p, "VZ-2026-019", "inzage", "2026-01-31T09:00:00Z");
+    let uit = p.moet("verzoek toon VZ-2026-019");
+    assert!(uit.contains("02-03-2026"), "kreeg:\n{uit}");
+}
+
+/// De tweede lezing rekent vanaf een moment dat er dan wel moet zijn.
+#[test]
+fn de_tweede_lezing_vergt_een_vastgestelde_identiteit() {
+    let p = Proef::nieuw();
+    p.moet(
+        "verzoek nieuw VZ-2026-020 'inzageverzoek' --soort inzage --ontvangen 2026-06-01T09:00:00Z",
+    );
+
+    let zonder = p.moet_falen(
+        "verzoek lezing VZ-2026-020 --lezing vanaf-identiteit --motivering 'gerede twijfel over de identiteit'",
+    );
+    assert!(zonder.contains("leg dat moment eerst vast"));
+
+    p.moet("verzoek identiteit VZ-2026-020 2026-06-05T09:00:00Z");
+    p.moet("verzoek lezing VZ-2026-020 --lezing vanaf-identiteit --motivering 'gerede twijfel over de identiteit'");
+    p.moet("verzoek termijn VZ-2026-020");
+
+    let uit = p.moet("verzoek toon VZ-2026-020");
+    // Verankerd op 5 juni, dus een maand later op 5 juli — een zondag, waardoor
+    // de termijn doorschuift naar maandag 6 juli. Ankert de klok ten onrechte
+    // op de ontvangstdatum van 1 juni, dan staat hier 1 juli.
+    assert!(uit.contains("06-07-2026"), "de klok hoort op 5 juni te ankeren:\n{uit}");
+}
+
+// --------------------------------------------------------------------------
 // De effectbeoordeling
 // --------------------------------------------------------------------------
 
