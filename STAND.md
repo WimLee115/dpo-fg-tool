@@ -69,7 +69,8 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Certificaten, mandaten en mappingreviews in de prognose | 3 | Die records bestaan nog niet; de prognose meldt uitdrukkelijk wat zij niet overziet |
 | Ketenbewijs tussen organisaties | 4 | |
 | Overdrachtsdossier bij een wisseling van functionaris | 4 | De scheiding tussen het persoonlijke dossier en het adviesregister van de organisatie is er; de overdracht zelf nog niet |
-| Grafische schil | 1 | De opdrachtregel is bewust eerst gebouwd |
+| Grafische schil | 1 | De opdrachtregel is bewust eerst gebouwd; de opzet ligt er in [`docs/SCHIL.md`](docs/SCHIL.md) |
+| De werkbak als motor | 1 | `AfgeleideVerplichting` bestaat alleen voor incidenten en kent geen voldaan-toestand; zonder die laag levert elk werkbakscherm een lijst op waaruit niets kan verdwijnen |
 | Multi-entiteit | 5 | |
 
 ---

@@ -115,7 +115,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Rotatie en intrekking van die sleutel | nog niet |
 | Toestemming als eigen record | nog niet |
 | Raamwerkvariant B en C, en de crosswalk naar normen | nog niet |
-| Grafische schil | nog niet |
+| Grafische schil | nog niet; de opzet staat in [`docs/SCHIL.md`](docs/SCHIL.md) |
 
 Vraag de werkelijke dekking op met `dpofg controle --dekking`. Het aantal regels in de catalogus zegt niets over wat er wordt bewaakt; die opdracht wel.
 
