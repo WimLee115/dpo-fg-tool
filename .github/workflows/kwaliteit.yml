@@ -137,12 +137,21 @@ jobs:
     name: de grafische schil
     needs: opmaak-en-analyse
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Ruimer dan de andere banen, en dat is geen slordigheid. Deze baan doet
+    # drie dingen achter elkaar die elk minuten kosten: node klaarzetten, de
+    # webviewmotoren van Playwright binnenhalen, en de Tauri-binary bouwen. Op
+    # vijfentwintig minuten werd de laatste stap afgekapt terwijl alles ervoor
+    # groen was, en dat leest als een fout in de code.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: schil
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
