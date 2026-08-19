@@ -66,6 +66,7 @@ pub mod dpia;
 mod error;
 pub mod incident;
 pub mod klokken;
+pub mod redactie;
 pub mod verwerking;
 pub mod verzoek;
 pub mod volledigheid;
@@ -79,6 +80,7 @@ pub use klokken::{
     verplichtingen_uit_incident, AfgeleideVerplichting, Ankertype, Verplichtingcode,
     Zorgplichtcontext,
 };
+pub use redactie::{Controlesoort, Controleuitkomst, Redactiecategorie, Redactieopdracht};
 pub use verwerking::{Bewaartermijn, Ontvanger, Verwerking};
 pub use verzoek::{
     Betrokkenenverzoek, Termijnlezing, Verzoekkanaal, Verzoeksoort, Verzoekuitkomst,

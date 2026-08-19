@@ -7,6 +7,7 @@ pub mod incident;
 pub mod kluis;
 pub mod logboek;
 pub mod pakket;
+pub mod redactie;
 pub mod register;
 pub mod termijn;
 pub mod verzoek;

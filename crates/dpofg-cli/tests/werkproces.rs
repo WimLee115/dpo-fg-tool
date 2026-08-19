@@ -1001,6 +1001,119 @@ fn een_pad_met_een_accent_laat_het_logboek_heel() {
 }
 
 // --------------------------------------------------------------------------
+// De redactieregie
+// --------------------------------------------------------------------------
+
+/// Zet een redactieopdracht klaar met één stuk waarin een bsn staat.
+fn redactie_opzetten(p: &Proef) -> std::path::PathBuf {
+    p.moet(
+        "verzoek nieuw VZ-2026-040 'inzageverzoek' --soort inzage --ontvangen 2026-06-01T09:00:00Z",
+    );
+    let bestand = p._map.path().join("bijlage-1.txt");
+    std::fs::write(&bestand, "dossier van J. Jansen, bsn 123456782, afdeling P&O").unwrap();
+
+    p.moet("redactie nieuw RED-2026-004 inzagebundel --dossier VZ-2026-040");
+    p.moet("redactie profiel RED-2026-004 --categorie bsn --waarde 123456782 --omschrijving 'het bsn van een collega'");
+    p.moet(&format!("redactie stuk RED-2026-004 {}", bestand.display()));
+    p.moet("redactie uitleveren RED-2026-004 --hulpmiddel 'het aangewezen redactiehulpmiddel'");
+    bestand
+}
+
+/// De klassieke fout: een zwart vlak over tekst die in de tekstlaag blijft
+/// staan. Precies wat deze controle moet vinden.
+#[test]
+fn een_zwart_vlak_over_leesbare_tekst_valt_door_de_mand() {
+    let p = Proef::nieuw();
+    redactie_opzetten(&p);
+
+    // Het "geredigeerde" bestand: er is iets veranderd, maar het bsn staat er nog.
+    let terug = p._map.path().join("bijlage-1-geredigeerd.txt");
+    std::fs::write(&terug, "dossier van [GELAKT], bsn 123456782, afdeling P&O").unwrap();
+
+    let uit = p.moet(&format!(
+        "redactie terugnemen RED-2026-004 --stuk bijlage-1.txt {}",
+        terug.display()
+    ));
+    assert!(uit.contains("staat nog leesbaar in het bestand"), "kreeg:\n{uit}");
+    assert!(uit.contains("123456782"));
+
+    let geweigerd = p.moet_falen("redactie verstrekken RED-2026-004 --aan 'de betrokkene'");
+    assert!(geweigerd.contains("tekstlaag"));
+}
+
+/// Invariant I28: geen verstrekking zonder geslaagde terugleescontrole. Ook
+/// niet wanneer de tekstcontrole slaagt maar de rest niet is gedaan.
+#[test]
+fn een_geslaagde_tekstcontrole_alleen_is_niet_genoeg() {
+    let p = Proef::nieuw();
+    redactie_opzetten(&p);
+
+    let terug = p._map.path().join("bijlage-1-geredigeerd.txt");
+    std::fs::write(&terug, "dossier van [GELAKT], bsn [GELAKT], afdeling P&O").unwrap();
+    let uit = p.moet(&format!(
+        "redactie terugnemen RED-2026-004 --stuk bijlage-1.txt {}",
+        terug.display()
+    ));
+    assert!(uit.contains("geen van de 1 waarden staat nog leesbaar"), "kreeg:\n{uit}");
+    // De tool is eerlijk over wat zij niet heeft gezien.
+    assert!(uit.contains("samengedrukte stroom"));
+    assert!(uit.contains("niet gecontroleerd"));
+
+    let geweigerd = p.moet_falen("redactie verstrekken RED-2026-004 --aan 'de betrokkene'");
+    assert!(geweigerd.contains("metagegevens"), "kreeg:\n{geweigerd}");
+    assert!(geweigerd.contains("beeldvergelijking"));
+
+    p.moet("redactie controle RED-2026-004 --stuk bijlage-1.txt --soort metagegevens --uitkomst geslaagd");
+    p.moet("redactie controle RED-2026-004 --stuk bijlage-1.txt --soort beeldvergelijking --uitkomst geslaagd");
+    p.moet("redactie verstrekken RED-2026-004 --aan 'de betrokkene'");
+}
+
+/// Wie zijn eigen redactie goedkeurt, controleert niets.
+#[test]
+fn een_handmatige_goedkeuring_vergt_een_tweede_persoon() {
+    let p = Proef::nieuw();
+    redactie_opzetten(&p);
+    let terug = p._map.path().join("bijlage-1-geredigeerd.txt");
+    std::fs::write(&terug, "dossier van [GELAKT], bsn [GELAKT]").unwrap();
+    p.moet(&format!("redactie terugnemen RED-2026-004 --stuk bijlage-1.txt {}", terug.display()));
+
+    let zonder = p.moet_falen(
+        "redactie controle RED-2026-004 --stuk bijlage-1.txt --soort handmatig --uitkomst geslaagd",
+    );
+    assert!(zonder.contains("tweede persoon"), "kreeg:\n{zonder}");
+
+    p.moet("redactie controle RED-2026-004 --stuk bijlage-1.txt --soort handmatig --uitkomst geslaagd --tweede-persoon 'B. Jansen'");
+    p.moet("redactie verstrekken RED-2026-004 --aan 'de betrokkene'");
+}
+
+/// Een categorie waarop de tool niet kan zoeken, wordt als zodanig gemeld.
+#[test]
+fn beeldmateriaal_wordt_niet_als_gecontroleerd_gepresenteerd() {
+    let p = Proef::nieuw();
+    p.moet(
+        "verzoek nieuw VZ-2026-041 'inzageverzoek' --soort inzage --ontvangen 2026-06-01T09:00:00Z",
+    );
+    p.moet("redactie nieuw RED-2026-005 inzagebundel --dossier VZ-2026-041");
+
+    let uit = p.moet("redactie profiel RED-2026-005 --categorie handtekening --omschrijving 'de handtekening onder de brief'");
+    assert!(uit.contains("kan de tool niet zoeken"), "kreeg:\n{uit}");
+    assert!(uit.contains("tweede persoon"));
+}
+
+/// Een teruggeleverd bestand dat niets is veranderd, betekent dat er niets is
+/// gebeurd.
+#[test]
+fn een_onveranderd_bestand_valt_op() {
+    let p = Proef::nieuw();
+    let bestand = redactie_opzetten(&p);
+    let uit = p.moet(&format!(
+        "redactie terugnemen RED-2026-004 --stuk bijlage-1.txt {}",
+        bestand.display()
+    ));
+    assert!(uit.contains("byte voor byte gelijk"), "kreeg:\n{uit}");
+}
+
+// --------------------------------------------------------------------------
 // Het Woo-spoor
 // --------------------------------------------------------------------------
 

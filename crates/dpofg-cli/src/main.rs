@@ -67,6 +67,10 @@ enum Opdracht {
     #[command(subcommand)]
     Woo(opdrachten::woo::Wooopdracht),
 
+    /// Redactieregie: aanwijzen wat weg moet en bewijzen dat het weg is.
+    #[command(subcommand)]
+    Redactie(opdrachten::redactie::Redactieopdrachtkeuze),
+
     /// De controleregels over de hele verzameling draaien.
     Controle(opdrachten::controle::Controleopties),
 
@@ -120,6 +124,7 @@ fn draai() -> Result<()> {
         Opdracht::Dpia(o) => opdrachten::dpia::draai(o, args.kluis, nu),
         Opdracht::Verzoek(o) => opdrachten::verzoek::draai(o, args.kluis, nu),
         Opdracht::Woo(o) => opdrachten::woo::draai(o, args.kluis, nu),
+        Opdracht::Redactie(o) => opdrachten::redactie::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),
