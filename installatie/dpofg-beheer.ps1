@@ -157,8 +157,21 @@ function Bouwen {
     Stap 'de toepassing bouwen (dit duurt de eerste keer een aantal minuten)'
     Push-Location $Wortel
     try {
-        cargo build --release -p dpofg-schil -p dpofg-cli -p dpofg-verify
+        # custom-protocol is niet optioneel voor een installatie: zonder die
+        # feature haalt de schil zijn scherm bij een ontwikkelserver op en
+        # toont een geïnstalleerd programma bij het starten alleen een
+        # foutmelding van de webview.
+        cargo build --release --features dpofg-schil/custom-protocol `
+            -p dpofg-schil -p dpofg-cli -p dpofg-verify
         if ($LASTEXITCODE -ne 0) { Afbreken 'de toepassing kon niet worden gebouwd' }
+
+        # En dan nagaan dat het ook zo is uitgevallen. De binary draait op
+        # Windows zonder console, dus alleen de afsluitcode telt hier.
+        Stap 'de bouw nakijken'
+        & (Join-Path $Wortel 'target\release\dpofg-schil.exe') --stand | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Afbreken 'de schil is als ontwikkelbouw uitgevallen en wordt niet geplaatst'
+        }
     } finally { Pop-Location }
 
     Gelukt 'gebouwd'

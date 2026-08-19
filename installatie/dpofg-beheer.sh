@@ -157,8 +157,20 @@ bouwen() {
     || afbreken 'de schil kon niet worden gebouwd'
 
   stap 'de toepassing bouwen (dit duurt de eerste keer een aantal minuten)'
-  ( cd "$WORTEL" && cargo build --release -p dpofg-schil -p dpofg-cli -p dpofg-verify ) \
+  # custom-protocol is niet optioneel voor een installatie: zonder die feature
+  # haalt de schil zijn scherm bij een ontwikkelserver op en toont een
+  # geïnstalleerd programma bij het starten alleen "Connection refused".
+  ( cd "$WORTEL" && cargo build --release --features dpofg-schil/custom-protocol \
+      -p dpofg-schil -p dpofg-cli -p dpofg-verify ) \
     || afbreken 'de toepassing kon niet worden gebouwd'
+
+  # En dan nagaan dat het ook zo is uitgevallen. Een verkeerd gebouwde binary
+  # is aan niets te zien tot het venster opengaat.
+  stap 'de bouw nakijken'
+  if ! "${WORTEL}/target/release/dpofg-schil" --stand > /dev/null 2>&1; then
+    "${WORTEL}/target/release/dpofg-schil" --stand || true
+    afbreken 'de schil is als ontwikkelbouw uitgevallen en wordt niet geplaatst'
+  fi
 
   gelukt 'gebouwd'
 }

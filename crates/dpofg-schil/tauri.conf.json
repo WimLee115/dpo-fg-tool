@@ -32,7 +32,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icoon.png"],
+    "icon": ["icons/icoon.ico", "icons/icoon.png"],
     "copyright": "",
     "category": "Business",
     "shortDescription": "Werkplatform voor de functionaris gegevensbescherming",

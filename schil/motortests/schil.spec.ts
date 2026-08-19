@@ -208,3 +208,29 @@ test('een blokkerend onderdeel is aan meer dan kleur te herkennen', async ({ pag
   // onderscheid.
   await expect(page.getByText(/houden vaststellen tegen/)).toBeVisible();
 });
+
+// Welke horizon aanstaat, moet aan de knop te zien zijn. Zonder dat leest de
+// gebruiker "Binnen 90 dagen" boven een rij knoppen die er alle drie hetzelfde
+// uitzien, en is de enige aanwijzing de kop van de band eronder.
+test('de gekozen horizon is aan de knop te zien', async ({ page }) => {
+  await ontgrendel(page);
+  await page.getByRole('button', { name: 'Prognose' }).click();
+  await expect(page.getByRole('heading', { name: 'Vervalprognose' })).toBeVisible();
+
+  const negentig = page.getByRole('button', { name: '90 dagen' });
+  const dertig = page.getByRole('button', { name: '30 dagen' });
+  await expect(negentig).toHaveAttribute('aria-pressed', 'true');
+
+  const stijl = (knop: typeof negentig) =>
+    knop.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return `${s.borderTopColor}|${s.color}|${s.fontWeight}`;
+    });
+  expect(await stijl(negentig)).not.toBe(await stijl(dertig));
+
+  // En het onderscheid verhuist mee met de keuze.
+  await dertig.click();
+  await expect(dertig).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'Binnen 30 dagen' })).toBeVisible();
+  expect(await stijl(dertig)).not.toBe(await stijl(negentig));
+});

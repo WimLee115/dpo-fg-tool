@@ -146,10 +146,15 @@ input, select, textarea {
 
 .balk nav { display: flex; gap: 0.35rem; }
 
-.balk nav button[aria-current='page'] {
+.balk nav button[aria-current='page'],
+button[aria-pressed='true'] {
   border-color: var(--nadruk);
   color: var(--nadruk);
 }
+
+/* Een ingedrukte knop moet ook zonder kleuronderscheid te herkennen zijn;
+   vandaar het zwaardere schrift naast de tint. */
+button[aria-pressed='true'] { font-weight: 600; }
 
 .balk .rek { margin-left: auto; }
 

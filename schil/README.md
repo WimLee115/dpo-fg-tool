@@ -20,6 +20,24 @@ tonen:
 pnpm dev
 ```
 
+## Bouwen om te installeren
+
+Een bouw die geïnstalleerd wordt, heeft de feature `custom-protocol` nodig.
+Tauri leidt daaruit af of het om een uitgave gaat; zonder die feature is
+`tauri::is_dev()` waar, wijst de schil naar `devUrl` en toont een
+geïnstalleerd programma bij het starten alleen een foutmelding van de webview.
+Aan de binary is dat verschil niet te zien:
+
+```
+pnpm exec vite build                       # de bundel moet er eerst zijn
+cargo build --release -p dpofg-schil --features dpofg-schil/custom-protocol
+./target/release/dpofg-schil --stand       # afsluitcode 1 bij een ontwikkelbouw
+```
+
+De beheerscripts in [`../installatie`](../installatie) doen dit alles, en
+plaatsen niets zolang `--stand` een ontwikkelbouw meldt. Voor het werken met de
+vite-server laat u de feature juist weg — dan is `devUrl` precies wat u wilt.
+
 ## Toetsen
 
 ```

@@ -15,6 +15,14 @@ crate-type = ["lib", "cdylib", "staticlib"]
 name = "dpofg-schil"
 path = "src/main.rs"
 
+# Zonder deze feature is `tauri::is_dev()` altijd waar en haalt de schil zijn
+# scherm bij de ontwikkelserver op localhost in plaats van uit de ingebouwde
+# bundel. Een geïnstalleerd programma dat dat doet, toont bij het starten
+# alleen "Connection refused". De bouwstraat en beide beheerscripts zetten hem
+# daarom aan; alleen een ontwikkelsessie met de vite-server laat hem weg.
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

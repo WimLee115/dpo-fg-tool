@@ -22,6 +22,34 @@ pub mod vorm;
 
 use tauri::Manager;
 
+/// Of deze binary zijn scherm bij een ontwikkelserver ophaalt.
+///
+/// Tauri leidt dit af uit de feature `custom-protocol`: ontbreekt die, dan
+/// wijst de schil naar `devUrl` en toont een geïnstalleerd programma bij het
+/// starten alleen een foutmelding van de webview. Het verschil is aan de
+/// binary niet te zien, dus het is hier opvraagbaar.
+pub fn is_ontwikkelbouw() -> bool {
+    tauri::is_dev()
+}
+
+/// De bouwsoort in één woord.
+pub fn bouwsoort() -> &'static str {
+    if is_ontwikkelbouw() {
+        "ontwikkelbouw"
+    } else {
+        "uitgave"
+    }
+}
+
+/// Waar het scherm vandaan komt.
+pub fn schermbron() -> &'static str {
+    if is_ontwikkelbouw() {
+        "de ontwikkelserver (niet geschikt om te installeren)"
+    } else {
+        "de ingebouwde bundel"
+    }
+}
+
 /// Start de schil.
 pub fn draai() {
     tauri::Builder::default()
@@ -46,4 +74,28 @@ pub fn draai() {
         ])
         .run(tauri::generate_context!())
         .expect("de schil kon niet worden gestart");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Deze test legt de koppeling vast die anders alleen uit de documentatie
+    // van Tauri blijkt, en die bij een upgrade stilletjes kan wijzigen: de
+    // feature bepaalt de bouwsoort, en niets anders.
+    #[test]
+    fn de_bouwsoort_volgt_de_feature() {
+        if cfg!(feature = "custom-protocol") {
+            assert!(!is_ontwikkelbouw(), "met custom-protocol hoort dit een uitgave te zijn");
+            assert_eq!(bouwsoort(), "uitgave");
+            assert!(schermbron().contains("ingebouwde"));
+        } else {
+            assert!(
+                is_ontwikkelbouw(),
+                "zonder custom-protocol hoort dit een ontwikkelbouw te zijn"
+            );
+            assert_eq!(bouwsoort(), "ontwikkelbouw");
+            assert!(schermbron().contains("niet geschikt om te installeren"));
+        }
+    }
 }
