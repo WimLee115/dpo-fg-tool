@@ -5,6 +5,7 @@ pub mod correctie;
 pub mod doorgifte;
 pub mod dossier;
 pub mod dpia;
+pub mod fg;
 pub mod incident;
 pub mod kluis;
 pub mod leverancier;

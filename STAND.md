@@ -51,6 +51,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Bestuursstuk | werkt | De prognose als ondertekende bundel met leesbaar stuk, machineleesbare kant en logboek; te controleren met dezelfde losse verificatiebinary |
 | De drie factoren van aantoonbaarheid | **deels** | Vastgesteld, uitgevoerd en actueel als drie tellingen; geen gewogen score, want het plan geeft daarvoor geen schaal |
 | Correctieplicht | werkt | Per bevinding een besluit met eigenaar en einddatum: herstel of gemotiveerde afwijking; alleen een lopende afwijking onderdrukt de bevinding |
+| Persoonlijk dossier van de functionaris | werkt | Een tweede kluisbestand met een eigen wachtwoordzin; adviezen met comply-or-explain, onafhankelijkheidsincidenten, en een hash in de kluis van de organisatie waarmee het bestaan is aan te tonen zonder de inhoud |
 
 ---
 
@@ -67,7 +68,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Crosswalk naar informatiebeveiligingsnormen | 3 | Vereist een mappinggraaf met reviewhoudbaarheid per rand |
 | Certificaten, mandaten en mappingreviews in de prognose | 3 | Die records bestaan nog niet; de prognose meldt uitdrukkelijk wat zij niet overziet |
 | Ketenbewijs tussen organisaties | 4 | |
-| Persoonlijk dossier van de functionaris | 1 | De cryptografische structuur ligt er; een tweede wachtwoord ontbreekt |
+| Overdrachtsdossier bij een wisseling van functionaris | 4 | De scheiding tussen het persoonlijke dossier en het adviesregister van de organisatie is er; de overdracht zelf nog niet |
 | Grafische schil | 1 | De opdrachtregel is bewust eerst gebouwd |
 | Multi-entiteit | 5 | |
 
@@ -125,7 +126,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 747 testfuncties, 751 uitgevoerde tests; ~7.100 regels in `tests` |
+| Tests | 774 testfuncties, 778 uitgevoerde tests; ~7.400 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

@@ -18,10 +18,23 @@ use dpofg_crypto::{kdf::beoordeel_wachtwoord, Wachtwoordzin};
 pub const OMGEVINGSVARIABELE: &str = "DPOFG_WACHTWOORD";
 
 /// Haalt het wachtwoord op.
+/// De omgevingsvariabele voor het persoonlijke dossier van de functionaris.
+///
+/// Een eigen variabele, en met opzet geen terugval op die van de organisatie:
+/// zou de zin van de organisatiekluis ook het persoonlijke dossier openen, dan
+/// is de scheiding schijn en leest de organisatie mee zonder dat iemand het
+/// merkt.
+pub const OMGEVINGSVARIABELE_FG: &str = "DPOFG_FG_WACHTWOORD";
+
 pub fn vraag(prompt: &str) -> Result<Wachtwoordzin> {
-    if let Ok(uit_omgeving) = std::env::var(OMGEVINGSVARIABELE) {
+    vraag_met(prompt, OMGEVINGSVARIABELE)
+}
+
+/// Vraagt een wachtwoordzin, met een eigen omgevingsvariabele.
+pub fn vraag_met(prompt: &str, omgevingsvariabele: &str) -> Result<Wachtwoordzin> {
+    if let Ok(uit_omgeving) = std::env::var(omgevingsvariabele) {
         eprintln!(
-            "\x1b[33m▸\x1b[0m Het wachtwoord komt uit {OMGEVINGSVARIABELE}. \
+            "\x1b[33m▸\x1b[0m Het wachtwoord komt uit {omgevingsvariabele}. \
              Dat is bruikbaar voor geautomatiseerd gebruik, maar leesbaar voor elk proces van \
              dezelfde gebruiker. Gebruik het niet op een werkplek."
         );
@@ -36,7 +49,12 @@ pub fn vraag(prompt: &str) -> Result<Wachtwoordzin> {
 
 /// Vraagt een nieuw wachtwoord, twee keer, en beoordeelt de sterkte.
 pub fn vraag_nieuw() -> Result<Wachtwoordzin> {
-    if let Ok(uit_omgeving) = std::env::var(OMGEVINGSVARIABELE) {
+    vraag_nieuw_met(OMGEVINGSVARIABELE)
+}
+
+/// Vraagt een nieuwe wachtwoordzin, met een eigen omgevingsvariabele.
+pub fn vraag_nieuw_met(omgevingsvariabele: &str) -> Result<Wachtwoordzin> {
+    if let Ok(uit_omgeving) = std::env::var(omgevingsvariabele) {
         return Ok(Wachtwoordzin::nieuw(uit_omgeving));
     }
 

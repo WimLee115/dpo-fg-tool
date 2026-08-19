@@ -21,10 +21,12 @@
 mod error;
 pub mod kluis;
 pub mod schema;
+pub mod spiegel;
 
 pub use error::{Resultaat, StoreFout};
 pub use kluis::{Installatiekop, Kluis, Recordkop};
 pub use schema::SCHEMAVERSIE;
+pub use spiegel::{spiegelhash, Spiegelregel, SPIEGELSOORT};
 
 /// Versie van deze crate.
 pub const VERSIE: &str = env!("CARGO_PKG_VERSION");

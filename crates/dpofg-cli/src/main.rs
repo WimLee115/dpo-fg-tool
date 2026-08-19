@@ -91,6 +91,9 @@ enum Opdracht {
     #[command(subcommand)]
     Leverancier(opdrachten::leverancier::Leveranciersopdracht),
 
+    /// Het persoonlijke dossier van de functionaris: advies en onafhankelijkheid.
+    Fg(opdrachten::fg::Fgargumenten),
+
     /// Wat er met een bevinding gebeurt: herstel of gemotiveerde afwijking.
     #[command(subcommand)]
     Correctie(opdrachten::correctie::Correctieopdracht),
@@ -165,6 +168,7 @@ fn draai() -> Result<()> {
         Opdracht::Lia(o) => opdrachten::lia::draai(o, args.kluis, nu),
         Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
         Opdracht::Leverancier(o) => opdrachten::leverancier::draai(o, args.kluis, nu),
+        Opdracht::Fg(o) => opdrachten::fg::draai(o, args.kluis, nu),
         Opdracht::Correctie(o) => opdrachten::correctie::draai(o, args.kluis, nu),
         Opdracht::Prognose(o) => opdrachten::prognose::draai(o, args.kluis, nu),
         Opdracht::Risico(o) => opdrachten::risico::draai(o, args.kluis, nu),

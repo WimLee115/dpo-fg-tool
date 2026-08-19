@@ -109,6 +109,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Vervalprognose op 30, 90 en 365 dagen | werkt |
 | Correctieplicht: per bevinding een besluit met eigenaar en datum | werkt |
 | De prognose als ondertekend bestuursstuk | werkt |
+| Persoonlijk dossier van de functionaris, met eigen wachtwoordzin | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |

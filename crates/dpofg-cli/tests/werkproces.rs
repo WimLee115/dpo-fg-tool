@@ -2939,3 +2939,216 @@ fn een_export_zonder_geadresseerde_wordt_geweigerd() {
     let uit = p.moet_falen(&format!("prognose --export {}", map.display()));
     assert!(uit.contains("bestemd-voor"), "kreeg:\n{uit}");
 }
+
+// --------------------------------------------------------------------------
+// Het persoonlijke dossier van de functionaris
+// --------------------------------------------------------------------------
+
+const FG_WACHTWOORD: &str = "mijn eigen zin met vier woorden";
+
+impl Proef {
+    /// Draait een opdracht met de wachtwoordzin van het persoonlijke dossier
+    /// erbij.
+    fn fg(&self, opdracht: &str) -> String {
+        let uit = self.draai_met_fg(opdracht);
+        let tekst = format!(
+            "{}{}",
+            String::from_utf8_lossy(&uit.stdout),
+            String::from_utf8_lossy(&uit.stderr)
+        );
+        assert!(uit.status.success(), "'{opdracht}' faalde:\n{tekst}");
+        tekst
+    }
+
+    fn fg_moet_falen(&self, opdracht: &str) -> String {
+        let uit = self.draai_met_fg(opdracht);
+        let tekst = format!(
+            "{}{}",
+            String::from_utf8_lossy(&uit.stdout),
+            String::from_utf8_lossy(&uit.stderr)
+        );
+        assert!(!uit.status.success(), "'{opdracht}' had moeten falen:\n{tekst}");
+        tekst
+    }
+
+    fn draai_met_fg(&self, opdracht: &str) -> Output {
+        let delen = shell_woorden(opdracht);
+        Command::new(env!("CARGO_BIN_EXE_dpofg"))
+            .args(&delen)
+            .env("DPOFG_WACHTWOORD", WACHTWOORD)
+            .env("DPOFG_FG_WACHTWOORD", FG_WACHTWOORD)
+            .env("DPOFG_KLUIS", &self.kluis)
+            .env("DPOFG_GEBRUIKER", "a.devries")
+            .output()
+            .expect("de binary moet te starten zijn")
+    }
+
+    /// Het pad naar het persoonlijke dossier, naast de kluis.
+    fn dossierpad(&self) -> String {
+        self.kluis.parent().unwrap().join("persoonlijk.dpofg").display().to_string()
+    }
+}
+
+fn fg_opzetten(p: &Proef) -> String {
+    let pad = p.dossierpad();
+    p.fg(&format!("fg nieuw {pad}"));
+    pad
+}
+
+/// Zou de zin van de organisatiekluis ook het persoonlijke dossier openen, dan
+/// is de scheiding schijn en leest de organisatie mee zonder dat iemand het
+/// merkt.
+#[test]
+fn het_persoonlijke_dossier_deelt_geen_wachtwoord_met_de_organisatie() {
+    let p = Proef::nieuw();
+    let pad = p.dossierpad();
+    let uit = p.draai_met_fg(&format!("fg nieuw {pad}"));
+    assert!(uit.status.success());
+
+    // Dezelfde zin voor beide wordt geweigerd.
+    let tweede = p.kluis.parent().unwrap().join("tweede.dpofg");
+    let uit = Command::new(env!("CARGO_BIN_EXE_dpofg"))
+        .args(shell_woorden(&format!("fg nieuw {}", tweede.display())))
+        .env("DPOFG_WACHTWOORD", WACHTWOORD)
+        .env("DPOFG_FG_WACHTWOORD", WACHTWOORD)
+        .env("DPOFG_KLUIS", &p.kluis)
+        .output()
+        .expect("de binary moet te starten zijn");
+    let tekst = String::from_utf8_lossy(&uit.stderr).to_string();
+    assert!(!uit.status.success(), "dit had moeten falen");
+    assert!(tekst.contains("opent ook de kluis van de organisatie"), "kreeg:\n{tekst}");
+    assert!(!tweede.exists(), "er hoort geen dossier achter te blijven");
+}
+
+/// De wachtwoordzin van de organisatie opent het persoonlijke dossier niet.
+#[test]
+fn de_organisatiezin_opent_het_persoonlijke_dossier_niet() {
+    let p = Proef::nieuw();
+    let pad = fg_opzetten(&p);
+
+    let uit = Command::new(env!("CARGO_BIN_EXE_dpofg"))
+        .args(shell_woorden(&format!("fg --dossier {pad} lijst")))
+        // Alleen de zin van de organisatie: die hoort niet te werken.
+        .env("DPOFG_FG_WACHTWOORD", WACHTWOORD)
+        .env("DPOFG_KLUIS", &p.kluis)
+        .output()
+        .expect("de binary moet te starten zijn");
+    assert!(!uit.status.success(), "de zin van de organisatie opende het dossier");
+}
+
+/// Te laat betrokken worden is de gebruikelijke manier waarop de rol wordt
+/// uitgehold; dat is alleen aantoonbaar met de omstandigheden erbij.
+#[test]
+fn niet_tijdig_betrokken_vraagt_een_toelichting() {
+    let p = Proef::nieuw();
+    let pad = fg_opzetten(&p);
+    let uit = p.fg_moet_falen(&format!(
+        "fg --dossier {pad} advies ADV-014 --onderwerp 'de aanwezigheidsregistratie' \
+         --vraagsteller bedrijfsvoering --advies 'de opzet verwerkt te veel gegevens' \
+         --aan 'de directie' --tijdig nee"
+    ));
+    assert!(uit.contains("art. 38 lid 1 AVG"), "kreeg:\n{uit}");
+}
+
+/// Comply-or-explain: een advies naast zich neerleggen mag, maar dan moet er
+/// staan waarom.
+#[test]
+fn een_advies_afwijzen_vraagt_een_reden() {
+    let p = Proef::nieuw();
+    let pad = fg_opzetten(&p);
+    p.fg(&format!(
+        "fg --dossier {pad} advies ADV-014 --onderwerp 'de aanwezigheidsregistratie' \
+         --vraagsteller bedrijfsvoering --advies 'de opzet verwerkt te veel gegevens' \
+         --aan 'de directie'"
+    ));
+    let uit = p.fg_moet_falen(&format!(
+        "fg --dossier {pad} reactie ADV-014 --status niet --beslisser 'de directie'"
+    ));
+    assert!(uit.contains("geen verantwoording"), "kreeg:\n{uit}");
+
+    let uit = p.fg(&format!(
+        "fg --dossier {pad} reactie ADV-014 --status geen-reactie --beslisser 'de directie'"
+    ));
+    assert!(uit.contains("uitblijven van een reactie is zelf een feit"), "kreeg:\n{uit}");
+}
+
+/// De kern: aantonen dát een record bestond, zonder de inhoud prijs te geven.
+#[test]
+fn de_spiegel_toont_bestaan_aan_zonder_de_inhoud() {
+    let p = Proef::nieuw();
+    let pad = fg_opzetten(&p);
+    p.fg(&format!(
+        "fg --dossier {pad} onafhankelijkheid ONA-001 --soort sanctie-gedreigd \
+         --omschrijving 'er is gezegd dat mijn contract niet zou worden verlengd' \
+         --van 'de directeur'"
+    ));
+
+    // Zonder spiegel berust het tijdstip op de eigen opgave.
+    let uit = p.fg_moet_falen(&format!("fg --dossier {pad} aantonen ONA-001"));
+    assert!(uit.contains("nooit gespiegeld"), "kreeg:\n{uit}");
+
+    let uit = p.fg(&format!("fg --dossier {pad} spiegelen ONA-001"));
+    assert!(uit.contains("uitsluitend deze hash"), "kreeg:\n{uit}");
+
+    let uit = p.fg(&format!("fg --dossier {pad} aantonen ONA-001"));
+    assert!(uit.contains("sindsdien niet gewijzigd"), "kreeg:\n{uit}");
+
+    // In de kluis van de organisatie staat de hash, en niets anders.
+    let uit = p.moet("kluis status");
+    assert!(uit.contains("spiegel"), "kreeg:\n{uit}");
+    let export = p.kluis.parent().unwrap().join("uitvoer");
+    p.moet(&format!(
+        "dossier {} --aanleiding proef --bestemd-voor 'de toezichthouder' --soort spiegel",
+        export.display()
+    ));
+    let bestanden: Vec<String> = std::fs::read_dir(&export)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    let spiegelbestand = bestanden
+        .iter()
+        .find(|n| n.starts_with("spiegel-"))
+        .expect("de spiegelregel hoort in het dossier te zitten");
+    let inhoud = std::fs::read_to_string(export.join(spiegelbestand)).unwrap();
+    assert!(!inhoud.contains("contract"), "de inhoud lekt in de kluis van de organisatie");
+    assert!(!inhoud.contains("directeur"), "de afzender lekt in de kluis van de organisatie");
+    assert!(inhoud.contains("onafhankelijkheidsincident"), "de soort hoort er wel in te staan");
+}
+
+/// Nooit gespiegeld en na het spiegelen gewijzigd zijn twee verschillende
+/// antwoorden. Die niet uit elkaar kunnen houden is bij bewijs het slechtst
+/// denkbare resultaat.
+#[test]
+fn een_gewijzigd_record_wordt_onderscheiden_van_een_ongespiegeld_record() {
+    let p = Proef::nieuw();
+    let pad = fg_opzetten(&p);
+    p.fg(&format!(
+        "fg --dossier {pad} advies ADV-014 --onderwerp 'de aanwezigheidsregistratie' \
+         --vraagsteller bedrijfsvoering --advies 'de opzet verwerkt te veel gegevens' \
+         --aan 'de directie'"
+    ));
+    p.fg(&format!("fg --dossier {pad} spiegelen ADV-014"));
+    p.fg(&format!(
+        "fg --dossier {pad} reactie ADV-014 --status niet --beslisser 'de directie' \
+         --motivering 'de kosten van een andere opzet wegen niet op tegen het risico'"
+    ));
+
+    let uit = p.fg_moet_falen(&format!("fg --dossier {pad} aantonen ADV-014"));
+    assert!(uit.contains("sinds de laatste spiegeling"), "kreeg:\n{uit}");
+    assert!(uit.contains("staat 1 eerdere spiegeling"), "kreeg:\n{uit}");
+    assert!(!uit.contains("nooit gespiegeld"), "dit is een ander geval:\n{uit}");
+
+    // Opnieuw spiegelen maakt de huidige inhoud weer aantoonbaar.
+    p.fg(&format!("fg --dossier {pad} spiegelen ADV-014"));
+    assert!(p.fg(&format!("fg --dossier {pad} aantonen ADV-014")).contains("niet gewijzigd"));
+}
+
+/// De zes gronden staan in het product, met de bepaling erbij.
+#[test]
+fn de_gronden_van_de_onafhankelijkheid_staan_in_beeld() {
+    let p = Proef::nieuw();
+    let uit = p.fg("fg gronden");
+    assert!(uit.contains("art. 38 lid 6 AVG"), "kreeg:\n{uit}");
+    assert!(uit.contains("art. 38 lid 2 AVG"), "kreeg:\n{uit}");
+    assert!(uit.contains("waardeloos wanneer het bewijs"), "kreeg:\n{uit}");
+}
