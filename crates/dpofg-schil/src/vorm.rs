@@ -85,3 +85,15 @@ pub struct Vervalpunt {
     pub eigenaar: Option<String>,
     pub vervalt_op: DateTime<Utc>,
 }
+
+/// De werkbak, met het moment waarop hij is berekend.
+///
+/// Het peilmoment gaat mee omdat de band in Rust wordt bepaald en de tekst
+/// "nog zoveel uur" in de schil. Zouden die twee elk hun eigen klok lezen, dan
+/// kan een regel in de band "verloopt vandaag" staan terwijl de tekst ernaast
+/// "te laat" zegt. Eén klok, één antwoord.
+#[derive(Debug, Clone, Serialize)]
+pub struct Werkvoorraad {
+    pub peilmoment: DateTime<Utc>,
+    pub regels: Vec<dpofg_report::werkbak::Werkbakregel>,
+}

@@ -105,4 +105,7 @@ tmp/
 schil/.svelte-kit/
 schil/test-results/
 schil/playwright-report/
+
+# Schermafdrukken worden door de motortests gemaakt; ze zijn uitvoer, geen bron.
+schil/beeld/
 crates/dpofg-schil/gen/

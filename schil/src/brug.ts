@@ -14,7 +14,7 @@ import type {
   Dossier,
   Kluisstand,
   Vervalpunt,
-  Werkbakregel,
+  Werkvoorraad,
 } from './soorten';
 
 /** De vorm van een aanroep. Namen zijn vast en worden nergens samengesteld. */
@@ -22,7 +22,7 @@ export interface Brug {
   ontgrendel(pad: string | null, wachtwoord: string): Promise<Kluisstand>;
   vergrendel(): Promise<void>;
   stand(): Promise<Kluisstand>;
-  werkbak(): Promise<Werkbakregel[]>;
+  werkbak(): Promise<Werkvoorraad>;
   buitenbeeld(): Promise<Buitenbeeld[]>;
   dossier(soort: string, kenmerk: string): Promise<Dossier>;
   controle(): Promise<Bevinding[]>;

@@ -13,10 +13,17 @@
   import DossierScherm from './onderdelen/Dossier.svelte';
   import Controle from './onderdelen/Controle.svelte';
   import Prognose from './onderdelen/Prognose.svelte';
+  import Themaknop from './onderdelen/Themaknop.svelte';
 
   type Scherm = 'werkbak' | 'controle' | 'prognose';
 
-  const { nu = new Date() }: { nu?: Date } = $props();
+  // De schil houdt geen eigen klok bij. Het peilmoment komt met de werkbak
+  // mee uit Rust, zodat de band en de resterende tijd nooit uiteen kunnen
+  // lopen. Alleen wanneer er nog niets is opgehaald, valt hij terug op de
+  // eigen klok — dan staat er ook nog niets om tegen af te meten.
+  const { nu: begin = new Date() }: { nu?: Date } = $props();
+  let opgehaald = $state<Date | null>(null);
+  const peilmoment = $derived(opgehaald ?? begin);
 
   let stand = $state<Kluisstand | null>(null);
   let bezig = $state(false);
@@ -56,7 +63,9 @@
   }
 
   async function haalWerkbak() {
-    regels = await brug().werkbak();
+    const voorraad = await brug().werkbak();
+    regels = voorraad.regels;
+    opgehaald = new Date(voorraad.peilmoment);
     buitenbeeld = await brug().buitenbeeld();
   }
 
@@ -112,6 +121,7 @@
       <span class="rek terzijde">
         {stand?.kennispakket} · bijgewerkt tot {stand?.consolidatiedatum}
       </span>
+      <Themaknop />
       <button type="button" onclick={() => brug().toonPersoonlijkVenster()}>
         Persoonlijk dossier
       </button>
@@ -133,11 +143,11 @@
       {#if dossier}
         <DossierScherm {dossier} sluit={() => (dossier = null)} />
       {:else if scherm === 'werkbak'}
-        <Werkbak {regels} {buitenbeeld} {nu} open={openDossier} />
+        <Werkbak {regels} {buitenbeeld} nu={peilmoment} open={openDossier} />
       {:else if scherm === 'controle'}
         <Controle {bevindingen} />
       {:else}
-        <Prognose punten={vervalpunten} dagen={horizon} kies={kiesHorizon} {nu} />
+        <Prognose punten={vervalpunten} dagen={horizon} kies={kiesHorizon} nu={peilmoment} />
       {/if}
     </main>
   </div>

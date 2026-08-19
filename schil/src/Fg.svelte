@@ -9,6 +9,7 @@
   import { fgbrug } from './fgbrug';
   import { SPIEGELNAAM, type Persoonlijkdossier } from './fgsoorten';
   import { datum } from './opmaak';
+  import Themaknop from './onderdelen/Themaknop.svelte';
 
   let dossier = $state<Persoonlijkdossier | null>(null);
   let wachtwoord = $state('');
@@ -67,6 +68,8 @@
         {bezig ? 'Bezig met openen…' : 'Openen'}
       </button>
 
+      <p><Themaknop /></p>
+
       <p class="terzijde">
         Of deze constructie standhoudt tegenover eigendoms- en archiefaanspraken van de
         organisatie, is niet vastgesteld. De keuze om dit dossier te voeren is aan u.
@@ -79,6 +82,7 @@
       <strong>Persoonlijk dossier</strong>
       <span class="terzijde">{dossier.pad}</span>
       <span class="rek terzijde">niet de kluis van de organisatie</span>
+      <Themaknop />
       <button type="button" onclick={vergrendel}>Op slot</button>
     </header>
 

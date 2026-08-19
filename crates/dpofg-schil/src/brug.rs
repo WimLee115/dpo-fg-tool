@@ -151,7 +151,7 @@ fn laad<T: serde::de::DeserializeOwned>(kluis: &Kluis, soort: &str) -> Result<Ve
 }
 
 #[tauri::command]
-pub fn werkbak(sessie: State<'_, Sessie>) -> Result<Vec<werkbak::Werkbakregel>, String> {
+pub fn werkbak(sessie: State<'_, Sessie>) -> Result<vorm::Werkvoorraad, String> {
     sessie.met_kluis(|kluis| {
         let nu = Utc::now();
         let pakket = dpofg_content::startpakket(nu.date_naive());
@@ -169,7 +169,10 @@ pub fn werkbak(sessie: State<'_, Sessie>) -> Result<Vec<werkbak::Werkbakregel>, 
         let kalender = pakket.kalender("NL").map_err(fout)?;
         let context = Kalendercontext { zone: chrono_tz::Europe::Amsterdam, kalender };
         let termijnen = Pakkettermijnen { pakket: pakket.clone() };
-        Ok(werkbak::werkbak(&bronnen, &termijnen, &context, nu))
+        Ok(vorm::Werkvoorraad {
+            peilmoment: nu,
+            regels: werkbak::werkbak(&bronnen, &termijnen, &context, nu),
+        })
     })
 }
 

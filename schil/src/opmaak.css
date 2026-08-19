@@ -31,8 +31,14 @@
   --hoek: 6px;
 }
 
+/* De donkere stand staat op drie plaatsen, en dat is met opzet.
+ *
+ * De systeemvoorkeur geldt alleen zolang de gebruiker niets heeft gekozen;
+ * daarom is de mediaquery uitgesloten zodra `data-thema="licht"` staat. En de
+ * eigen keuze wint in beide richtingen, want anders kan wie licht wil op een
+ * donker systeem niets. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-thema='licht']) {
     --papier: #16171b;
     --inkt: #e9e9ec;
     --gedempt: #9ba1ab;
@@ -44,6 +50,19 @@
     --band-loopt: #7fc98d;
     --band-wacht: #9ba1ab;
   }
+}
+
+:root[data-thema='donker'] {
+  --papier: #16171b;
+  --inkt: #e9e9ec;
+  --gedempt: #9ba1ab;
+  --lijn: #2e3038;
+  --vlak: #1d1f24;
+  --nadruk: #7aa2ff;
+  --band-onherstelbaar: #ff8a90;
+  --band-verstreken: #e0a84a;
+  --band-loopt: #7fc98d;
+  --band-wacht: #9ba1ab;
 }
 
 * { box-sizing: border-box; }
@@ -87,6 +106,11 @@ button:hover { border-color: var(--gedempt); }
   outline: 2px solid var(--nadruk);
   outline-offset: 2px;
 }
+
+/* De themaknop is een gewone knop; hij draagt zijn stand als tekst en niet
+ * alleen als pictogram, want een pictogram zegt niet wat er gebeurt als je
+ * erop drukt. */
+.thema { white-space: nowrap; }
 
 button.hoofd {
   background: var(--nadruk);

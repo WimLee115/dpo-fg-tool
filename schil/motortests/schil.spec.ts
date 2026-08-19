@@ -22,7 +22,9 @@ async function metNabootsing(page: Page) {
               keten_in_orde: true,
             };
           case 'werkbak':
-            return [
+            return {
+              peilmoment: new Date(nu).toISOString(),
+              regels: [
               {
                 record_soort: 'incident',
                 record_kenmerk: '2026-0041',
@@ -47,7 +49,8 @@ async function metNabootsing(page: Page) {
                 eigenaar: 'de security officer (K. de Wit)',
                 spoor: null,
               },
-            ];
+              ],
+            };
           case 'buitenbeeld':
             return [{ wat: 'wat verloopt zonder dat er iets moet', waar: "staat in 'dpofg prognose'" }];
           case 'controle':
@@ -146,4 +149,62 @@ test('er staat nergens een percentage of een voortgangsbalk', async ({ page }) =
   await expect(page.locator('progress')).toHaveCount(0);
   const tekst = (await page.locator('body').textContent()) ?? '';
   expect(tekst).not.toMatch(/\d+\s*%/);
+});
+
+// Wat blokkeert moet ook te zien zijn zonder kleuronderscheid. De rode streep
+// is de tint; dat er überhaupt een streep staat en dat de tekst het zegt, is
+// de vorm.
+test('een blokkerend onderdeel is aan meer dan kleur te herkennen', async ({ page }) => {
+  await page.addInitScript(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__TAURI_INTERNALS__ = {
+      invoke: async (naam: string) => {
+        if (naam === 'ontgrendel')
+          return {
+            pad: '/proef', ontgrendeld: true, kennispakket: 'nl-start',
+            consolidatiedatum: '2026-08-19', ketenreikwijdte: 'ok', keten_in_orde: true,
+          };
+        if (naam === 'werkbak')
+          return {
+            peilmoment: new Date().toISOString(),
+            regels: [{
+              record_soort: 'incident', record_kenmerk: '2026-0041', wat: 'iets',
+              grondslag: 'art. 33 AVG', anker: 'kennisname', deadline: null,
+              band: 'wacht_op_anker', onherstelbaar: false, eigenaar: null, spoor: null,
+            }],
+          };
+        if (naam === 'buitenbeeld') return [];
+        if (naam === 'dossier')
+          return {
+            kop: { id: 'a', soort: 'incident', kenmerk: '2026-0041', status: 'concept',
+                   gewijzigd_op: new Date().toISOString() },
+            volledigheid: { soort: 'incident', verplicht: 2, compleet: 0, ontbreekt: [
+              { veld: 'incident.oorzaak', omschrijving: 'kies de oorzaakcategorie',
+                grondslag: 'art. 33 lid 5 AVG', blokkeert_vaststelling: true },
+              { veld: 'incident.aantal', omschrijving: 'schat het aantal',
+                grondslag: 'art. 33 lid 3 AVG', blokkeert_vaststelling: false },
+            ] },
+            velden: [],
+          };
+        return null;
+      },
+    };
+  });
+  await page.goto('/');
+  await page.getByLabel(/wachtwoordzin/i).fill('juist');
+  await page.getByRole('button', { name: /openen/i }).click();
+  await page.getByRole('button', { name: /open incident/i }).click();
+  await page.getByText('0 van de 2 verplichte onderdelen').waitFor();
+
+  const blokkerend = page.locator('.ontbreekt li.blokkeert');
+  await expect(blokkerend).toHaveCount(1);
+  const kleur = await blokkerend.evaluate((el) => getComputedStyle(el).borderLeftColor);
+  const gewoon = await page
+    .locator('.ontbreekt li:not(.blokkeert)')
+    .evaluate((el) => getComputedStyle(el).borderLeftColor);
+  expect(kleur).not.toBe(gewoon);
+
+  // En het staat er ook met zoveel woorden bij, want kleur alleen is geen
+  // onderscheid.
+  await expect(page.getByText(/houden vaststellen tegen/)).toBeVisible();
 });

@@ -7,7 +7,14 @@
 // ze zijn gebouwd.
 
 import type { Brug } from './brug';
-import type { Bevinding, Buitenbeeld, Dossier, Kluisstand, Vervalpunt, Werkbakregel } from './soorten';
+import type {
+  Bevinding,
+  Buitenbeeld,
+  Dossier,
+  Kluisstand,
+  Vervalpunt,
+  Werkbakregel,
+} from './soorten';
 
 export interface Nabootsing extends Brug {
   /** Hoe vaak welk commando is aangeroepen; de tests kijken hiernaar. */
@@ -195,7 +202,7 @@ export function nabootsing(nu = new Date('2026-08-19T09:00:00Z')): Nabootsing {
     },
     async werkbak() {
       aanroepen.push('werkbak');
-      return regels;
+      return { peilmoment: nu.toISOString(), regels };
     },
     async buitenbeeld() {
       aanroepen.push('buitenbeeld');

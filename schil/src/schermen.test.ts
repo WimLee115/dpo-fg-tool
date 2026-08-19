@@ -87,6 +87,17 @@ describe('de werkbak', () => {
     expect(screen.getByText(/dpofg prognose/)).toBeTruthy();
   });
 
+  // De band komt uit Rust en de resterende tijd stond in de schil. Zolang die
+  // twee elk hun eigen klok lazen, kon een regel in de band "verloopt vandaag"
+  // staan terwijl de tekst ernaast "te laat" zei. Het peilmoment komt nu mee.
+  it('meet de resterende tijd af tegen het peilmoment uit Rust', async () => {
+    await ontgrendel();
+    // De nabootsing zet de deadline van het verzoek op achttien uur na het
+    // peilmoment; met de klok van de machine zou dat allang verstreken zijn.
+    const regel = (await screen.findByText(/inzage in het personeelsdossier/)).closest('li');
+    expect(within(regel as HTMLElement).getByText(/nog 18 uur/)).toBeTruthy();
+  });
+
   it('zegt hoeveel er buiten de filter valt', async () => {
     const gebruiker = await ontgrendel();
     await screen.findByRole('heading', { name: 'Werkbak' });

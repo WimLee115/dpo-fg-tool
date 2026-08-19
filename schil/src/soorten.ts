@@ -118,6 +118,18 @@ export interface Vervalpunt {
   vervalt_op: string;
 }
 
+/**
+ * De werkbak, met het moment waarop hij is berekend.
+ *
+ * Het peilmoment komt uit Rust, want de band wordt daar bepaald. Zou de schil
+ * de resterende tijd tegen zijn eigen klok afmeten, dan kan een regel in de
+ * band "verloopt vandaag" staan terwijl de tekst ernaast "te laat" zegt.
+ */
+export interface Werkvoorraad {
+  peilmoment: string;
+  regels: Werkbakregel[];
+}
+
 /** Wat er niet in de werkbak staat, en waar het dan wel staat. */
 export interface Buitenbeeld {
   wat: string;

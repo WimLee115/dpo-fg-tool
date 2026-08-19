@@ -6,6 +6,8 @@
   waarmee iemand kan uitvinden welke van twee wachtwoorden hij te pakken heeft.
 -->
 <script lang="ts">
+  import Themaknop from './Themaknop.svelte';
+
   const {
     ontgrendel,
     bezig,
@@ -44,6 +46,8 @@
     <button type="submit" class="hoofd" disabled={bezig || wachtwoord.length === 0}>
       {bezig ? 'Bezig met openen…' : 'Openen'}
     </button>
+
+    <p><Themaknop /></p>
 
     <p class="terzijde">
       Er is geen herstelmogelijkheid voor deze zin. Het persoonlijke dossier van de functionaris
