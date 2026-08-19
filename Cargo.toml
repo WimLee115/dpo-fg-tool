@@ -11,6 +11,7 @@ members = [
     "crates/dpofg-report",
     "crates/dpofg-verify",
     "crates/dpofg-cli",
+    "crates/dpofg-schil",
 ]
 
 [workspace.package]

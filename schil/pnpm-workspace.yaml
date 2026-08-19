@@ -1,0 +1,6 @@
+# esbuild plaatst zijn binary via een installatiescript. Alleen dit pakket
+# krijgt die toestemming; al het andere draait geen scripts bij het
+# installeren, zodat een gecompromitteerde afhankelijkheid niet zomaar code
+# uitvoert op de bouwmachine.
+allowBuilds:
+  esbuild: true

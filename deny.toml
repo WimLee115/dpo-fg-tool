@@ -10,7 +10,39 @@ all-features = true
 [advisories]
 # Bekende kwetsbaarheden en niet meer onderhouden crates zijn fouten.
 yanked = "deny"
-ignore = []
+# Zestien meldingen uit de afhankelijkheden van Tauri v2, alle van het type
+# `unmaintained` en geen enkele een kwetsbaarheid. Zij staan hier stuk voor
+# stuk met naam, want een uitzondering die niet is opgeschreven is over een
+# jaar niet meer te onderscheiden van een vergissing.
+#
+# De GTK3-bindingen komen mee doordat Tauri v2 op Linux `webkit2gtk-4.1`
+# gebruikt, en dat is GTK3. Daar is binnen de vastgelegde techniekkeuze niets
+# aan te doen; het wachten is op de GTK4-overgang van Tauri zelf.
+#
+# Wat deze uitzondering níet doet: een échte kwetsbaarheid doorlaten. Een
+# melding van het type `vulnerability` laat de bouwstraat nog altijd vastlopen.
+# Deze lijst wordt bij elke uitgave nagelopen.
+ignore = [
+    # gtk-rs GTK3-bindingen, via tauri en wry.
+    "RUSTSEC-2024-0411",
+    "RUSTSEC-2024-0412",
+    "RUSTSEC-2024-0413",
+    "RUSTSEC-2024-0414",
+    "RUSTSEC-2024-0415",
+    "RUSTSEC-2024-0416",
+    "RUSTSEC-2024-0417",
+    "RUSTSEC-2024-0418",
+    "RUSTSEC-2024-0419",
+    "RUSTSEC-2024-0420",
+    # proc-macro-error, via de macro's van gtk-rs.
+    "RUSTSEC-2024-0370",
+    # De unic-pakketten, via de domeinnaamverwerking onder Tauri.
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098",
+    "RUSTSEC-2025-0100",
+]
 
 [licenses]
 # Een expliciete lijst, geen uitsluitingslijst: een onbekende licentie hoort
@@ -28,6 +60,14 @@ allow = [
     "Unicode-3.0",
     "CC0-1.0",
     "Unlicense",
+    # Zwak, bestandsgebonden copyleft. Komt binnen via de opmaakketen onder
+    # Tauri (cssparser, dtoa-short, option-ext). Toegestaan omdat de
+    # verplichting zich beperkt tot de bestanden van die pakketten zelf en wij
+    # die niet wijzigen; zouden wij dat wel doen, dan hoort dat besluit hier
+    # te worden herzien.
+    "MPL-2.0",
+    # Toegeeflijk, vergelijkbaar met MIT. Komt binnen via foldhash onder Tauri.
+    "Zlib",
 ]
 confidence-threshold = 0.9
 

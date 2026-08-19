@@ -1,0 +1,33 @@
+[package]
+name = "dpofg-schil"
+description = "De grafische schil van dpo-fg-tool"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "dpofg_schil_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "dpofg-schil"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+dpofg-domain.workspace = true
+dpofg-store.workspace = true
+dpofg-rules.workspace = true
+dpofg-report.workspace = true
+dpofg-content.workspace = true
+dpofg-terms.workspace = true
+dpofg-crypto.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }

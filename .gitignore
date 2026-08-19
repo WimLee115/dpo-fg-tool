@@ -100,3 +100,9 @@ tmp/
 *.bak
 *.orig
 *.rej
+
+# --- De grafische schil ---
+schil/.svelte-kit/
+schil/test-results/
+schil/playwright-report/
+crates/dpofg-schil/gen/

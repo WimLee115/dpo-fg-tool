@@ -102,6 +102,77 @@ jobs:
           path: "**/*.cdx.json"
           if-no-files-found: error
 
+  schil:
+    name: de grafische schil
+    needs: opmaak-en-analyse
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: schil
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: pnpm klaarzetten
+        run: |
+          corepack enable
+          corepack prepare pnpm@11 --activate
+
+      - name: afhankelijkheden installeren
+        run: pnpm install --frozen-lockfile
+
+      - name: typecontrole
+        run: pnpm exec svelte-check --tsconfig ./tsconfig.json
+
+      - name: eenheidstests
+        run: pnpm exec vitest run
+
+      - name: bouwen
+        run: pnpm exec vite build
+
+      # De bundel wordt nagelopen op wat het contentbeveiligingsbeleid niet
+      # toestaat. Dit is uitdrukkelijk een vangnet en geen bewijs: de
+      # motortests hieronder draaien op de echte motoren en die tellen.
+      - name: de bundel nalopen
+        run: |
+          set -euo pipefail
+          if grep -qE "<script>|<style" dist/index.html; then
+            echo "::error::er staat een inline script of een inline stijl in index.html"
+            exit 1
+          fi
+          for patroon in "eval(" "new Function" "fetch(" "XMLHttpRequest" \
+                         "WebSocket" "EventSource" "WebAssembly" "setInterval" \
+                         "createObjectURL" "structuredClone"; do
+            if grep -qF "$patroon" dist/assets/*.js; then
+              echo "::error::'$patroon' staat in de bundel en hoort daar niet"
+              exit 1
+            fi
+          done
+          if grep -qE 'url\(data:|@import' dist/assets/*.css; then
+            echo "::error::de stijlen halen iets van buiten of lijnen een bestand in"
+            exit 1
+          fi
+          echo "de bundel is schoon"
+
+      - name: motoren klaarzetten
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      # WebKit is de motor die er het meest toe doet: hij benadert zowel
+      # WKWebView op macOS als WebKitGTK op Linux. Daardoor breekt een
+      # wijziging hier al voordat er een macOS-bouw bestaat.
+      - name: motortests
+        run: pnpm exec playwright test
+
+      - name: bouw van de schilbinary
+        working-directory: .
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+          cargo build -p dpofg-schil
+
   netwerkstilte:
     name: geen uitgaand netwerkverkeer
     needs: opmaak-en-analyse

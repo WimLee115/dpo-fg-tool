@@ -1,0 +1,244 @@
+/* De opmaak van de schil.
+ *
+ * Eén bestand, geen stijl in het element. Dat is geen voorkeur maar een eis:
+ * het contentbeveiligingsbeleid staat `style-src 'self'` zonder
+ * `'unsafe-inline'` toe, en een bibliotheek die stijlen in het element
+ * injecteert loopt daar op stuk.
+ *
+ * Geen weblettertypen. De letters komen van het besturingssysteem; een
+ * lettertype van buiten zou het enige uitgaande verzoek van het hele product
+ * zijn.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --papier: #fbfbfa;
+  --inkt: #17181c;
+  --gedempt: #5b6069;
+  --lijn: #d9d9d6;
+  --vlak: #ffffff;
+  --nadruk: #1c4fd8;
+
+  /* Banden dragen vorm en niet alleen tint: wie kleuren niet onderscheidt,
+   * moet de volgorde nog steeds kunnen zien. */
+  --band-onherstelbaar: #a4232b;
+  --band-verstreken: #8a5a00;
+  --band-loopt: #2f6b3a;
+  --band-wacht: #5b6069;
+
+  --ruimte: 1rem;
+  --hoek: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --papier: #16171b;
+    --inkt: #e9e9ec;
+    --gedempt: #9ba1ab;
+    --lijn: #2e3038;
+    --vlak: #1d1f24;
+    --nadruk: #7aa2ff;
+    --band-onherstelbaar: #ff8a90;
+    --band-verstreken: #e0a84a;
+    --band-loopt: #7fc98d;
+    --band-wacht: #9ba1ab;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--papier);
+  color: var(--inkt);
+  font-family: system-ui, -apple-system, "Segoe UI", Cantarell, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* De schuifbalk mag de opmaak niet verschuiven: op Windows neemt hij ruimte
+ * in en op macOS niet, en dan valt een tabel op één platform anders uit. */
+html { scrollbar-gutter: stable; }
+
+h1, h2, h3 { font-weight: 600; line-height: 1.25; margin: 0; }
+h1 { font-size: 1.35rem; }
+h2 { font-size: 1.1rem; }
+h3 { font-size: 1rem; }
+
+a { color: var(--nadruk); }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--vlak);
+  border: 1px solid var(--lijn);
+  border-radius: var(--hoek);
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+button:hover { border-color: var(--gedempt); }
+
+/* Een zichtbare focus is geen detail: dit product is met het toetsenbord te
+ * bedienen en een onzichtbare focus maakt dat onmogelijk. */
+:focus-visible {
+  outline: 2px solid var(--nadruk);
+  outline-offset: 2px;
+}
+
+button.hoofd {
+  background: var(--nadruk);
+  border-color: var(--nadruk);
+  color: #fff;
+}
+
+input, select, textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--vlak);
+  border: 1px solid var(--lijn);
+  border-radius: var(--hoek);
+  padding: 0.4rem 0.55rem;
+  width: 100%;
+}
+
+.schil {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+.balk {
+  display: flex;
+  align-items: center;
+  gap: var(--ruimte);
+  padding: 0.6rem var(--ruimte);
+  border-bottom: 1px solid var(--lijn);
+  background: var(--vlak);
+  flex-wrap: wrap;
+}
+
+.balk nav { display: flex; gap: 0.35rem; }
+
+.balk nav button[aria-current='page'] {
+  border-color: var(--nadruk);
+  color: var(--nadruk);
+}
+
+.balk .rek { margin-left: auto; }
+
+.inhoud { padding: var(--ruimte); max-width: 78rem; width: 100%; }
+
+.terzijde { color: var(--gedempt); font-size: 0.9rem; }
+
+/* --- De banden van de werkbak ------------------------------------------- */
+
+.band { margin-block: 1.25rem; }
+
+.band > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--lijn);
+}
+
+.band[data-band^='onherstelbaar'] > h2 { border-bottom-color: var(--band-onherstelbaar); }
+.band[data-band='verstreken'] > h2 { border-bottom-color: var(--band-verstreken); }
+.band[data-band='loopt'] > h2 { border-bottom-color: var(--band-loopt); }
+.band[data-band='wacht_op_anker'] > h2 { border-bottom-color: var(--band-wacht); }
+
+.band > h2 .aantal { color: var(--gedempt); font-weight: 400; font-size: 0.9rem; }
+
+.regels { list-style: none; margin: 0; padding: 0; }
+
+.regel {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--lijn);
+  border-radius: var(--hoek);
+  background: var(--vlak);
+  margin-block: 0.4rem;
+}
+
+/* Onherstelbaar krijgt een dubbele rand: vorm naast tint. */
+.regel.onherstelbaar { border-left: 4px double var(--band-onherstelbaar); }
+
+.regel .kop { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+.regel .dossier { font-weight: 600; }
+.regel .spoor { color: var(--gedempt); font-size: 0.85rem; }
+.regel .wanneer { margin-left: auto; font-variant-numeric: tabular-nums; }
+.regel .grondslag, .regel .anker, .regel .eigenaar { color: var(--gedempt); font-size: 0.9rem; }
+
+/* --- De volledigheidsteller --------------------------------------------- */
+
+/* Losse blokjes en geen doorlopende balk. Een balk nodigt uit om te worden
+ * gelezen als percentage, en dit product geeft geen percentages. */
+.blokjes { display: flex; gap: 3px; flex-wrap: wrap; margin-block: 0.4rem; }
+
+.blokje {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid var(--lijn);
+  background: transparent;
+}
+
+.blokje.ingevuld { background: var(--band-loopt); border-color: var(--band-loopt); }
+
+.ontbreekt { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
+
+.ontbreekt li {
+  border-left: 3px solid var(--lijn);
+  padding-left: 0.6rem;
+}
+
+.ontbreekt li.blokkeert { border-left-color: var(--band-onherstelbaar); }
+
+.ontbreekt .veld { font-weight: 600; }
+.ontbreekt .grondslag { color: var(--gedempt); font-size: 0.9rem; }
+
+/* --- Het slot ------------------------------------------------------------ */
+
+.slot {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--ruimte);
+}
+
+.slot form {
+  width: min(30rem, 100%);
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--lijn);
+  border-radius: var(--hoek);
+  background: var(--vlak);
+}
+
+.fout {
+  border-left: 4px solid var(--band-onherstelbaar);
+  padding: 0.5rem 0.75rem;
+  background: var(--vlak);
+}
+
+.tabel { width: 100%; border-collapse: collapse; }
+.tabel th, .tabel td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--lijn); vertical-align: top; }
+.tabel th { color: var(--gedempt); font-weight: 600; font-size: 0.9rem; }
+
+.leeg { color: var(--gedempt); padding: 1rem 0; }
+
+/* Wat er niet in de lijst staat, hoort er altijd onder. */
+.buitenbeeld { margin-top: 2rem; border-top: 1px solid var(--lijn); padding-top: 0.75rem; }
+.buitenbeeld ul { list-style: none; margin: 0.4rem 0 0; padding: 0; display: grid; gap: 0.35rem; }
+.buitenbeeld li { color: var(--gedempt); font-size: 0.9rem; }
+
+@media print {
+  .balk, button { display: none; }
+  .inhoud { max-width: none; padding: 0; }
+  .regel, .band { break-inside: avoid; }
+}
