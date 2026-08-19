@@ -58,7 +58,7 @@ fn toon(kluis: &dpofg_store::Kluis, aantal: usize, onderwerp: Option<String>) ->
     for r in regels.iter().rev().take(aantal).rev() {
         t.add_row(vec![
             r.volgnummer.to_string(),
-            r.gebeurtenis.tijdstip.format("%d-%m %H:%M").to_string(),
+            crate::uitvoer::dag_en_tijd(r.gebeurtenis.tijdstip).to_string(),
             format!("{:?}", r.gebeurtenis.handeling),
             r.gebeurtenis.actor.naam.clone(),
             format!(
@@ -83,7 +83,7 @@ fn verifieer(kluis: &dpofg_store::Kluis) -> Result<()> {
     if let Some((van, tot)) = rapport.periode {
         t.add_row(vec![
             "periode",
-            &format!("{} tot {}", van.format("%d-%m-%Y %H:%M"), tot.format("%d-%m-%Y %H:%M")),
+            &format!("{} tot {}", crate::uitvoer::tijdstip(van), crate::uitvoer::tijdstip(tot)),
         ]);
     }
     if let Some(h) = &rapport.laatste_hash {
@@ -170,7 +170,7 @@ fn anker(
     let mut t = tabel(&["", ""]);
     t.add_row(vec!["regel", &a.volgnummer.to_string()]);
     t.add_row(vec!["hash", &a.hash[..16]]);
-    t.add_row(vec!["tijdstip", &a.tijdstip.format("%d-%m-%Y %H:%M UTC").to_string()]);
+    t.add_row(vec!["tijdstip", &crate::uitvoer::tijdstip(a.tijdstip).to_string()]);
     t.add_row(vec!["sleutel", &format!("{}…", &a.sleutel[..16])]);
     if let Some(p) = &a.bewaarplaats {
         t.add_row(vec!["bewaarplaats", p]);

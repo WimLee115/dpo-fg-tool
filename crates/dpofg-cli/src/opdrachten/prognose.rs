@@ -89,7 +89,7 @@ pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>
     kop("Vervalprognose");
     terzijde(&format!(
         "peilmoment {} · {} dossiers doorzocht",
-        nu.format("%d-%m-%Y %H:%M UTC"),
+        crate::uitvoer::tijdstip(nu),
         zorgplicht.len()
             + beoordelingen.len()
             + leveranciers.len()
@@ -108,7 +108,7 @@ pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>
             t.add_row(vec![
                 v.eis.clone(),
                 v.oorzaak.omschrijving().to_string(),
-                v.vervalt_op.format("%d-%m-%Y").to_string(),
+                crate::uitvoer::datum(v.vervalt_op).to_string(),
                 v.eigenaar.clone().unwrap_or_else(|| "geen".into()),
             ]);
         }
@@ -121,7 +121,7 @@ pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>
         let peildatum = nu + Duration::days(*dagen);
         let punten = prognose(&bronnen, termijnen, peildatum);
         let erbij = punten.len().saturating_sub(vorig);
-        kop(&format!("Over {dagen} dagen — {}", peildatum.format("%d-%m-%Y")));
+        kop(&format!("Over {dagen} dagen — {}", crate::uitvoer::datum(peildatum)));
         if punten.is_empty() {
             gelukt("er verloopt niets binnen deze horizon");
         } else {
@@ -136,7 +136,7 @@ pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>
                     t.add_row(vec![
                         v.eis.clone(),
                         v.oorzaak.omschrijving().to_string(),
-                        v.vervalt_op.format("%d-%m-%Y").to_string(),
+                        crate::uitvoer::datum(v.vervalt_op).to_string(),
                         format!("{} dagen", v.dagen_tot_verval(nu)),
                         v.eigenaar.clone().unwrap_or_else(|| "geen".into()),
                     ]);

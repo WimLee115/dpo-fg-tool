@@ -293,7 +293,7 @@ fn nieuw(
     bewaar(kluis, &b, Handeling::RecordAangemaakt, "risicobeoordeling begonnen", nu)?;
 
     gelukt(&format!("risicobeoordeling {kenmerk} begonnen"));
-    terzijde(&format!("geldig tot {}", tot.format("%d-%m-%Y")));
+    terzijde(&format!("geldig tot {}", crate::uitvoer::datum(tot)));
     terzijde(
         "Er komt geen score uit deze beoordeling. Wat eruit komt is: welke risico's zijn \
          onderkend, welke maatregelen ze verkleinen, wat er overblijft en wie dat aanvaardt.",
@@ -456,9 +456,9 @@ fn lijst(kluis: &Kluis, nu: DateTime<Utc>) -> Result<()> {
     for k in &koppen {
         let b: Risicobeoordeling = kluis.laad(SOORT, &k.id)?;
         let geldig = if b.is_verlopen(nu) {
-            format!("{} (verlopen)", b.geldig_tot.format("%d-%m-%Y"))
+            format!("{} (verlopen)", crate::uitvoer::datum(b.geldig_tot))
         } else {
-            b.geldig_tot.format("%d-%m-%Y").to_string()
+            crate::uitvoer::datum(b.geldig_tot).to_string()
         };
         t.add_row(vec![
             b.kenmerk.clone(),
@@ -480,9 +480,9 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     t.add_row(vec!["methode", &b.methode]);
     t.add_row(vec!["bron van de methode", &b.methode_bron]);
     t.add_row(vec!["uitgevoerd door", &b.uitgevoerd_door]);
-    let uitgevoerd = b.uitgevoerd_op.format("%d-%m-%Y").to_string();
+    let uitgevoerd = crate::uitvoer::datum(b.uitgevoerd_op).to_string();
     t.add_row(vec!["uitgevoerd op", &uitgevoerd]);
-    let tot = b.geldig_tot.format("%d-%m-%Y").to_string();
+    let tot = crate::uitvoer::datum(b.geldig_tot).to_string();
     t.add_row(vec!["geldig tot", &tot]);
     t.add_row(vec!["status", b.status.omschrijving()]);
     println!("{t}");
@@ -497,7 +497,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
             t.add_row(vec![
                 br.aanduiding.clone(),
                 br.soort.clone(),
-                br.geraadpleegd_op.format("%d-%m-%Y").to_string(),
+                crate::uitvoer::datum(br.geraadpleegd_op).to_string(),
             ]);
         }
         println!("{t}");

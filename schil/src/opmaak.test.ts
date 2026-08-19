@@ -32,3 +32,25 @@ describe('opmaak', () => {
     expect(teller(11, 14)).not.toMatch(/%|procent/);
   });
 });
+
+// De tijdzone is die van het rechtsgebied en niet die van de machine. Zonder
+// dat toont een laptop die op een andere zone staat een andere deadline dan de
+// opdrachtregel, voor precies hetzelfde record.
+describe('de tijdzone', () => {
+  it('zet een moment om naar Nederlandse tijd en niet naar die van de machine', () => {
+    expect(tijdstip('2026-08-21T09:20:00Z')).toBe('21-08-2026 11:20');
+    expect(tijdstip('2026-01-15T09:00:00Z')).toBe('15-01-2026 10:00');
+  });
+
+  it('laat een moment laat op de avond op de volgende Nederlandse dag vallen', () => {
+    expect(datum('2026-08-19T22:50:00Z')).toBe('20-08-2026');
+    expect(tijdstip('2026-08-19T22:50:00Z')).toBe('20-08-2026 00:50');
+  });
+
+  it('geeft een streepje bij niets en bij onleesbare tekst', () => {
+    expect(datum(null)).toBe('—');
+    expect(tijdstip(null)).toBe('—');
+    expect(datum('geen datum')).toBe('—');
+    expect(tijdstip('geen datum')).toBe('—');
+  });
+});

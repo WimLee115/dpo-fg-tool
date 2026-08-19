@@ -536,7 +536,7 @@ fn toon(kluis: &Kluis, kenmerk: &str) -> Result<()> {
         t.add_row(vec!["hulpmiddel", h]);
     }
     if let Some(m) = o.verstrekt_op {
-        t.add_row(vec!["verstrekt op", &m.format("%d-%m-%Y").to_string()]);
+        t.add_row(vec!["verstrekt op", &crate::uitvoer::datum(m).to_string()]);
     }
     println!("{t}");
 

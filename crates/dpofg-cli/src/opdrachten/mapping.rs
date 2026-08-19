@@ -354,7 +354,7 @@ fn toon(kluis: &Kluis, kenmerk: &str) -> Result<()> {
     }
     if let Some(r) = &p.laatste_rapport {
         kop("Laatste vergelijking");
-        terzijde(&format!("uitgevoerd op {}", r.uitgevoerd_op.format("%d-%m-%Y %H:%M")));
+        terzijde(&format!("uitgevoerd op {}", crate::uitvoer::tijdstip(r.uitgevoerd_op)));
         let mut t = tabel(&["", ""]);
         t.add_row(vec!["bevestigd", &r.bevestigd.len().to_string()]);
         t.add_row(vec!["nieuw in de bron", &r.nieuw_in_bron.len().to_string()]);

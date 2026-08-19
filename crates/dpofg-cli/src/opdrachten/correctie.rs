@@ -231,7 +231,7 @@ fn nieuw(
         c.soort.omschrijving(),
         c.bevinding.aanduiding()
     ));
-    terzijde(&format!("uiterlijk {}", c.uiterlijk.format("%d-%m-%Y")));
+    terzijde(&format!("uiterlijk {}", crate::uitvoer::datum(c.uiterlijk)));
     match soort {
         Correctiesoort::Herstel => terzijde(
             "Een herstelafspraak onderdrukt de bevinding niet: zolang de tekortkoming er is, \
@@ -264,8 +264,8 @@ fn verlengen(
 
     gelukt(&format!(
         "de termijn loopt van {} naar {}",
-        oud.format("%d-%m-%Y"),
-        c.uiterlijk.format("%d-%m-%Y")
+        crate::uitvoer::datum(oud),
+        crate::uitvoer::datum(c.uiterlijk)
     ));
     let_op(
         "Uitstel is een besluit en geen administratieve handeling. Een reeks verlengingen is \
@@ -286,7 +286,7 @@ fn afronden(kluis: &mut Kluis, kenmerk: &str, motivering: &str, nu: DateTime<Utc
         terzijde(&format!(
             "de afspraak liep tot {}; dat de termijn is overschreden blijft in het logboek \
              staan",
-            c.uiterlijk.format("%d-%m-%Y")
+            crate::uitvoer::datum(c.uiterlijk)
         ));
     }
     terzijde(
@@ -324,7 +324,7 @@ fn lijst(kluis: &Kluis, alles: bool, nu: DateTime<Utc>) -> Result<()> {
             c.bevinding.aanduiding(),
             c.soort.omschrijving().to_string(),
             format!("{} ({})", c.eigenaar_rol, c.eigenaar_persoon),
-            c.uiterlijk.format("%d-%m-%Y").to_string(),
+            crate::uitvoer::datum(c.uiterlijk).to_string(),
             stand,
         ]);
         getoond += 1;
@@ -350,7 +350,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     t.add_row(vec!["aanpak", c.soort.omschrijving()]);
     let eigenaar = format!("{} ({})", c.eigenaar_rol, c.eigenaar_persoon);
     t.add_row(vec!["eigenaar", &eigenaar]);
-    let uiterlijk = c.uiterlijk.format("%d-%m-%Y").to_string();
+    let uiterlijk = crate::uitvoer::datum(c.uiterlijk).to_string();
     t.add_row(vec!["uiterlijk", &uiterlijk]);
     t.add_row(vec!["status", c.status.omschrijving()]);
     println!("{t}");
@@ -359,7 +359,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     if let Some(a) = &c.afronding {
         kop("Afronding");
         let mut t = tabel(&["", ""]);
-        let op = a.op.format("%d-%m-%Y").to_string();
+        let op = crate::uitvoer::datum(a.op).to_string();
         t.add_row(vec!["op", &op]);
         t.add_row(vec!["door", &a.door]);
         println!("{t}");
@@ -367,7 +367,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     } else if c.is_te_laat(nu) {
         blokkade(&format!(
             "de afspraak liep tot {} en is {} dagen later nog niet afgerond",
-            c.uiterlijk.format("%d-%m-%Y"),
+            crate::uitvoer::datum(c.uiterlijk),
             -c.dagen_tot_uiterlijk(nu)
         ));
     } else if c.onderdrukt(nu) {

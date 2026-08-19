@@ -596,7 +596,7 @@ fn lijst(dossier: &Kluis) -> Result<()> {
                 a.kenmerk.clone(),
                 a.onderwerp.clone(),
                 a.uitgebracht_aan.clone(),
-                a.uitgebracht_op.format("%d-%m-%Y").to_string(),
+                crate::uitvoer::datum(a.uitgebracht_op).to_string(),
                 a.bestuursreactie
                     .as_ref()
                     .map(|r| r.status.omschrijving().to_string())
@@ -618,7 +618,7 @@ fn lijst(dossier: &Kluis) -> Result<()> {
                 i.kenmerk.clone(),
                 i.soort.omschrijving().to_string(),
                 i.van.clone(),
-                i.datum.format("%d-%m-%Y").to_string(),
+                crate::uitvoer::datum(i.datum).to_string(),
                 i.opvolging.clone().unwrap_or_else(|| "nog geen".into()),
             ]);
         }
@@ -634,7 +634,7 @@ fn toon(dossier: &Kluis, kenmerk: &str) -> Result<()> {
         t.add_row(vec!["onderwerp", &a.onderwerp]);
         t.add_row(vec!["gevraagd door", &a.vraagsteller]);
         t.add_row(vec!["uitgebracht aan", &a.uitgebracht_aan]);
-        let op = a.uitgebracht_op.format("%d-%m-%Y").to_string();
+        let op = crate::uitvoer::datum(a.uitgebracht_op).to_string();
         t.add_row(vec!["uitgebracht op", &op]);
         t.add_row(vec!["betrokkenheid", a.tijdig_betrokken.omschrijving()]);
         println!("{t}");
@@ -648,7 +648,7 @@ fn toon(dossier: &Kluis, kenmerk: &str) -> Result<()> {
             let mut t = tabel(&["", ""]);
             t.add_row(vec!["uitkomst", r.status.omschrijving()]);
             t.add_row(vec!["door", &r.beslisser]);
-            let d = r.datum.format("%d-%m-%Y").to_string();
+            let d = crate::uitvoer::datum(r.datum).to_string();
             t.add_row(vec!["op", &d]);
             println!("{t}");
             if let Some(m) = &r.motivering {
@@ -664,7 +664,7 @@ fn toon(dossier: &Kluis, kenmerk: &str) -> Result<()> {
             for e in &a.escalatie {
                 t.add_row(vec![
                     e.niveau.clone(),
-                    e.datum.format("%d-%m-%Y").to_string(),
+                    crate::uitvoer::datum(e.datum).to_string(),
                     e.uitkomst.clone().unwrap_or_else(|| "nog geen".into()),
                 ]);
             }
@@ -680,7 +680,7 @@ fn toon(dossier: &Kluis, kenmerk: &str) -> Result<()> {
     let mut t = tabel(&["", ""]);
     t.add_row(vec!["wat er gebeurde", i.soort.omschrijving()]);
     t.add_row(vec!["grondslag", i.soort.grondslag()]);
-    let d = i.datum.format("%d-%m-%Y").to_string();
+    let d = crate::uitvoer::datum(i.datum).to_string();
     t.add_row(vec!["datum", &d]);
     t.add_row(vec!["van", &i.van]);
     t.add_row(vec!["betrof", &i.betrokken_functionaris]);
@@ -837,7 +837,7 @@ fn aantonen(
                 blokkade(&format!(
                     "dit record is sinds de laatste spiegeling van {} gewijzigd; de huidige \
                      inhoud is daarmee niet aangetoond",
-                    laatste.format("%d-%m-%Y")
+                    crate::uitvoer::datum(laatste)
                 ));
                 terzijde(&format!(
                     "er {} van dit record in de kluis van de organisatie; {} aan dát er toen \
@@ -864,7 +864,7 @@ fn aantonen(
 
     gelukt(&format!(
         "dit record bestond op {} en is sindsdien niet gewijzigd",
-        regel.vastgelegd_op.format("%d-%m-%Y %H:%M UTC")
+        crate::uitvoer::tijdstip(regel.vastgelegd_op)
     ));
     let ketenrapport = kluis.verifieer_logboek()?;
     terzijde(&ketenrapport.reikwijdte());

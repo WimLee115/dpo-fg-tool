@@ -247,7 +247,7 @@ fn controle(
     let soort = if extern_uitgevoerd { "externe audit" } else { "interne controle" };
     bewaar(kluis, &s, Handeling::KetenGeverifieerd, soort, nu)?;
 
-    gelukt(&format!("{soort} vastgelegd op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("{soort} vastgelegd op {}", crate::uitvoer::datum(moment)));
     if bevindingen > 0 {
         let_op(&format!(
             "{bevindingen} bevinding(en). Een rapport opbergen zonder plan is de meest \
@@ -293,7 +293,7 @@ fn verbeterplan(
         t.add_row(vec![
             m.omschrijving.clone(),
             m.eigenaar.clone(),
-            m.gereed_uiterlijk.format("%d-%m-%Y").to_string(),
+            crate::uitvoer::datum(m.gereed_uiterlijk).to_string(),
         ]);
     }
     println!("{t}");
@@ -399,7 +399,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
         {
             t.add_row(vec![
                 soort.to_string(),
-                c.uitgevoerd_op.format("%d-%m-%Y").to_string(),
+                crate::uitvoer::datum(c.uitgevoerd_op).to_string(),
                 c.uitvoerder.clone(),
                 c.bevindingen.to_string(),
             ]);
@@ -427,14 +427,14 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
         let mut t = tabel(&["maatregel", "eigenaar", "gereed uiterlijk", "stand"]);
         for m in &plan.maatregelen {
             let stand = match m.afgerond_op {
-                Some(d) => format!("afgerond {}", d.format("%d-%m-%Y")),
+                Some(d) => format!("afgerond {}", crate::uitvoer::datum(d)),
                 None if m.is_verlopen(nu) => "verlopen".to_string(),
                 None => "open".to_string(),
             };
             t.add_row(vec![
                 m.omschrijving.clone(),
                 m.eigenaar.clone(),
-                m.gereed_uiterlijk.format("%d-%m-%Y").to_string(),
+                crate::uitvoer::datum(m.gereed_uiterlijk).to_string(),
                 stand,
             ]);
         }

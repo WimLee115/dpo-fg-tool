@@ -126,7 +126,7 @@ fn status(pad: &std::path::Path, nu: DateTime<Utc>) -> Result<()> {
     if let Some(anker) = kluis.laatste_anker()? {
         t.add_row(vec![
             "laatste anker",
-            &format!("regel {} op {}", anker.volgnummer, anker.tijdstip.format("%d-%m-%Y %H:%M")),
+            &format!("regel {} op {}", anker.volgnummer, crate::uitvoer::tijdstip(anker.tijdstip)),
         ]);
     } else {
         t.add_row(vec!["laatste anker", "geen"]);
@@ -213,7 +213,7 @@ fn sleutel(pad: &std::path::Path, uitvoer: Option<PathBuf>) -> Result<()> {
     kop("Installatiesleutel");
     let mut t = tabel(&["", ""]);
     t.add_row(vec!["publieke sleutel", &k.publieke_sleutel]);
-    t.add_row(vec!["aangemaakt op", &k.aangemaakt_op.format("%d-%m-%Y %H:%M").to_string()]);
+    t.add_row(vec!["aangemaakt op", &crate::uitvoer::tijdstip(k.aangemaakt_op).to_string()]);
     t.add_row(vec!["generatie", &k.generatie.to_string()]);
     println!("{t}");
 

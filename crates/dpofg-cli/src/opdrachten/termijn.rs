@@ -44,7 +44,7 @@ pub fn draai(o: Termijnopties, nu: DateTime<Utc>) -> Result<()> {
             "uit kennispakket '{}' versie {}, geconsolideerd op {}",
             pakket.code,
             pakket.versienaam,
-            pakket.consolidatiedatum.format("%d-%m-%Y")
+            crate::uitvoer::datum(pakket.consolidatiedatum)
         ));
         return Ok(());
     };
@@ -69,6 +69,9 @@ pub fn draai(o: Termijnopties, nu: DateTime<Utc>) -> Result<()> {
 
     kop(&format!("{} — {}", soort.code, soort.naam));
     let mut t = tabel(&["", ""]);
+    // De enige plaats die niet `uitvoer::tijdstip` gebruikt, en dat is
+    // opzettelijk: deze opdracht rekent in de zone die de gebruiker met
+    // --tijdzone heeft gekozen, en moet het anker dus in díe zone tonen.
     t.add_row(vec!["anker", &anker.with_timezone(&zone).format("%d-%m-%Y %H:%M %Z").to_string()]);
     t.add_row(vec!["duur", &deadline.duur]);
     t.add_row(vec!["verstrijkt", &deadline.lokaal]);
@@ -107,7 +110,7 @@ pub fn draai(o: Termijnopties, nu: DateTime<Utc>) -> Result<()> {
          Verifieer de duur en de grondslag tegen de bron voordat u hierop vertrouwt.",
         pakket.code,
         pakket.versienaam,
-        pakket.consolidatiedatum.format("%d-%m-%Y")
+        crate::uitvoer::datum(pakket.consolidatiedatum)
     ));
     Ok(())
 }

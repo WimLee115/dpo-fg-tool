@@ -442,7 +442,7 @@ fn uitvoeren(
     }
 
     bewaar(kluis, &d, Handeling::RecordGewijzigd, "beoordeling vastgelegd", nu)?;
-    gelukt(&format!("beoordeling vastgelegd op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("beoordeling vastgelegd op {}", crate::uitvoer::datum(moment)));
 
     if d.vooraf_uitgevoerd == Some(false) {
         let_op(
@@ -572,12 +572,12 @@ fn raadpleging(
         "{} {}, geconsolideerd {}",
         pakket.code,
         pakket.versienaam,
-        pakket.consolidatiedatum.format("%d-%m-%Y")
+        crate::uitvoer::datum(pakket.consolidatiedatum)
     ));
 
     bewaar(kluis, &d, Handeling::TermijnGestart, "verzoek om voorafgaande raadpleging", nu)?;
 
-    gelukt(&format!("verzoek ingediend op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("verzoek ingediend op {}", crate::uitvoer::datum(moment)));
     kop("De termijn van de toezichthouder");
     let mut t = tabel(&["", ""]);
     t.add_row(vec!["duur", &deadline.duur]);
@@ -615,7 +615,7 @@ fn opschorten(
     d.herkomst.wijzig("raadplegingstermijn opgeschort", nu);
 
     bewaar(kluis, &d, Handeling::TermijnGestuit, &grond, nu)?;
-    gelukt(&format!("termijn opgeschort vanaf {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("termijn opgeschort vanaf {}", crate::uitvoer::datum(moment)));
     terzijde(&grond);
     terzijde(
         "De opschorting wordt in hele kalenderdagen verrekend, zodat een overgang naar of van \
@@ -645,7 +645,7 @@ fn hervatten(kluis: &mut Kluis, kenmerk: &str, op: &str, nu: DateTime<Utc>) -> R
     let deadline = bereken_deadline(&d, nu)?;
 
     bewaar(kluis, &d, Handeling::TermijnHervat, "raadplegingstermijn hervat", nu)?;
-    gelukt(&format!("termijn hervat op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("termijn hervat op {}", crate::uitvoer::datum(moment)));
     terzijde(&format!("verstrijkt nu op {}", deadline.lokaal));
     toon_klok(&d, nu)?;
     Ok(())
@@ -703,7 +703,7 @@ fn advies(
     d.leg_advies_vast(moment, referentie, nu)?;
 
     bewaar(kluis, &d, Handeling::BesluitGenomen, &format!("advies {referentie} vastgelegd"), nu)?;
-    gelukt(&format!("advies {referentie} vastgelegd op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("advies {referentie} vastgelegd op {}", crate::uitvoer::datum(moment)));
     toon_ontbrekend(&d);
     Ok(())
 }
@@ -829,7 +829,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
         d.voortoets.map(|v| v.omschrijving()).unwrap_or("nog niet beantwoord"),
     ]);
     if let Some(datum) = d.datum {
-        t.add_row(vec!["beoordeeld op", &datum.format("%d-%m-%Y").to_string()]);
+        t.add_row(vec!["beoordeeld op", &crate::uitvoer::datum(datum).to_string()]);
     }
     if let Some(door) = &d.uitgevoerd_door {
         t.add_row(vec!["uitgevoerd door", door]);
@@ -884,7 +884,7 @@ fn toon_klok(d: &Dpia, nu: DateTime<Utc>) -> Result<()> {
 
     kop("Voorafgaande raadpleging");
     let mut t = tabel(&["", ""]);
-    t.add_row(vec!["ingediend op", &klok.anker.format("%d-%m-%Y").to_string()]);
+    t.add_row(vec!["ingediend op", &crate::uitvoer::datum(klok.anker).to_string()]);
     t.add_row(vec![
         "stand",
         match &status {
@@ -909,7 +909,7 @@ fn toon_klok(d: &Dpia, nu: DateTime<Utc>) -> Result<()> {
         t.add_row(vec!["verlengd", &format!("{} keer", klok.keer_verlengd)]);
     }
     if let Some(op) = klok.afgerond_op {
-        t.add_row(vec!["advies ontvangen", &op.format("%d-%m-%Y").to_string()]);
+        t.add_row(vec!["advies ontvangen", &crate::uitvoer::datum(op).to_string()]);
     }
     if let Some(r) = &d.advies_referentie {
         t.add_row(vec!["kenmerk advies", r]);
@@ -917,9 +917,11 @@ fn toon_klok(d: &Dpia, nu: DateTime<Utc>) -> Result<()> {
     println!("{t}");
 
     for o in &klok.opschortingen {
-        let tot =
-            o.tot.map(|t| t.format("%d-%m-%Y").to_string()).unwrap_or_else(|| "loopt nog".into());
-        println!("  opgeschort van {} tot {}", o.van.format("%d-%m-%Y"), tot);
+        let tot = o
+            .tot
+            .map(|t| crate::uitvoer::datum(t).to_string())
+            .unwrap_or_else(|| "loopt nog".into());
+        println!("  opgeschort van {} tot {}", crate::uitvoer::datum(o.van), tot);
         terzijde(&o.grond);
     }
 

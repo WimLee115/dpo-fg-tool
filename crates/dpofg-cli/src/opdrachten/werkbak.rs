@@ -118,7 +118,7 @@ pub fn draai(o: Werkbakargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>)
     terzijde(&format!(
         "{} openstaande verplichting(en) op {}",
         regels.len(),
-        nu.format("%d-%m-%Y %H:%M UTC")
+        crate::uitvoer::tijdstip(nu)
     ));
 
     if regels.is_empty() {
@@ -156,11 +156,11 @@ fn toon_banden(regels: &[Werkbakregel], nu: DateTime<Utc>) {
         }
         let wanneer = match (r.deadline, r.uren_tot_deadline(nu)) {
             (Some(d), Some(u)) if u.abs() < 48 => {
-                format!("{} ({u} uur)", d.format("%d-%m-%Y %H:%M"))
+                format!("{} ({u} uur)", crate::uitvoer::tijdstip(d))
             }
             (Some(d), _) => format!(
                 "{} ({} dagen)",
-                d.format("%d-%m-%Y"),
+                crate::uitvoer::datum(d),
                 r.dagen_tot_deadline(nu).unwrap_or_default()
             ),
             _ => "geen anker".to_string(),

@@ -8,7 +8,59 @@
 //! 2. **Bij elk oordeel staat de grondslag.** Een melding zonder bepaling is
 //!    een mening.
 
+use chrono::{DateTime, NaiveDate, Utc};
 use comfy_table::{presets::UTF8_FULL, Cell, Color, ContentArrangement, Table};
+
+/// De tijdzone waarin dit product zijn tijdstippen toont.
+///
+/// Dezelfde zone waarin de termijnen worden gerekend. Een deadline die om
+/// 11:20 Nederlandse tijd verstrijkt en als "09:20 UTC" op het scherm komt,
+/// wordt om tien uur 's ochtends gelezen als verstreken. De vermelding "UTC"
+/// staat er dan wel bij, maar wie onder tijdsdruk een meldtermijn naslaat,
+/// leest cijfers en geen zone-aanduiding.
+const ZONE: chrono_tz::Tz = chrono_tz::Europe::Amsterdam;
+
+/// Iets wat een kalenderdag aanwijst.
+///
+/// Twee soorten, en het verschil doet ertoe. Een `DateTime<Utc>` is een
+/// moment: die moet worden omgerekend, want 22:50 UTC op 19 augustus is in
+/// Nederland al 20 augustus. Een `NaiveDate` is al een dag zoals hij is
+/// vastgelegd — daar valt niets om te rekenen, en het zou verkeerd zijn het
+/// toch te doen.
+pub trait Kalenderdag {
+    fn als_datum(&self) -> String;
+}
+
+impl Kalenderdag for DateTime<Utc> {
+    fn als_datum(&self) -> String {
+        self.with_timezone(&ZONE).format("%d-%m-%Y").to_string()
+    }
+}
+
+impl Kalenderdag for NaiveDate {
+    fn als_datum(&self) -> String {
+        self.format("%d-%m-%Y").to_string()
+    }
+}
+
+/// Een datum in Nederlandse notatie.
+pub fn datum(d: impl Kalenderdag) -> String {
+    d.als_datum()
+}
+
+/// Datum en tijd in Nederlandse tijd, met de zone erbij.
+///
+/// De zone-aanduiding blijft staan omdat een auditspoor over de zomertijdgrens
+/// heen anders niet te lezen is: twee records met "02:30" zijn zonder CEST of
+/// CET niet te ordenen.
+pub fn tijdstip(t: DateTime<Utc>) -> String {
+    t.with_timezone(&ZONE).format("%d-%m-%Y %H:%M %Z").to_string()
+}
+
+/// Dag en tijd zonder jaartal, voor een kolom waar het jaar al vaststaat.
+pub fn dag_en_tijd(t: DateTime<Utc>) -> String {
+    t.with_timezone(&ZONE).format("%d-%m %H:%M").to_string()
+}
 
 /// Een tabel met de vaste opmaak van dit product.
 pub fn tabel(koppen: &[&str]) -> Table {
@@ -121,5 +173,65 @@ mod tests {
         // En een teller die door een fout elders te hoog uitvalt, mag de
         // weergave niet laten crashen.
         assert!(voortgang(99, 8).contains("99 van de 8"));
+    }
+}
+
+#[cfg(test)]
+mod tijdtests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn moment(s: &str) -> DateTime<Utc> {
+        s.parse::<DateTime<Utc>>().expect("het proefmoment moet leesbaar zijn")
+    }
+
+    // Dit is het geval waar het om begonnen was. Een record dat om 22:50 UTC
+    // wordt vastgelegd, staat in Nederland op de volgende dag. Wie de
+    // opdrachtregel en de schil naast elkaar legt, moet daar dezelfde datum
+    // zien staan.
+    #[test]
+    fn een_moment_laat_op_de_avond_valt_in_nederland_op_de_volgende_dag() {
+        assert_eq!(datum(moment("2026-08-19T22:50:00Z")), "20-08-2026");
+        assert_eq!(tijdstip(moment("2026-08-19T22:50:00Z")), "20-08-2026 00:50 CEST");
+    }
+
+    #[test]
+    fn in_de_winter_staat_er_cet_en_in_de_zomer_cest() {
+        assert_eq!(tijdstip(moment("2026-01-15T09:00:00Z")), "15-01-2026 10:00 CET");
+        assert_eq!(tijdstip(moment("2026-07-15T09:00:00Z")), "15-07-2026 11:00 CEST");
+    }
+
+    // De meldtermijn uit het proefdossier: 72 uur na kennisname om 09:20 UTC.
+    // Op het scherm hoort daar de Nederlandse kloktijd te staan, want dat is
+    // ook de klok waarop de termijn is gerekend.
+    #[test]
+    fn een_meldtermijn_staat_op_de_nederlandse_klok() {
+        assert_eq!(tijdstip(moment("2026-08-21T09:20:00Z")), "21-08-2026 11:20 CEST");
+    }
+
+    // Een vastgelegde kalenderdag is geen moment en wordt niet omgerekend.
+    // Zou dat wel gebeuren, dan zou een consolidatiedatum van een kennispakket
+    // per tijdzone kunnen verschuiven.
+    #[test]
+    fn een_kalenderdag_wordt_niet_omgerekend() {
+        let dag = NaiveDate::from_ymd_opt(2026, 8, 19).expect("een geldige dag");
+        assert_eq!(datum(dag), "19-08-2026");
+    }
+
+    #[test]
+    fn dag_en_tijd_laat_het_jaar_weg_maar_rekent_wel_om() {
+        assert_eq!(dag_en_tijd(moment("2026-08-19T22:50:00Z")), "20-08 00:50");
+    }
+
+    // Op de nacht dat de klok verspringt staan er twee keer 02:30. Zonder de
+    // zone-aanduiding zijn die twee records niet te ordenen, en een auditspoor
+    // dat niet te ordenen is, bewijst niets.
+    #[test]
+    fn de_uren_op_de_omschakelnacht_blijven_te_onderscheiden() {
+        let voor = Utc.with_ymd_and_hms(2026, 10, 25, 0, 30, 0).single().expect("een geldig uur");
+        let na = Utc.with_ymd_and_hms(2026, 10, 25, 1, 30, 0).single().expect("een geldig uur");
+        assert_eq!(tijdstip(voor), "25-10-2026 02:30 CEST");
+        assert_eq!(tijdstip(na), "25-10-2026 02:30 CET");
+        assert_ne!(tijdstip(voor), tijdstip(na));
     }
 }

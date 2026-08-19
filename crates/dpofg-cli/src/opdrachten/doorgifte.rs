@@ -227,7 +227,7 @@ fn toon_instrumenten(nu: DateTime<Utc>) -> Result<()> {
             i.code.clone(),
             i.land_of_gebied.clone(),
             format!("{:?}", i.status).to_lowercase(),
-            i.geverifieerd_op.format("%d-%m-%Y").to_string(),
+            crate::uitvoer::datum(i.geverifieerd_op).to_string(),
         ]);
     }
     println!("{t}");
@@ -545,7 +545,7 @@ fn toon(kluis: &Kluis, kenmerk: &str) -> Result<()> {
         t.add_row(vec!["besluit door", &b.besluit_door]);
         t.add_row(vec![
             "rechtsontwikkelingen geraadpleegd",
-            &b.rechtsontwikkelingen_geraadpleegd_op.format("%d-%m-%Y").to_string(),
+            &crate::uitvoer::datum(b.rechtsontwikkelingen_geraadpleegd_op).to_string(),
         ]);
         println!("{t}");
         terzijde(&b.restrisico.tekst);

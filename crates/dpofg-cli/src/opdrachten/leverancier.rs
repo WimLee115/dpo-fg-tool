@@ -389,7 +389,7 @@ fn subverwerkerscontrole(
     l.controleer_subverwerkers(moment, nu)?;
     bewaar(kluis, &l, Handeling::RecordGewijzigd, "subverwerkerslijst nagelopen", nu)?;
 
-    gelukt(&format!("subverwerkerslijst nagelopen op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("subverwerkerslijst nagelopen op {}", crate::uitvoer::datum(moment)));
     terzijde(&format!("{} subverwerker(s) in de lijst", l.subverwerkers.len()));
     toon_ontbrekend(&l);
     Ok(())
@@ -496,9 +496,9 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
         kop("Verwerkersovereenkomst");
         let mut t = tabel(&["", ""]);
         t.add_row(vec!["kenmerk", &o.kenmerk]);
-        t.add_row(vec!["ondertekend op", &o.ondertekend_op.format("%d-%m-%Y").to_string()]);
+        t.add_row(vec!["ondertekend op", &crate::uitvoer::datum(o.ondertekend_op).to_string()]);
         if let Some(b) = o.verwerking_begon_op {
-            t.add_row(vec!["verwerking begon op", &b.format("%d-%m-%Y").to_string()]);
+            t.add_row(vec!["verwerking begon op", &crate::uitvoer::datum(b).to_string()]);
         }
         t.add_row(vec![
             "meldtermijn",

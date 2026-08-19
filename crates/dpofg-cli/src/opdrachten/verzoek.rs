@@ -530,7 +530,7 @@ fn nieuw(
     t.add_row(vec!["soort", soort.omschrijving()]);
     t.add_row(vec!["grondslag", soort.grondslag()]);
     t.add_row(vec!["kanaal", kanaal.omschrijving()]);
-    t.add_row(vec!["ontvangen op", &ontvangen_op.format("%d-%m-%Y %H:%M UTC").to_string()]);
+    t.add_row(vec!["ontvangen op", &crate::uitvoer::tijdstip(ontvangen_op).to_string()]);
     println!("{t}");
 
     if soort.vraagt_kennisgeving_aan_ontvangers() {
@@ -554,7 +554,7 @@ fn identiteit(kluis: &mut Kluis, kenmerk: &str, tijdstip: &str, nu: DateTime<Utc
     v.stel_identiteit_vast(moment, nu)?;
 
     bewaar(kluis, &v, Handeling::RecordGewijzigd, "identiteit vastgesteld", nu)?;
-    gelukt(&format!("identiteit vastgesteld op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("identiteit vastgesteld op {}", crate::uitvoer::datum(moment)));
     toon_ontbrekend(&v);
     Ok(())
 }
@@ -611,14 +611,14 @@ fn start_termijn(kluis: &mut Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<
         "{} {}, geconsolideerd {}",
         pakket.code,
         pakket.versienaam,
-        pakket.consolidatiedatum.format("%d-%m-%Y")
+        crate::uitvoer::datum(pakket.consolidatiedatum)
     ));
 
     bewaar(kluis, &v, Handeling::TermijnGestart, "termijn gestart", nu)?;
 
     gelukt("de termijn loopt");
     let mut t = tabel(&["", ""]);
-    t.add_row(vec!["anker", &anker.format("%d-%m-%Y").to_string()]);
+    t.add_row(vec!["anker", &crate::uitvoer::datum(anker).to_string()]);
     t.add_row(vec!["duur", &deadline.duur]);
     t.add_row(vec!["verstrijkt", &deadline.lokaal]);
     t.add_row(vec!["grondslag", &deadline.grondslag]);
@@ -844,7 +844,7 @@ fn bericht_lid4(
     v.leg_bericht_lid4_vast(moment, klachtrecht, rechtsmiddel, m, nu)?;
 
     bewaar(kluis, &v, Handeling::MeldingVerzonden, "bericht art. 12 lid 4 verzonden", nu)?;
-    gelukt(&format!("bericht vastgelegd, verzonden op {}", moment.format("%d-%m-%Y")));
+    gelukt(&format!("bericht vastgelegd, verzonden op {}", crate::uitvoer::datum(moment)));
 
     if !klachtrecht || !rechtsmiddel {
         blokkade(
@@ -942,7 +942,7 @@ fn lijst(kluis: &Kluis, alleen_onvolledig: bool, nu: DateTime<Utc>) -> Result<()
         t.add_row(vec![
             v.kenmerk.clone(),
             v.soort.omschrijving().to_string(),
-            v.ontvangen_op.format("%d-%m-%Y").to_string(),
+            crate::uitvoer::datum(v.ontvangen_op).to_string(),
             verstrijkt,
             resterend,
             format!("{} van {}", r.compleet, r.verplicht),
@@ -961,11 +961,11 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     t.add_row(vec!["soort", v.soort.omschrijving()]);
     t.add_row(vec!["grondslag", v.soort.grondslag()]);
     t.add_row(vec!["kanaal", v.kanaal.omschrijving()]);
-    t.add_row(vec!["ontvangen op", &v.ontvangen_op.format("%d-%m-%Y %H:%M UTC").to_string()]);
+    t.add_row(vec!["ontvangen op", &crate::uitvoer::tijdstip(v.ontvangen_op).to_string()]);
     t.add_row(vec!["status", v.status.omschrijving()]);
     t.add_row(vec!["behandelaar", &v.behandelaar]);
     if let Some(m) = v.identiteit_geverifieerd_op {
-        t.add_row(vec!["identiteit vastgesteld", &m.format("%d-%m-%Y").to_string()]);
+        t.add_row(vec!["identiteit vastgesteld", &crate::uitvoer::datum(m).to_string()]);
     }
     if let Some(l) = &v.lezing {
         t.add_row(vec!["lezing", l.lezing.omschrijving()]);
@@ -982,7 +982,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
 
         kop("Termijn");
         let mut t = tabel(&["", ""]);
-        t.add_row(vec!["anker", &klok.anker.format("%d-%m-%Y").to_string()]);
+        t.add_row(vec!["anker", &crate::uitvoer::datum(klok.anker).to_string()]);
         match klok.deadline_volledig(nu, zone, kalender) {
             Ok(d) => {
                 t.add_row(vec!["verstrijkt", &d.lokaal]);
@@ -1004,7 +1004,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
             t.add_row(vec!["verlengd wegens", verlenging.grond.omschrijving()]);
             t.add_row(vec![
                 "medegedeeld op",
-                &verlenging.medegedeeld_op.format("%d-%m-%Y").to_string(),
+                &crate::uitvoer::datum(verlenging.medegedeeld_op).to_string(),
             ]);
         }
         println!("{t}");
@@ -1032,7 +1032,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
         for k in &v.kennisgevingen {
             t.add_row(vec![
                 k.ontvanger.clone(),
-                k.verzonden_op.map(|m| m.format("%d-%m-%Y").to_string()).unwrap_or_else(|| {
+                k.verzonden_op.map(|m| crate::uitvoer::datum(m).to_string()).unwrap_or_else(|| {
                     if k.onmogelijk_of_onevenredig {
                         "—".into()
                     } else {
@@ -1048,7 +1048,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     if let Some(b) = &v.bericht_lid4 {
         kop("Bericht art. 12 lid 4");
         let mut t = tabel(&["", ""]);
-        t.add_row(vec!["verzonden op", &b.verzonden_op.format("%d-%m-%Y").to_string()]);
+        t.add_row(vec!["verzonden op", &crate::uitvoer::datum(b.verzonden_op).to_string()]);
         t.add_row(vec!["noemt klachtrecht", if b.noemt_klachtrecht { "ja" } else { "nee" }]);
         t.add_row(vec![
             "noemt beroepsmogelijkheid",

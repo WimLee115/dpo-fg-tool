@@ -3,24 +3,46 @@
 // De reden is niet netheid maar toetsbaarheid: een verkeerd afgeronde termijn
 // is in een scherm niet te vinden en in een functie wel.
 
+// De zone waarin dit product zijn tijdstippen toont: dezelfde waarin de
+// termijnen worden gerekend, en niet die van de machine. Een functionaris die
+// met zijn laptop in Lissabon zit, moet de Nederlandse meldtermijn zien staan
+// en niet een uur ervoor. De opdrachtregel doet hetzelfde; anders tonen de
+// twee gezichten van hetzelfde product twee tijden voor dezelfde deadline.
+const ZONE = 'Europe/Amsterdam';
+
+const DELEN = new Intl.DateTimeFormat('nl-NL', {
+  timeZone: ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+function ontleed(iso: string | null): Record<string, string> | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const uit: Record<string, string> = {};
+  for (const deel of DELEN.formatToParts(d)) uit[deel.type] = deel.value;
+  return uit;
+}
+
 /** Een tijdstip als datum, in de vorm die de rest van het product gebruikt. */
 export function datum(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const dag = String(d.getDate()).padStart(2, '0');
-  const maand = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dag}-${maand}-${d.getFullYear()}`;
+  const p = ontleed(iso);
+  if (!p) return '—';
+  return `${p.day}-${p.month}-${p.year}`;
 }
 
 /** Datum en tijd, voor termijnen die op het uur aankomen. */
 export function tijdstip(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const uur = String(d.getHours()).padStart(2, '0');
-  const minuut = String(d.getMinutes()).padStart(2, '0');
-  return `${datum(iso)} ${uur}:${minuut}`;
+  const p = ontleed(iso);
+  if (!p) return '—';
+  // Middernacht komt in sommige uitvoeringen als 24 terug in plaats van 00.
+  const uur = p.hour === '24' ? '00' : p.hour;
+  return `${p.day}-${p.month}-${p.year} ${uur}:${p.minute}`;
 }
 
 /**

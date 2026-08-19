@@ -62,7 +62,7 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
         manifest.anker_omschrijving = Some(format!(
             "regel {} op {}, bewaard in: {}",
             anker.volgnummer,
-            anker.tijdstip.format("%d-%m-%Y %H:%M UTC"),
+            crate::uitvoer::tijdstip(anker.tijdstip),
             anker.bewaarplaats.as_deref().unwrap_or("niet vermeld")
         ));
     }

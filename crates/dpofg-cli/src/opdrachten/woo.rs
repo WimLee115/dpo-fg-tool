@@ -325,7 +325,7 @@ fn start_termijn(kluis: &mut Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<
         "{} {}, geconsolideerd {}",
         pakket.code,
         pakket.versienaam,
-        pakket.consolidatiedatum.format("%d-%m-%Y")
+        crate::uitvoer::datum(pakket.consolidatiedatum)
     ));
 
     bewaar(kluis, &v, Handeling::TermijnGestart, "beslistermijn gestart", nu)?;
@@ -569,7 +569,7 @@ fn lijst(kluis: &Kluis, nu: DateTime<Utc>) -> Result<()> {
         t.add_row(vec![
             v.kenmerk.clone(),
             v.onderwerp.clone(),
-            v.ontvangen_op.format("%d-%m-%Y").to_string(),
+            crate::uitvoer::datum(v.ontvangen_op).to_string(),
             verstrijkt,
             resterend,
             v.uitkomst.map(|u| u.omschrijving().to_string()).unwrap_or_else(|| "—".into()),
@@ -586,7 +586,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
     let mut t = tabel(&["", ""]);
     t.add_row(vec!["onderwerp", &v.onderwerp]);
     t.add_row(vec!["verzoeker", &v.verzoeker]);
-    t.add_row(vec!["ontvangen op", &v.ontvangen_op.format("%d-%m-%Y %H:%M UTC").to_string()]);
+    t.add_row(vec!["ontvangen op", &crate::uitvoer::tijdstip(v.ontvangen_op).to_string()]);
     t.add_row(vec!["status", v.status.omschrijving()]);
     if let Some(u) = v.uitkomst {
         t.add_row(vec!["uitkomst", u.omschrijving()]);
@@ -621,7 +621,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
             }
         }
         if let Some(m) = v.verdaging_medegedeeld_op {
-            t.add_row(vec!["verdaagd, medegedeeld", &m.format("%d-%m-%Y").to_string()]);
+            t.add_row(vec!["verdaagd, medegedeeld", &crate::uitvoer::datum(m).to_string()]);
         }
         println!("{t}");
     }
@@ -633,7 +633,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
             t.add_row(vec![
                 z.belanghebbende.clone(),
                 z.gevraagd_op
-                    .map(|m| m.format("%d-%m-%Y").to_string())
+                    .map(|m| crate::uitvoer::datum(m).to_string())
                     .unwrap_or_else(|| "nog niet".into()),
                 z.standpunt.clone().unwrap_or_else(|| "geen".into()),
             ]);

@@ -27,7 +27,7 @@ pub fn draai(o: Pakketopdracht, _kluispad: Option<PathBuf>, nu: DateTime<Utc>) -
             t.add_row(vec!["versie", &pakket.versienaam]);
             t.add_row(vec![
                 "geconsolideerd op",
-                &pakket.consolidatiedatum.format("%d-%m-%Y").to_string(),
+                &crate::uitvoer::datum(pakket.consolidatiedatum).to_string(),
             ]);
             t.add_row(vec!["rechtsgebied", &pakket.jurisdictie]);
             t.add_row(vec!["termijnen", &pakket.termijnen.len().to_string()]);

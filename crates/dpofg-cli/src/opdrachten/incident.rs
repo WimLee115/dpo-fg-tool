@@ -408,7 +408,7 @@ fn verwerker(
         if let Some(anker) = i.anker_meldklok() {
             terzijde(&format!(
                 "de eigen klok van tweeënzeventig uur loopt vanaf {}",
-                anker.format("%d-%m-%Y %H:%M UTC")
+                crate::uitvoer::tijdstip(anker)
             ));
         }
     }
@@ -594,7 +594,7 @@ fn afronden(
 
     bewaar(kluis, &i, Handeling::RecordGewijzigd, "incident afgerond", nu)?;
 
-    gelukt(&format!("afgerond op {}", moment.format("%d-%m-%Y %H:%M UTC")));
+    gelukt(&format!("afgerond op {}", crate::uitvoer::tijdstip(moment)));
     kop("Afronding");
     let mut t = tabel(&["", ""]);
     t.add_row(vec!["oorzaakcategorie", oorzaak.trim()]);
@@ -721,7 +721,7 @@ fn lijst(kluis: &Kluis, nu: DateTime<Utc>) -> Result<()> {
             i.kenmerk.clone(),
             i.omschrijving.chars().take(40).collect::<String>(),
             i.kennisname_op
-                .map(|t| t.format("%d-%m %H:%M").to_string())
+                .map(|t| crate::uitvoer::dag_en_tijd(t).to_string())
                 .unwrap_or_else(|| "—".into()),
             i.risiconiveau
                 .map(|r| match r {
@@ -751,7 +751,7 @@ fn besluittekst(i: &Incident, nu: DateTime<Utc>) -> String {
                 format!(
                     "niet melden (definitief {})",
                     afkoelperiode_tot
-                        .map(|t| t.format("%d-%m %H:%M").to_string())
+                        .map(|t| crate::uitvoer::dag_en_tijd(t).to_string())
                         .unwrap_or_default()
                 )
             }
@@ -764,10 +764,10 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
 
     kop(&format!("{} — {}", i.kenmerk, i.omschrijving));
     let mut t = tabel(&["", ""]);
-    t.add_row(vec!["eerste signaal", &i.signaal_op.format("%d-%m-%Y %H:%M UTC").to_string()]);
-    t.add_row(vec!["geregistreerd", &i.geregistreerd_op.format("%d-%m-%Y %H:%M UTC").to_string()]);
+    t.add_row(vec!["eerste signaal", &crate::uitvoer::tijdstip(i.signaal_op).to_string()]);
+    t.add_row(vec!["geregistreerd", &crate::uitvoer::tijdstip(i.geregistreerd_op).to_string()]);
     match i.kennisname_op {
-        Some(k) => t.add_row(vec!["kennisname", &k.format("%d-%m-%Y %H:%M UTC").to_string()]),
+        Some(k) => t.add_row(vec!["kennisname", &crate::uitvoer::tijdstip(k).to_string()]),
         None => t.add_row(vec!["kennisname", "nog niet vastgelegd"]),
     };
     t.add_row(vec!["aangetast", &aantastingstekst(&i.aantasting)]);
@@ -800,7 +800,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, nu: DateTime<Utc>) -> Result<()> {
             v.code.code().to_string(),
             v.ankertype.omschrijving().to_string(),
             v.anker
-                .map(|a| a.format("%d-%m-%Y %H:%M").to_string())
+                .map(|a| crate::uitvoer::tijdstip(a).to_string())
                 .unwrap_or_else(|| "wacht op anker".into()),
             v.reden.clone(),
         ]);
@@ -860,7 +860,7 @@ fn kennisname(
     i.stel_kennisname_vast(moment, motivering)?;
     bewaar(kluis, &i, Handeling::TermijnGestart, "moment van kennisname vastgelegd", nu)?;
 
-    gelukt(&format!("kennisname vastgelegd op {}", moment.format("%d-%m-%Y %H:%M UTC")));
+    gelukt(&format!("kennisname vastgelegd op {}", crate::uitvoer::tijdstip(moment)));
     let verplichtingen = verplichtingen_uit_incident(&i, Zorgplichtcontext::niet_van_toepassing());
     println!();
     println!("Hierdoor zijn deze klokken gaan lopen:");

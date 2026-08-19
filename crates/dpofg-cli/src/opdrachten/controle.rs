@@ -256,7 +256,7 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
         "{} regels gedraaid over {} dossiers op {}",
         rapport.regels_gedraaid,
         rapport.records_beoordeeld,
-        nu.format("%d-%m-%Y %H:%M")
+        crate::uitvoer::tijdstip(nu)
     ));
 
     if rapport.bevindingen.is_empty() {

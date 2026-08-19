@@ -756,7 +756,7 @@ fn risicobeoordeling(
 
     gelukt(&format!("{} is gekoppeld aan beoordeling {}", d.kenmerk, b.kenmerk));
     terzijde(&format!("reikwijdte: {}", b.reikwijdte));
-    terzijde(&format!("geldig tot {}", b.geldig_tot.format("%d-%m-%Y")));
+    terzijde(&format!("geldig tot {}", crate::uitvoer::datum(b.geldig_tot)));
     if b.is_verlopen(nu) {
         let_op("Deze beoordeling is verlopen; regel ZRP-11 blijft dat melden.");
     }
@@ -842,7 +842,7 @@ fn functionaris(kluis: &mut Kluis, kenmerk: &str, naam: &str, nu: DateTime<Utc>)
 fn vervalt(kluis: &Kluis, kenmerk: &str, dagen: i64, nu: DateTime<Utc>) -> Result<()> {
     let d = zoek(kluis, kenmerk)?;
     let peildatum = nu + Duration::days(dagen);
-    kop(&format!("Niet meer aantoonbaar op {}", peildatum.format("%d-%m-%Y")));
+    kop(&format!("Niet meer aantoonbaar op {}", crate::uitvoer::datum(peildatum)));
     let regels = d.vervalt_voor(peildatum, nu);
     if regels.is_empty() {
         gelukt(&format!("binnen {dagen} dagen vervalt er geen uitvoeringsbewijs"));
@@ -856,7 +856,7 @@ fn vervalt(kluis: &Kluis, kenmerk: &str, dagen: i64, nu: DateTime<Utc>) -> Resul
                     .as_ref()
                     .map(|e| format!("{} ({})", e.rol, e.persoon))
                     .unwrap_or_else(|| "geen".into()),
-                r.vervalt_op.format("%d-%m-%Y").to_string(),
+                crate::uitvoer::datum(r.vervalt_op).to_string(),
             ]);
         }
         println!("{t}");
@@ -967,7 +967,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, onder: Option<&str>, nu: DateTime<Utc>) ->
         let ingetrokken = m.bewijs.iter().filter(|b| b.is_ingetrokken()).count();
         let bewijs = m
             .geldig_uitvoeringsbewijs(nu)
-            .map(|b| b.geldig_tot.format("%d-%m-%Y").to_string())
+            .map(|b| crate::uitvoer::datum(b.geldig_tot).to_string())
             .unwrap_or_else(|| "—".into());
         let bewijs =
             if ingetrokken > 0 { format!("{bewijs} ({ingetrokken} ingetrokken)") } else { bewijs };
@@ -988,7 +988,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, onder: Option<&str>, nu: DateTime<Utc>) ->
         kop("Risicobeoordeling");
         let mut t = tabel(&["", ""]);
         t.add_row(vec!["kenmerk", &k.kenmerk]);
-        let gekoppeld = k.gekoppeld_op.format("%d-%m-%Y").to_string();
+        let gekoppeld = crate::uitvoer::datum(k.gekoppeld_op).to_string();
         t.add_row(vec!["gekoppeld op", &gekoppeld]);
         println!("{t}");
         terzijde("bekijk de beoordeling met 'dpofg risico toon'");
@@ -997,7 +997,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, onder: Option<&str>, nu: DateTime<Utc>) ->
     if let Some(b) = &d.bestuursvaststelling {
         kop("Bestuursvaststelling");
         let mut t = tabel(&["", ""]);
-        let datum = b.datum.format("%d-%m-%Y").to_string();
+        let datum = crate::uitvoer::datum(b.datum).to_string();
         t.add_row(vec!["datum", &datum]);
         t.add_row(vec!["kaderversie", &b.goedgekeurde_kaderversie]);
         let aanwezigen = b.aanwezigen.join(", ");
