@@ -106,6 +106,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Leveranciersregister met de acht onderdelen van art. 28 lid 3 | werkt |
 | Zorgplichtcontrolset (art. 21 lid 3 Cbw) met bewijs dat vervalt | werkt |
 | Risicobeoordeling als eigen dossier, met aanvaarding van het restrisico | werkt |
+| Vervalprognose op 30, 90 en 365 dagen | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |

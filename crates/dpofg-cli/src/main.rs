@@ -91,6 +91,9 @@ enum Opdracht {
     #[command(subcommand)]
     Leverancier(opdrachten::leverancier::Leveranciersopdracht),
 
+    /// Welke eisen op een gekozen datum niet meer aantoonbaar zijn.
+    Prognose(opdrachten::prognose::Prognoseargumenten),
+
     /// Risicobeoordelingen waarop de zorgplichtmaatregelen steunen.
     #[command(subcommand)]
     Risico(opdrachten::risico::Risicoopdracht),
@@ -158,6 +161,7 @@ fn draai() -> Result<()> {
         Opdracht::Lia(o) => opdrachten::lia::draai(o, args.kluis, nu),
         Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
         Opdracht::Leverancier(o) => opdrachten::leverancier::draai(o, args.kluis, nu),
+        Opdracht::Prognose(o) => opdrachten::prognose::draai(o, args.kluis, nu),
         Opdracht::Risico(o) => opdrachten::risico::draai(o, args.kluis, nu),
         Opdracht::Zorgplicht(o) => opdrachten::zorgplicht::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),

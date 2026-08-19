@@ -545,6 +545,7 @@ dependencies = [
  "dpofg-audit",
  "dpofg-crypto",
  "dpofg-domain",
+ "dpofg-terms",
  "ed25519-dalek",
  "hex",
  "rand",

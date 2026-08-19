@@ -2634,3 +2634,82 @@ fn een_verlopen_beoordeling_wordt_gemeld() {
     assert!(uit.contains("RIS-01"), "kreeg:\n{uit}");
     assert!(uit.contains("verlopen"), "kreeg:\n{uit}");
 }
+
+// --------------------------------------------------------------------------
+// De vervalprognose
+// --------------------------------------------------------------------------
+
+/// De prognose is een lijst met eisen die onbewijsbaar worden, met de datum
+/// erbij. Geen kleur, geen score, geen takenlijst.
+#[test]
+fn de_prognose_toont_datums_en_geen_score() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
+    p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
+    let bewijs = p.bestand("sleutelbeheer.txt", "uitdraai van het sleutelbeheer");
+    p.moet(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2026-10-15T00:00:00Z"
+    ));
+
+    let uit = p.moet("prognose");
+    assert!(uit.contains("Over 30 dagen"), "kreeg:\n{uit}");
+    assert!(uit.contains("Over 90 dagen"), "kreeg:\n{uit}");
+    assert!(uit.contains("Over 365 dagen"), "kreeg:\n{uit}");
+    assert!(uit.contains("het bewijsstuk verloopt"), "kreeg:\n{uit}");
+    assert!(uit.contains("geen takenlijst en geen score"), "kreeg:\n{uit}");
+
+    let uit = p.moet("prognose --uitgebreid --dagen 120");
+    assert!(uit.contains("CBB-13"), "kreeg:\n{uit}");
+    assert!(uit.contains("15-10-2026"), "kreeg:\n{uit}");
+    assert!(uit.contains("beheerder (J. Jansen)"), "kreeg:\n{uit}");
+}
+
+/// Een prognose die zwijgt over wat zij niet overziet, meldt te weinig.
+#[test]
+fn de_prognose_noemt_wat_zij_niet_overziet() {
+    let p = Proef::nieuw();
+    let uit = p.moet("prognose");
+    assert!(uit.contains("overziet niet alles"), "kreeg:\n{uit}");
+    assert!(uit.contains("niet in orde bevonden"), "kreeg:\n{uit}");
+}
+
+/// Wat vandaag al niet aantoonbaar is, staat apart van wat er nog aankomt.
+/// Die twee door elkaar halen laat een achterstand als een aankomende
+/// gebeurtenis lezen.
+#[test]
+fn de_prognose_scheidt_achterstand_van_wat_er_aankomt() {
+    let p = Proef::nieuw();
+    p.moet(
+        "risico nieuw RIS-2025 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
+         --uitgevoerd-door 'de security officer' --uitgevoerd-op 2026-01-01T09:00:00Z \
+         --geldig-tot 2026-07-01T00:00:00Z",
+    );
+    let uit = p.moet("prognose");
+    assert!(uit.contains("Vandaag al niet aantoonbaar"), "kreeg:\n{uit}");
+    assert!(uit.contains("nu al niet te bewijzen"), "kreeg:\n{uit}");
+    assert!(uit.contains("de risicobeoordeling verloopt"), "kreeg:\n{uit}");
+}
+
+/// Drie tellingen en geen gewogen getal.
+#[test]
+fn de_drie_factoren_leveren_drie_tellingen_op() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
+    p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
+    let beleid = p.bestand("beleid.txt", "cryptografiebeleid");
+    p.moet(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol vaststelling --bestand {beleid} \
+         --omschrijving 'het vastgestelde cryptografiebeleid' --geldig-tot 2027-06-01T00:00:00Z"
+    ));
+
+    let uit = p.moet("prognose --factoren");
+    assert!(uit.contains("vastgesteld"), "kreeg:\n{uit}");
+    assert!(uit.contains("uitgevoerd"), "kreeg:\n{uit}");
+    assert!(uit.contains("actueel"), "kreeg:\n{uit}");
+    assert!(uit.contains("1 van de 1"), "de vastgestelde factor hoort geteld te worden:\n{uit}");
+    assert!(uit.contains("0 van de 1"), "uitvoering en actualiteit horen nul te zijn:\n{uit}");
+    assert!(uit.contains("geen schaal, geen weging"), "kreeg:\n{uit}");
+}

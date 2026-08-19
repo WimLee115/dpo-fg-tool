@@ -13,6 +13,7 @@ description = "Dossieropbouw, manifest en ondertekening van uitvoer"
 dpofg-crypto.workspace = true
 dpofg-audit.workspace = true
 dpofg-domain.workspace = true
+dpofg-terms.workspace = true
 ed25519-dalek.workspace = true
 rand.workspace = true
 serde.workspace = true

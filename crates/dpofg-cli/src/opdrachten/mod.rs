@@ -11,6 +11,7 @@ pub mod lia;
 pub mod logboek;
 pub mod mapping;
 pub mod pakket;
+pub mod prognose;
 pub mod redactie;
 pub mod register;
 pub mod risico;

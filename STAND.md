@@ -47,6 +47,8 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Leveranciersregister | werkt | De acht onderdelen van art. 28 lid 3 met vindplaats per onderdeel, contractuele meldtermijn, subverwerkerslijst met controledatum |
 | Zorgplichtcontrolset | werkt | De tien onderdelen van art. 21 lid 3 Cbw, afgeleid uit het kennispakket; bewijs met een geldigheidsvenster maakt een maatregel aantoonbaar, of niet |
 | Risicobeoordeling | werkt | Eigen dossier met methode, reikwijdte, bronnen en onderkende risico's; het restrisico daalt alleen met een maatregel erbij, en een hoog restrisico aanvaardt het bestuur |
+| Vervalprognose | werkt | Welke eisen op 30, 90 en 365 dagen niet meer aantoonbaar zijn, met oorzaak, eigenaar en datum; over vijf dossiersoorten heen |
+| De drie factoren van aantoonbaarheid | **deels** | Vastgesteld, uitgevoerd en actueel als drie tellingen; geen gewogen score, want het plan geeft daarvoor geen schaal |
 
 ---
 
@@ -58,9 +60,10 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Ketenregister voorbij de eerste schil | 3 | De verwerker en zijn subverwerkers staan er; de laag daaronder nog niet |
 | Toezichtdossier en bestuursrechtelijk spoor | 4 | |
 | Raamwerkvariant B en C | 3 | Het mechanisme staat er; de kaders zelf ontbreken in het kennispakket |
-| Driefactorscore en volwassenheidsniveau | 3 | Het plan geeft vier veldnamen en geen enkele schaal of weging |
+| Driefactorscore als één gewogen getal | 3 | De drie factoren worden geteld; een gewogen score vergt een schaal en een weging die het plan niet geeft |
+| Volwassenheidsniveau | 3 | Komt in het plan één keer voor als veldnaam, zonder definitie |
 | Crosswalk naar informatiebeveiligingsnormen | 3 | Vereist een mappinggraaf met reviewhoudbaarheid per rand |
-| Vervalprognose over alle dossiers heen | 3 | De geldigheidsvensters bestaan nu in de controlset en in de risicobeoordeling; een prognose over het hele dossierbestand nog niet |
+| Certificaten, mandaten en mappingreviews in de prognose | 3 | Die records bestaan nog niet; de prognose meldt uitdrukkelijk wat zij niet overziet |
 | Ketenbewijs tussen organisaties | 4 | |
 | Persoonlijk dossier van de functionaris | 1 | De cryptografische structuur ligt er; een tweede wachtwoord ontbreekt |
 | Grafische schil | 1 | De opdrachtregel is bewust eerst gebouwd |
@@ -120,7 +123,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 696 testfuncties, 700 uitgevoerde tests; ~6.200 regels in `tests` |
+| Tests | 707 testfuncties, 711 uitgevoerde tests; ~6.400 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
