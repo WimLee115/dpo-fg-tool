@@ -1001,6 +1001,111 @@ fn een_pad_met_een_accent_laat_het_logboek_heel() {
 }
 
 // --------------------------------------------------------------------------
+// Het Woo-spoor
+// --------------------------------------------------------------------------
+
+#[test]
+fn de_weigeringsgronden_scheiden_absoluut_van_relatief() {
+    let p = Proef::nieuw();
+    let uit = p.moet("woo gronden");
+    assert!(uit.contains("de veiligheid van de Staat"));
+    assert!(uit.contains("absoluut"));
+    assert!(uit.contains("relatief"));
+    assert!(uit.contains("art. 5.1 lid 1"));
+    assert!(uit.contains("art. 5.1 lid 2"));
+    assert!(uit.contains("verwijzing naar een wetsartikel"));
+}
+
+/// Vier weken, niet een maand. Een verzoek van 1 juni verstrijkt op 29 juni.
+#[test]
+fn de_beslistermijn_is_vier_weken_en_geen_maand() {
+    let p = Proef::nieuw();
+    p.moet("woo nieuw WOO-2026-003 'correspondentie over de aanbesteding' --ontvangen 2026-06-01T09:00:00Z");
+    let uit = p.moet("woo termijn WOO-2026-003");
+    assert!(uit.contains("4 weken"), "kreeg:\n{uit}");
+    assert!(uit.contains("29-06-2026"), "kreeg:\n{uit}");
+    assert!(uit.contains("Wet open overheid"));
+}
+
+/// Een relatieve grond zonder afweging is geen besluit maar een verwijzing.
+#[test]
+fn een_relatieve_grond_zonder_afweging_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("woo nieuw WOO-2026-004 aanbesteding --ontvangen 2026-06-01T09:00:00Z");
+    p.moet("woo termijn WOO-2026-004");
+
+    let uit =
+        p.moet_falen("woo grond WOO-2026-004 --grond economische-belangen --betreft 'bijlage 3'");
+    assert!(uit.contains("afgewogen"), "kreeg:\n{uit}");
+
+    p.moet("woo grond WOO-2026-004 --grond economische-belangen --betreft 'bijlage 3' --afweging 'de onderhandelingspositie zou worden geschaad bij lopende gunning'");
+}
+
+/// Bij een absolute grond valt er niets af te wegen.
+#[test]
+fn een_absolute_grond_vergt_geen_afweging() {
+    let p = Proef::nieuw();
+    p.moet("woo nieuw WOO-2026-005 aanbesteding --ontvangen 2026-06-01T09:00:00Z");
+    p.moet("woo grond WOO-2026-005 --grond veiligheid-van-de-staat --betreft 'bijlage 1'");
+}
+
+#[test]
+fn een_besluit_wacht_op_de_belanghebbende_derde() {
+    let p = Proef::nieuw();
+    p.moet("woo nieuw WOO-2026-006 aanbesteding --ontvangen 2026-06-01T09:00:00Z");
+    p.moet("woo termijn WOO-2026-006");
+    p.moet("woo belanghebbende WOO-2026-006 --naam 'de aannemer'");
+
+    let uit = p.moet_falen("woo besluit WOO-2026-006 --uitkomst openbaar");
+    assert!(uit.contains("art. 4.4 lid 4"), "kreeg:\n{uit}");
+
+    let zienswijze =
+        p.moet("woo zienswijze WOO-2026-006 --naam 'de aannemer' --gevraagd 2026-06-05T09:00:00Z");
+    assert!(zienswijze.contains("niet dat er wordt gereageerd"));
+    p.moet("woo besluit WOO-2026-006 --uitkomst openbaar --op 2026-06-20T09:00:00Z");
+}
+
+#[test]
+fn een_weigering_zonder_grond_is_geen_besluit() {
+    let p = Proef::nieuw();
+    p.moet("woo nieuw WOO-2026-007 aanbesteding --ontvangen 2026-06-01T09:00:00Z");
+    p.moet("woo termijn WOO-2026-007");
+    let uit = p.moet_falen("woo besluit WOO-2026-007 --uitkomst geweigerd");
+    assert!(uit.contains("weigering zonder grond"));
+}
+
+/// Randgeval T-33: één bericht met beide verzoeken levert twee dossiers met
+/// twee klokken en een onderlinge verwijzing.
+#[test]
+fn een_bericht_met_beide_verzoeken_levert_twee_dossiers_met_twee_klokken() {
+    let p = Proef::nieuw();
+    p.moet("verzoek nieuw VZ-2026-030 'inzage in het eigen dossier' --soort inzage --ontvangen 2026-06-01T09:00:00Z");
+    p.moet("verzoek lezing VZ-2026-030 --lezing vanaf-ontvangst --motivering 'geen twijfel over de identiteit'");
+    p.moet("verzoek termijn VZ-2026-030");
+    p.moet("woo nieuw WOO-2026-008 'de aanbestedingsstukken' --ontvangen 2026-06-01T09:00:00Z");
+    p.moet("woo termijn WOO-2026-008");
+
+    let koppeling = p.moet("woo koppel WOO-2026-008 --verzoek VZ-2026-030");
+    assert!(koppeling.contains("gekoppeld"));
+    assert!(koppeling.contains("twee klokken"));
+
+    // Dezelfde ontvangstdatum, twee verschillende deadlines.
+    let woo = p.moet("woo toon WOO-2026-008");
+    let verzoek = p.moet("verzoek toon VZ-2026-030");
+    assert!(woo.contains("29-06-2026"), "de Woo-termijn is vier weken:\n{woo}");
+    assert!(verzoek.contains("01-07-2026"), "de AVG-termijn is een maand:\n{verzoek}");
+}
+
+#[test]
+fn koppelen_aan_een_onbekend_verzoek_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("woo nieuw WOO-2026-009 aanbesteding --ontvangen 2026-06-01T09:00:00Z");
+    let uit = p.moet_falen("woo koppel WOO-2026-009 --verzoek bestaat-niet");
+    assert!(uit.contains("geen betrokkenenverzoek"));
+    assert!(uit.contains("verzoek lijst"));
+}
+
+// --------------------------------------------------------------------------
 // Verzoeken van betrokkenen
 // --------------------------------------------------------------------------
 

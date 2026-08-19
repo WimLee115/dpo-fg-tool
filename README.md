@@ -97,6 +97,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Dossiers samenstellen en ondertekenen | werkt |
 | Effectbeoordeling (DPIA) met de raadplegingsklok van art. 36 | werkt |
 | Betrokkenenverzoeken (art. 15 t/m 22) met de maandtermijn | werkt |
+| Woo-spoor met eigen beslistermijn en weigeringsgronden | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |

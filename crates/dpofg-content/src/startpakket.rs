@@ -148,6 +148,40 @@ fn termijnen() -> Vec<Termijnsoort> {
             Aanvang::VanafDagNaGebeurtenis,
             "Awb art. 6:7 en 6:8",
         ),
+        // --- Woo: het informatieverzoek ---
+        //
+        // Een ander spoor dan het inzageverzoek: andere termijn, andere
+        // weigeringsgronden, andere rechtsbescherming. Dat de twee scherp
+        // gescheiden blijven is geen vormkwestie — wie de AVG-maandtermijn op
+        // een Woo-verzoek loslaat, is vier weken te laat.
+        Termijnsoort::kalender(
+            "WOO-BESLISTERMIJN",
+            "beslissing op een verzoek om informatie",
+            4,
+            Eenheid::Weken,
+            Rechtsstelsel::NationaalRecht,
+            Aanvang::VanafGebeurtenis,
+            "art. 4.4 lid 1 Wet open overheid",
+        )
+        .met_verlenging(Verlengingsrecht {
+            duur: 2,
+            eenheid: Eenheid::Weken,
+            aantal_keer: 1,
+            // De verdaging moet binnen de oorspronkelijke termijn schriftelijk
+            // en gemotiveerd worden medegedeeld; daarna is zij niet meer in te
+            // roepen.
+            bericht_binnen_oorspronkelijke_termijn: true,
+            grondslag: "art. 4.4 lid 2 Wet open overheid".into(),
+        }),
+        Termijnsoort::kalender(
+            "WOO-ZIENSWIJZE",
+            "zienswijze van een belanghebbende derde",
+            2,
+            Eenheid::Weken,
+            Rechtsstelsel::NationaalRecht,
+            Aanvang::VanafGebeurtenis,
+            "art. 4.4 lid 4 Wet open overheid",
+        ),
         // --- Zelf vastgestelde termijnen ---
         Termijnsoort::kalender(
             "INTERN-REGISTERHERZIENING",
@@ -322,7 +356,9 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                 "of voor uw entiteitstype een verkorte meldtermijn geldt",
                 "het lidnummer waarop de termijn voor de voorafgaande raadpleging berust",
                 "de negen criteria voor een effectbeoordeling en de drempel van twee",
-                "de zesendertig maanden voor de herbeoordeling van een effectbeoordeling"
+                "de zesendertig maanden voor de herbeoordeling van een effectbeoordeling",
+                "de beslistermijn en de verdagingstermijn van de Wet open overheid",
+                "de opsomming van weigeringsgronden en of die volledig is"
             ]
         }),
     );

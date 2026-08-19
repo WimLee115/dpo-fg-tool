@@ -10,6 +10,7 @@ pub mod pakket;
 pub mod register;
 pub mod termijn;
 pub mod verzoek;
+pub mod woo;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};

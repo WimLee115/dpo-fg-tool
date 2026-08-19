@@ -63,6 +63,10 @@ enum Opdracht {
     #[command(subcommand)]
     Verzoek(opdrachten::verzoek::Verzoekopdracht),
 
+    /// Verzoeken om informatie op grond van de Wet open overheid.
+    #[command(subcommand)]
+    Woo(opdrachten::woo::Wooopdracht),
+
     /// De controleregels over de hele verzameling draaien.
     Controle(opdrachten::controle::Controleopties),
 
@@ -115,6 +119,7 @@ fn draai() -> Result<()> {
         Opdracht::Incident(o) => opdrachten::incident::draai(o, args.kluis, nu),
         Opdracht::Dpia(o) => opdrachten::dpia::draai(o, args.kluis, nu),
         Opdracht::Verzoek(o) => opdrachten::verzoek::draai(o, args.kluis, nu),
+        Opdracht::Woo(o) => opdrachten::woo::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),

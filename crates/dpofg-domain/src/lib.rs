@@ -69,6 +69,7 @@ pub mod klokken;
 pub mod verwerking;
 pub mod verzoek;
 pub mod volledigheid;
+pub mod woo;
 
 pub use basis::{Compartiment, Herkomst, Id, Motivering, Overgenomen, Status};
 pub use dpia::{Dpia, Restrisico, Restrisiconiveau, Voortoets};
@@ -84,6 +85,7 @@ pub use verzoek::{
     Vindplaatsuitkomst,
 };
 pub use volledigheid::{Ontbrekend, Registerrapport, Volledig, Volledigheidsrapport};
+pub use woo::{Weigeringsgrond, Woouitkomst, Wooverzoek};
 
 /// De eenheid waarin een bewaartermijn is uitgedrukt.
 ///

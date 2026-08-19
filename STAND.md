@@ -38,6 +38,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Installatiesleutel | werkt | Eén vaste ondertekenidentiteit per kluis; overleeft een wachtwoordwissel |
 | Effectbeoordeling | werkt | Voortoets, de vier onderdelen van art. 35 lid 7, restrisico met weging, raadplegingsklok |
 | Betrokkenenverzoeken | werkt | Maandtermijn met beide lezingen, vindplaatsen uit het register, art. 19-kennisgeving, art. 12 lid 4-bericht |
+| Woo-spoor | werkt | Eigen beslistermijn van vier weken, weigeringsgronden gescheiden in absoluut en relatief, zienswijze van derden |
 
 ---
 
@@ -88,6 +89,8 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 **De zoekorkestratie reikt tot waar het register reikt.** `dpofg verzoek vindplaatsen` leidt af waar gegevens kunnen staan uit de registerregels, en meldt hoeveel conceptregels zijn overgeslagen. Wat niet in het register staat, wordt hier niet gevonden — en dat is precies de fout die de onderzoeksbasis het vaakst aanwijst. Een koppeling naar systemen buiten het register bestaat nog niet.
 
+**De Woo-inhoud is niet vastgesteld.** De beslistermijn van vier weken, de verdaging van twee weken en de opsomming van weigeringsgronden staan in het kennispakket en zijn daar als te verifiëren gemarkeerd. Of de opsomming van artikel 5.1 volledig is en of elke grond bij het juiste lid staat, hoort tegen de geconsolideerde wettekst te worden gecontroleerd.
+
 **De redactieregie ontbreekt.** Het verzoekdossier legt vast wát er is verstrekt, niet of daaruit is weggelakt wat er niet in hoort. Zolang die terugleescontrole er niet is, blijft verstrekking beperkt tot een profiel dat gecompartimenteerde en als gevoelig gemarkeerde inhoud volledig uitsluit.
 
 **Geen hardwaretoken.** Het platformhoofdstuk beschrijft hoe FIDO2 en PIV per besturingssysteem werken; de implementatie ontbreekt.
@@ -100,8 +103,8 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 | | |
 |---|---|
-| Rust-code | ~14.400 regels, zonder commentaar en lege regels |
-| Tests | 469 testfuncties, 473 uitgevoerde tests |
+| Rust-code | ~15.500 regels, zonder commentaar en lege regels |
+| Tests | 485 testfuncties, 489 uitgevoerde tests |
 | Documentatie | ~4.700 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
