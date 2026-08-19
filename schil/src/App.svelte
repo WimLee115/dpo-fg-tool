@@ -112,6 +112,9 @@
       <span class="rek terzijde">
         {stand?.kennispakket} · bijgewerkt tot {stand?.consolidatiedatum}
       </span>
+      <button type="button" onclick={() => brug().toonPersoonlijkVenster()}>
+        Persoonlijk dossier
+      </button>
       <button type="button" onclick={vergrendel}>Op slot</button>
     </header>
 

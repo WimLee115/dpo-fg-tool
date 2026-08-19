@@ -17,6 +17,16 @@ export default defineConfig(({ mode }) => ({
     // Alles in de bundel. Geen CDN, geen weblettertypen, geen polyfilldienst.
     assetsInlineLimit: 0,
     emptyOutDir: true,
+    rollupOptions: {
+      // Twee ingangen, want twee kluizen zijn twee vensters met eigen rechten.
+      // De scheiding is daarmee ook een bouwtijdgrens: het persoonlijke
+      // venster laadt de commando's van de organisatie niet, want het kent ze
+      // niet.
+      input: {
+        organisatie: 'index.html',
+        fg: 'fg.html',
+      },
+    },
   },
   server: { port: 5173, strictPort: true },
   // Uitdrukkelijk op 127.0.0.1: `localhost` kan naar ::1 wijzen terwijl de

@@ -138,10 +138,12 @@ jobs:
       - name: de bundel nalopen
         run: |
           set -euo pipefail
-          if grep -qE "<script>|<style" dist/index.html; then
-            echo "::error::er staat een inline script of een inline stijl in index.html"
-            exit 1
-          fi
+          for ingang in dist/index.html dist/fg.html; do
+            if grep -qE "<script>|<style" "$ingang"; then
+              echo "::error::er staat een inline script of een inline stijl in $ingang"
+              exit 1
+            fi
+          done
           for patroon in "eval(" "new Function" "fetch(" "XMLHttpRequest" \
                          "WebSocket" "EventSource" "WebAssembly" "setInterval" \
                          "createObjectURL" "structuredClone"; do

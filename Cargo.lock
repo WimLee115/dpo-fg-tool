@@ -1123,6 +1123,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "dpofg-audit",
  "dpofg-content",
  "dpofg-crypto",
  "dpofg-domain",

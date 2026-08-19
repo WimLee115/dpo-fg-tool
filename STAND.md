@@ -70,7 +70,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Certificaten, mandaten en mappingreviews in de prognose | 3 | Die records bestaan nog niet; de prognose meldt uitdrukkelijk wat zij niet overziet |
 | Ketenbewijs tussen organisaties | 4 | |
 | Overdrachtsdossier bij een wisseling van functionaris | 4 | De scheiding tussen het persoonlijke dossier en het adviesregister van de organisatie is er; de overdracht zelf nog niet |
-| Grafische schil | **deels** | Svelte 5 en Vite in de webview van Tauri v2. Het slot, de werkbak, het dossiervenster, de controleronde en de prognose werken; het persoonlijke dossier heeft nog geen eigen venster |
+| Grafische schil | werkt | Svelte 5 en Vite in de webview van Tauri v2. Twee vensters met elk een eigen wachtwoordzin en een eigen brug: het slot, de werkbak, het dossiervenster, de controleronde en de prognose voor de organisatie, en het persoonlijke dossier met de spiegel apart |
 | Multi-entiteit | 5 | |
 
 ---
@@ -127,9 +127,9 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 794 testfuncties, 798 uitgevoerde tests; ~7.700 regels in `tests` |
+| Tests | 794 Rust-testfuncties, 798 uitgevoerde tests; 32 componenttests en 12 motortests voor de schil |
 | Documentatie | ~5.100 regels |
-| Crates | 10 |
+| Crates | 11 |
 | Clippy | geen waarschuwingen met `-D warnings` |
 
 De verhouding tussen code en tests is bewust hoog. Bij een product waarvan de kernfunctie het bewaken van wettelijke termijnen is, is een rekenfout die niemand opmerkt de duurste fout die er is.

@@ -27,6 +27,13 @@ export interface Brug {
   dossier(soort: string, kenmerk: string): Promise<Dossier>;
   controle(): Promise<Bevinding[]>;
   prognose(dagen: number): Promise<Vervalpunt[]>;
+  /**
+   * Opent het venster van het persoonlijke dossier.
+   *
+   * Het openen gebeurt in Rust; dit venster krijgt daarmee geen recht om zelf
+   * vensters te maken, en het krijgt ook niets van dat dossier te zien.
+   */
+  toonPersoonlijkVenster(): Promise<void>;
 }
 
 let huidige: Brug | null = null;
@@ -62,6 +69,7 @@ export async function tauribrug(): Promise<Brug> {
     dossier: (soort, kenmerk) => invoke('dossier', { soort, kenmerk }),
     controle: () => invoke('controle'),
     prognose: (dagen) => invoke('prognose', { dagen }),
+    toonPersoonlijkVenster: () => invoke('toon_persoonlijk_venster'),
   };
 }
 

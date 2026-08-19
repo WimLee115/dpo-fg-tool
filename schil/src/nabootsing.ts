@@ -215,5 +215,8 @@ export function nabootsing(nu = new Date('2026-08-19T09:00:00Z')): Nabootsing {
       aanroepen.push(`prognose:${dagen}`);
       return vervalpunten;
     },
+    async toonPersoonlijkVenster() {
+      aanroepen.push('toonPersoonlijkVenster');
+    },
   };
 }

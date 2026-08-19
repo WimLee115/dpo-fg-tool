@@ -14,8 +14,8 @@ use tauri::State;
 
 use crate::{sessie::Sessie, vorm};
 
-/// Waar de kluis van de organisatie staat.
-fn standaardpad() -> Result<std::path::PathBuf, String> {
+/// De map waarin dit product zijn gegevens bewaart.
+pub fn gegevensmap() -> Result<std::path::PathBuf, String> {
     let basis = if cfg!(target_os = "windows") {
         std::env::var_os("APPDATA").map(std::path::PathBuf::from)
     } else if cfg!(target_os = "macos") {
@@ -29,8 +29,13 @@ fn standaardpad() -> Result<std::path::PathBuf, String> {
         })
     };
     basis
-        .map(|b| b.join("dpo-fg-tool").join("dossier.dpofg"))
+        .map(|b| b.join("dpo-fg-tool"))
         .ok_or_else(|| "de standaardlocatie voor gegevens is op dit systeem niet te bepalen".into())
+}
+
+/// Waar de kluis van de organisatie staat.
+fn standaardpad() -> Result<std::path::PathBuf, String> {
+    gegevensmap().map(|m| m.join("dossier.dpofg"))
 }
 
 fn fout(e: impl std::fmt::Display) -> String {

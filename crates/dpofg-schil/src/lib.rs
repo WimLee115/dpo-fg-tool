@@ -16,6 +16,7 @@
 //! Rust-proces, en gaat dicht wanneer de gebruiker dat zegt.
 
 pub mod brug;
+pub mod fg;
 pub mod sessie;
 pub mod vorm;
 
@@ -26,6 +27,7 @@ pub fn draai() {
     tauri::Builder::default()
         .setup(|app| {
             app.manage(sessie::Sessie::nieuw());
+            app.manage(fg::Fgsessie::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -37,6 +39,10 @@ pub fn draai() {
             brug::dossier,
             brug::controle,
             brug::prognose,
+            fg::fg_ontgrendel,
+            fg::fg_vergrendel,
+            fg::fg_spiegel,
+            fg::toon_persoonlijk_venster,
         ])
         .run(tauri::generate_context!())
         .expect("de schil kon niet worden gestart");

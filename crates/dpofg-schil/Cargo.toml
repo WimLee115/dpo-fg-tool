@@ -19,6 +19,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+dpofg-audit.workspace = true
 dpofg-domain.workspace = true
 dpofg-store.workspace = true
 dpofg-rules.workspace = true
