@@ -149,6 +149,7 @@ fn status(pad: &std::path::Path, nu: DateTime<Utc>) -> Result<()> {
         "redactie",
         "zorgplicht",
         "risico",
+        "correctie",
     ] {
         let lijst = kluis.lijst(soort)?;
         if lijst.is_empty() {

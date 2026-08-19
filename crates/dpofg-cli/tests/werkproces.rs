@@ -1993,8 +1993,8 @@ fn een_leeg_verplicht_veld_wordt_geweigerd() {
 fn de_dekking_meldt_wat_er_werkelijk_draait() {
     let p = Proef::nieuw();
     let uit = p.moet("controle --dekking");
-    assert!(uit.contains("van de 74 regels"));
-    assert!(uit.contains("60 van de 74"), "kreeg:\n{uit}");
+    assert!(uit.contains("van de 78 regels"));
+    assert!(uit.contains("64 van de 78"), "kreeg:\n{uit}");
     // En wat er níet draait, staat er met naam bij.
     assert!(uit.contains("Nog zonder evaluatie"));
     assert!(uit.contains("SYS-09"), "kreeg:\n{uit}");
@@ -2759,4 +2759,128 @@ fn een_intrekking_die_niet_te_plaatsen_is_wordt_geweigerd() {
          --rol uitvoering --motivering 'dit stuk hoort hier niet'",
     );
     assert!(uit.contains("niet-ingetrokken bewijsstuk"), "kreeg:\n{uit}");
+}
+
+// --------------------------------------------------------------------------
+// De correctieplicht
+// --------------------------------------------------------------------------
+
+/// De controleronde rekent elke keer opnieuw. Zonder een vastgelegd besluit
+/// zijn er twee uitkomsten: oplossen of wegkijken.
+#[test]
+fn een_blokkerende_bevinding_vraagt_een_besluit() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht functionaris ZRP-2026 --naam 'J. Jansen'");
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'K. de Wit'");
+    p.moet("zorgplicht functionaris ZRP-2026 --naam 'K. de Wit'");
+
+    let uit = p.moet("controle");
+    assert!(uit.contains("ZRP-02"), "kreeg:\n{uit}");
+    assert!(uit.contains("COR-02"), "kreeg:\n{uit}");
+    assert!(uit.contains("dpofg correctie nieuw"), "kreeg:\n{uit}");
+
+    p.moet(
+        "correctie nieuw COR-001 --regel ZRP-02 --soort zorgplicht --record ZRP-2026 \
+         --rol 'de directie' --persoon 'P. de Boer' --uiterlijk 2026-12-01T00:00:00Z \
+         --motivering 'het eigenaarschap wordt bij de eerstvolgende directievergadering belegd'",
+    );
+    assert!(!p.moet("controle").contains("COR-02"));
+}
+
+/// Herstel onderdrukt niets; een afwijking wel, en alleen tot de afgesproken
+/// datum.
+#[test]
+fn herstel_onderdrukt_niets_en_een_afwijking_alleen_tijdelijk() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
+    p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
+    assert!(p.moet("controle").contains("ZRP-04"));
+
+    let uit = p.moet(
+        "correctie nieuw COR-001 --regel ZRP-04 --soort zorgplicht --record ZRP-2026 \
+         --rol 'de security officer' --persoon 'J. Jansen' --uiterlijk 2026-12-01T00:00:00Z \
+         --motivering 'de uitdraaien komen bij de kwartaalcontrole beschikbaar'",
+    );
+    assert!(uit.contains("onderdrukt de bevinding niet"), "kreeg:\n{uit}");
+    assert!(p.moet("controle").contains("ZRP-04"), "herstel hoort niets te onderdrukken");
+
+    let uit = p.moet(
+        "correctie nieuw COR-002 --regel ZRP-05 --soort zorgplicht --record ZRP-2026 \
+         --aanpak afwijking --rol 'de security officer' --persoon 'J. Jansen' \
+         --uiterlijk 2026-12-01T00:00:00Z \
+         --motivering 'tot de kwartaalcontrole wordt dit signaal bewust genegeerd'",
+    );
+    assert!(uit.contains("Daarna staat zij er weer"), "kreeg:\n{uit}");
+}
+
+/// Van een regel die geen afwijking toestaat, is niet af te wijken.
+#[test]
+fn afwijken_kan_niet_bij_elke_regel() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let uit = p.moet_falen(
+        "correctie nieuw COR-001 --regel ZRP-01 --soort zorgplicht --record ZRP-2026 \
+         --aanpak afwijking --rol x --persoon y --uiterlijk 2026-12-01T00:00:00Z \
+         --motivering 'wij laten dit zo staan'",
+    );
+    assert!(uit.contains("mag niet gemotiveerd worden afgeweken"), "kreeg:\n{uit}");
+
+    let uit = p.moet_falen(
+        "correctie nieuw COR-001 --regel ZRP-99 --soort zorgplicht --record ZRP-2026 \
+         --rol x --persoon y --uiterlijk 2026-12-01T00:00:00Z --motivering 'wij pakken dit op'",
+    );
+    assert!(uit.contains("staat niet in de regelcatalogus"), "kreeg:\n{uit}");
+}
+
+/// Een correctie zonder eigenaar of met een datum in het verleden is geen
+/// afspraak.
+#[test]
+fn een_correctie_vraagt_een_eigenaar_en_een_datum_in_de_toekomst() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let uit = p.moet_falen(
+        "correctie nieuw COR-001 --regel ZRP-01 --soort zorgplicht --record ZRP-2026 \
+         --rol '  ' --persoon 'J. Jansen' --uiterlijk 2026-12-01T00:00:00Z \
+         --motivering 'wij pakken dit op bij de kwartaalronde'",
+    );
+    assert!(uit.contains("voornemen dat vanzelf verdwijnt"), "kreeg:\n{uit}");
+
+    let uit = p.moet_falen(
+        "correctie nieuw COR-001 --regel ZRP-01 --soort zorgplicht --record ZRP-2026 \
+         --rol beheerder --persoon 'J. Jansen' --uiterlijk 2020-01-01T00:00:00Z \
+         --motivering 'wij pakken dit op bij de kwartaalronde'",
+    );
+    assert!(uit.contains("geen afspraak maar een constatering"), "kreeg:\n{uit}");
+}
+
+/// Uitstel is een besluit; afronden zegt niets over de tekortkoming zelf.
+#[test]
+fn verlengen_en_afronden_zijn_besluiten_met_een_motivering() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet(
+        "correctie nieuw COR-001 --regel ZRP-01 --soort zorgplicht --record ZRP-2026 \
+         --rol beheerder --persoon 'J. Jansen' --uiterlijk 2026-12-01T00:00:00Z \
+         --motivering 'de eigenaars worden bij de kwartaalronde belegd'",
+    );
+
+    let uit = p.moet_falen(
+        "correctie verlengen COR-001 --uiterlijk 2026-10-01T00:00:00Z \
+         --motivering 'het gaat toch sneller'",
+    );
+    assert!(uit.contains("verlengen is iets anders dan vervroegen"), "kreeg:\n{uit}");
+
+    let uit = p.moet(
+        "correctie verlengen COR-001 --uiterlijk 2027-03-01T00:00:00Z \
+         --motivering 'de reorganisatie schuift het beleggen van rollen een kwartaal op'",
+    );
+    assert!(uit.contains("Uitstel is een besluit"), "kreeg:\n{uit}");
+
+    let uit =
+        p.moet("correctie afronden COR-001 --motivering 'alle vijftien maatregelen zijn belegd'");
+    assert!(uit.contains("blijkt uit de volgende controleronde"), "kreeg:\n{uit}");
+    assert!(p.moet("correctie lijst").contains("geen correctie open"));
+    assert!(p.moet("correctie lijst --alles").contains("COR-001"));
 }

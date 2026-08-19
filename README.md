@@ -92,7 +92,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Termijnenmotor met getypeerde termijnen | werkt |
 | Verwerkingsregister (art. 30 AVG) met afgeleide verplichtingen | werkt |
 | Incidentdossier met de vijf klokken en het meldbesluit | werkt |
-| Controleregels over de samenhang | 60 van de 74 regels draaien |
+| Controleregels over de samenhang | 64 van de 78 regels draaien |
 | Kennispakketten met handtekening en terugrolbescherming | werkt |
 | Dossiers samenstellen en ondertekenen | werkt |
 | Effectbeoordeling (DPIA) met de raadplegingsklok van art. 36 | werkt |
@@ -107,6 +107,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Zorgplichtcontrolset (art. 21 lid 3 Cbw) met bewijs dat vervalt | werkt |
 | Risicobeoordeling als eigen dossier, met aanvaarding van het restrisico | werkt |
 | Vervalprognose op 30, 90 en 365 dagen | werkt |
+| Correctieplicht: per bevinding een besluit met eigenaar en datum | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |

@@ -30,7 +30,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Volledigheidsmechanisme | werkt | Teller met grondslag; blokkerend onderscheiden van signalerend |
 | Incidentdossier | werkt | Vijf klokken op eigen ankers, meldbesluit met drie lagen |
 | Klokkenmotor | werkt | Leidt verplichtingen af; ankers vallen niet samen |
-| Controleregels | **deels** | 60 van de 74 regels in de catalogus hebben een evaluatiefunctie |
+| Controleregels | **deels** | 64 van de 78 regels in de catalogus hebben een evaluatiefunctie |
 | Kennispakketten | werkt | Ondertekend, met terugrolbescherming en consolidatiedatum |
 | Dossiers | werkt | Ondertekend manifest, weglatingen zichtbaar, voorbehoud meegetekend |
 | Verificatiebinary | werkt | Leest uitsluitend, geen wachtwoord, geen kluis nodig |
@@ -49,6 +49,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Risicobeoordeling | werkt | Eigen dossier met methode, reikwijdte, bronnen en onderkende risico's; het restrisico daalt alleen met een maatregel erbij, en een hoog restrisico aanvaardt het bestuur |
 | Vervalprognose | werkt | Welke eisen op 30, 90 en 365 dagen niet meer aantoonbaar zijn, met oorzaak, eigenaar en datum; over vijf dossiersoorten heen |
 | De drie factoren van aantoonbaarheid | **deels** | Vastgesteld, uitgevoerd en actueel als drie tellingen; geen gewogen score, want het plan geeft daarvoor geen schaal |
+| Correctieplicht | werkt | Per bevinding een besluit met eigenaar en einddatum: herstel of gemotiveerde afwijking; alleen een lopende afwijking onderdrukt de bevinding |
 
 ---
 
@@ -123,7 +124,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 715 testfuncties, 719 uitgevoerde tests; ~6.500 regels in `tests` |
+| Tests | 739 testfuncties, 743 uitgevoerde tests; ~6.900 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

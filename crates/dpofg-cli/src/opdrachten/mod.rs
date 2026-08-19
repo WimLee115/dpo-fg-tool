@@ -1,6 +1,7 @@
 //! De opdrachten van de bedieningsschil.
 
 pub mod controle;
+pub mod correctie;
 pub mod doorgifte;
 pub mod dossier;
 pub mod dpia;

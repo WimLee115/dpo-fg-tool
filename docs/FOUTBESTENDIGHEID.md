@@ -1421,6 +1421,17 @@ De beoordeling waarop de zorgplichtmaatregelen steunen. Eén blokkerende regel: 
 | RIS-05 | Geen bron geraadpleegd | beoordeling die uitsluitend op het eigen beeld berust | S | security officer |
 | RIS-06 | Aanvaarding ouder dan de beoordeling | aanvaard vóór de laatste wijziging van de beoordeling | S | directie |
 
+#### Correctieplicht (COR)
+
+Wat er met een bevinding gebeurt nadat zij is gezien. Deze regels kijken niet naar een dossier maar naar de controleronde zelf: zonder een vastgelegd besluit zijn er maar twee uitkomsten, oplossen of wegkijken.
+
+| ID | Naam | Wat het controleert | Niveau | Naar |
+|---|---|---|---|---|
+| COR-01 | Correctietermijn verstreken | niet afgerond op de afgesproken datum | B | FG |
+| COR-02 | Blokkerende bevinding zonder correctie | geen besluit vastgelegd over een blokkerende bevinding | S | FG |
+| COR-03 | Correctie voor een bevinding die niet meer aanslaat | de tekortkoming is weg, de correctie staat nog open | S | FG |
+| COR-04 | Afwijken is gewoonte geworden | aandeel afwijkingen in de lopende correcties boven de drempel | R | directie |
+
 #### Integriteit van de applicatie zelf (SYS)
 
 | ID | Naam | Wat het controleert | Niveau | Naar |
@@ -1436,7 +1447,7 @@ De beoordeling waarop de zorgplichtmaatregelen steunen. Eén blokkerende regel: 
 | SYS-09 | Termijnmodule niet geverifieerd | testgevallen van de termijnmodule niet groen na een update | B op alle termijnberekeningen | beheerder |
 | SYS-10 | Klokafwijking | systeemklok wijkt af van de monotone referentie | S | beheerder |
 
-**Totaal: 143 controleregels** — 17 REG, 12 GRO, 8 BEW, 9 DPIA, 13 VWO, 8 EER, 16 LEK, 12 BTR, 7 NIS, 13 ZRP, 6 RIS, 12 ORG, 10 SYS.
+**Totaal: 147 controleregels** — 17 REG, 12 GRO, 8 BEW, 9 DPIA, 13 VWO, 8 EER, 16 LEK, 12 BTR, 7 NIS, 13 ZRP, 6 RIS, 4 COR, 12 ORG, 10 SYS.
 
 > De eerdere opgave van 123 klopte niet met de opsomming eronder: die telde 124 regels. Met de dertien regels van de zorgplichtcontrolset erbij zijn het er 137.
 

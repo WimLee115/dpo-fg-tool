@@ -28,6 +28,7 @@ use chrono::{DateTime, Duration, Utc};
 use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
     avg::Grondslag,
+    correctie::{Correctie, Correctiesoort},
     risico::Risicobeoordeling,
     zorgplicht::{
         Bewijsaanwijzing, Bewijskracht, Bewijsrol, Maatregelstand, Toepassing, Zorgplichtdossier,
@@ -39,7 +40,7 @@ use dpofg_terms::Deadline;
 
 use crate::budget::Waarschuwingsbudget;
 
-use crate::motor::{Bevinding, Niveau::*, Ontvangerrol::*, Regel, Regelmotor};
+use crate::motor::{Afwijking, Bevinding, Niveau::*, Ontvangerrol::*, Regel, Regelmotor};
 
 /// De volledige catalogus.
 pub fn catalogus() -> Vec<Regel> {
@@ -54,6 +55,7 @@ pub fn catalogus() -> Vec<Regel> {
     uit.extend(organisatie());
     uit.extend(zorgplicht());
     uit.extend(risicobeoordeling());
+    uit.extend(correcties());
     uit.extend(systeem());
     uit
 }
@@ -85,7 +87,8 @@ pub fn geimplementeerd() -> &'static [&'static str] {
         "DPIA-03", "DPIA-06", "DPIA-07", "EER-03", "EER-06", "EER-07", "VWO-02", "VWO-04",
         "VWO-09", "VWO-13", "LEK-16", "ZRP-01", "ZRP-02", "ZRP-03", "ZRP-04", "ZRP-05", "ZRP-06",
         "ZRP-07", "ZRP-08", "ZRP-09", "ZRP-10", "ZRP-11", "ZRP-12", "ZRP-13", "RIS-01", "RIS-02",
-        "RIS-03", "RIS-04", "RIS-05", "RIS-06", "SYS-04", "SYS-06", "SYS-10",
+        "RIS-03", "RIS-04", "RIS-05", "RIS-06", "COR-01", "COR-02", "COR-03", "COR-04", "SYS-04",
+        "SYS-06", "SYS-10",
     ]
 }
 
@@ -823,6 +826,57 @@ fn risicobeoordeling() -> Vec<Regel> {
             Signalerend,
             Directie,
             "interne norm",
+            true,
+        ),
+    ]
+}
+
+/// De correctieplicht: wat er met een bevinding gebeurt nadat zij is gezien.
+///
+/// Deze vier regels kijken niet naar een dossier maar naar de controleronde
+/// zelf. Zij bestaan omdat de ronde elke keer opnieuw rekent: zonder een
+/// vastgelegd besluit zijn er maar twee uitkomsten, oplossen of wegkijken, en
+/// de tweede is de gebruikelijke.
+fn correcties() -> Vec<Regel> {
+    vec![
+        Regel::nieuw(
+            "COR-01",
+            "correctie",
+            "Correctietermijn verstreken",
+            "een correctie is niet afgerond op de afgesproken datum",
+            Blokkerend,
+            Functionaris,
+            "interne norm; de correctieplicht volgt uit de verantwoordingsplicht",
+            false,
+        ),
+        Regel::nieuw(
+            "COR-02",
+            "correctie",
+            "Blokkerende bevinding zonder correctie",
+            "een blokkerende bevinding waarover geen besluit is vastgelegd",
+            Signalerend,
+            Functionaris,
+            "interne norm; de correctieplicht volgt uit de verantwoordingsplicht",
+            false,
+        ),
+        Regel::nieuw(
+            "COR-03",
+            "correctie",
+            "Correctie voor een bevinding die niet meer aanslaat",
+            "de tekortkoming is weg maar de correctie staat nog open",
+            Signalerend,
+            Functionaris,
+            "interne norm",
+            true,
+        ),
+        Regel::nieuw(
+            "COR-04",
+            "correctie",
+            "Afwijken is gewoonte geworden",
+            "het aandeel bevindingen dat met een afwijking wordt afgedaan ligt boven de drempel",
+            Rapporterend,
+            Directie,
+            "interne norm; geen wettelijke drempel",
             true,
         ),
     ]
@@ -1731,7 +1785,7 @@ pub fn beoordeel_risicobeoordeling(
         voeg(
             "RIS-01",
             format!(
-                "de beoordeling van {} is op {} verlopen; de maatregelen eronder steunen op \\
+                "de beoordeling van {} is op {} verlopen; de maatregelen eronder steunen op \
                  een beeld dat niet meer is getoetst",
                 b.uitgevoerd_op.format("%d-%m-%Y"),
                 b.geldig_tot.format("%d-%m-%Y")
@@ -1766,7 +1820,7 @@ pub fn beoordeel_risicobeoordeling(
         voeg(
             "RIS-04",
             format!(
-                "bij {} is geen enkele maatregel genoemd; het restrisico is daarmee gelijk aan \\
+                "bij {} is geen enkele maatregel genoemd; het restrisico is daarmee gelijk aan \
                  het risico",
                 zonder.join(", ")
             ),
@@ -1776,7 +1830,7 @@ pub fn beoordeel_risicobeoordeling(
     if b.bronnen.is_empty() {
         voeg(
             "RIS-05",
-            "er is geen enkele bron vastgelegd; een beoordeling die alleen op het eigen beeld \\
+            "er is geen enkele bron vastgelegd; een beoordeling die alleen op het eigen beeld \
              berust, ziet wat de organisatie al wist"
                 .to_string(),
         );
@@ -1796,11 +1850,175 @@ pub fn beoordeel_risicobeoordeling(
         voeg(
             "RIS-06",
             format!(
-                "de aanvaarding van {} dateert van vóór de laatste wijziging van deze \\
+                "de aanvaarding van {} dateert van vóór de laatste wijziging van deze \
                  beoordeling",
                 verouderd.join(", ")
             ),
         );
+    }
+
+    uit
+}
+
+/// Legt de vastgelegde afwijkingen over de bevindingen van deze ronde heen.
+///
+/// Een lopende afwijking vult het veld `afwijking` op de bevinding, zodat
+/// `Bevinding::is_actief` weet wat het besluit was. Een herstelafspraak doet
+/// dat niet: zolang de tekortkoming er is, hoort zij in beeld te blijven, ook
+/// als er iemand aan werkt.
+pub fn pas_correcties_toe(
+    bevindingen: &mut [Bevinding],
+    correcties: &[Correctie],
+    nu: DateTime<Utc>,
+) {
+    for b in bevindingen.iter_mut() {
+        let Some(kenmerk) = b.record_kenmerk.as_deref() else {
+            continue;
+        };
+        let treffer = correcties.iter().find(|c| {
+            c.onderdrukt(nu)
+                && c.bevinding.regelcode == b.regelcode
+                && c.bevinding.record_soort == b.record_soort
+                && c.bevinding.record_kenmerk == kenmerk
+        });
+        if let Some(c) = treffer {
+            b.afwijking = Some(Afwijking {
+                motivering: c.aanpak.tekst.clone(),
+                door: format!("{} ({})", c.eigenaar_rol, c.eigenaar_persoon),
+                op: c.herkomst.aangemaakt_op,
+                geldig_tot: Some(c.uiterlijk),
+            });
+        }
+    }
+}
+
+/// Beoordeelt de correcties tegen de bevindingen van deze ronde
+/// (COR-01 tot en met COR-04).
+///
+/// Krijgt de bevindingen mee zoals zij vóór het toepassen van de afwijkingen
+/// waren: anders zou een afwijking de bevinding waarover zij gaat uit het
+/// beeld halen en zou COR-03 elke lopende afwijking als overbodig melden.
+pub fn beoordeel_correcties(
+    motor: &Regelmotor,
+    correcties: &[Correctie],
+    bevindingen: &[Bevinding],
+    afwijkingsaandeel_procent: u32,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+
+    let sleutel_van = |b: &Bevinding| {
+        b.record_kenmerk
+            .as_deref()
+            .map(|k| (b.regelcode.clone(), b.record_soort.clone(), k.to_string()))
+    };
+    let actueel: Vec<_> = bevindingen.iter().filter_map(sleutel_van).collect();
+
+    for c in correcties {
+        let id = c.id.to_string();
+        let kenmerk = Some(c.kenmerk.as_str());
+
+        if c.is_te_laat(nu) {
+            if let Some(b) = motor.bevind(
+                "COR-01",
+                "correctie",
+                &id,
+                kenmerk,
+                format!(
+                    "de afspraak over {} liep tot {} en is {} dagen later nog niet afgerond; \
+                     eigenaar {} ({})",
+                    c.bevinding.aanduiding(),
+                    c.uiterlijk.format("%d-%m-%Y"),
+                    -c.dagen_tot_uiterlijk(nu),
+                    c.eigenaar_rol,
+                    c.eigenaar_persoon
+                ),
+                nu,
+            ) {
+                uit.push(b);
+            }
+        }
+
+        let sleutel = (
+            c.bevinding.regelcode.clone(),
+            c.bevinding.record_soort.clone(),
+            c.bevinding.record_kenmerk.clone(),
+        );
+        if !c.is_afgerond() && !actueel.contains(&sleutel) {
+            if let Some(b) = motor.bevind(
+                "COR-03",
+                "correctie",
+                &id,
+                kenmerk,
+                format!(
+                    "{} slaat niet meer aan; rond deze correctie af of leg vast waarom zij \
+                     open blijft staan",
+                    c.bevinding.aanduiding()
+                ),
+                nu,
+            ) {
+                uit.push(b);
+            }
+        }
+    }
+
+    // COR-02: blokkerende bevindingen waarover geen besluit is vastgelegd.
+    let zonder: Vec<String> = bevindingen
+        .iter()
+        .filter(|b| b.niveau == Blokkerend)
+        .filter(|b| {
+            let Some(k) = b.record_kenmerk.as_deref() else {
+                return false;
+            };
+            !correcties.iter().any(|c| {
+                !c.is_afgerond()
+                    && c.bevinding.regelcode == b.regelcode
+                    && c.bevinding.record_soort == b.record_soort
+                    && c.bevinding.record_kenmerk == k
+            })
+        })
+        .map(|b| format!("{} op {}", b.regelcode, b.record_kenmerk.as_deref().unwrap_or("?")))
+        .collect();
+    if !zonder.is_empty() {
+        if let Some(b) = motor.bevind(
+            "COR-02",
+            "controleronde",
+            "ronde",
+            None,
+            format!(
+                "{} blokkerende bevinding(en) zonder vastgelegd besluit: {}. Leg per bevinding \
+                 vast wie er iets aan doet en wanneer, met 'dpofg correctie nieuw'",
+                zonder.len(),
+                zonder.join(", ")
+            ),
+            nu,
+        ) {
+            uit.push(b);
+        }
+    }
+
+    // COR-04: het aandeel bevindingen dat met een afwijking wordt afgedaan.
+    let lopend: Vec<&Correctie> = correcties.iter().filter(|c| !c.is_afgerond()).collect();
+    if !lopend.is_empty() {
+        let afwijkingen = lopend.iter().filter(|c| c.soort == Correctiesoort::Afwijking).count();
+        let aandeel = ((afwijkingen * 100) / lopend.len()) as u32;
+        if aandeel > afwijkingsaandeel_procent {
+            if let Some(b) = motor.bevind(
+                "COR-04",
+                "controleronde",
+                "ronde",
+                None,
+                format!(
+                    "{aandeel} procent van de {} lopende correcties is een afwijking en geen \
+                     herstel; boven {afwijkingsaandeel_procent} procent verwordt de regel tot \
+                     een formaliteit",
+                    lopend.len()
+                ),
+                nu,
+            ) {
+                uit.push(b);
+            }
+        }
     }
 
     uit

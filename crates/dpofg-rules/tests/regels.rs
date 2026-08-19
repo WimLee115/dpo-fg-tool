@@ -3,6 +3,7 @@
 use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use dpofg_domain::{
     avg::{BijzondereCategorie, Grondslag, Rol},
+    correctie::{Bevindingsleutel, Correctie, Correctiesoort},
     doorgifte::{Beoordelingsuitkomst, Doorgifte, Doorgiftebeoordeling, Doorgifteinstrumentsoort},
     incident::Herkomstkanaal,
     leverancier::{Contracteis, Leverancier},
@@ -17,13 +18,13 @@ use dpofg_domain::{
 };
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
-    motor::{Niveau, Ontvangerrol},
+    motor::{Niveau, Ontvangerrol, Regelmotor},
     regels::{
-        beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
-        beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
-        beoordeel_raadplegingstermijn, beoordeel_risicobeoordeling, beoordeel_verwerkersmelding,
-        beoordeel_verwerking, beoordeel_zorgplicht, catalogus, geimplementeerd, standaardmotor,
-        Zorgplichtdrempels,
+        beoordeel_budget, beoordeel_correcties, beoordeel_doorgifte, beoordeel_dpia,
+        beoordeel_incident, beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn,
+        beoordeel_oorzaakpatroon, beoordeel_raadplegingstermijn, beoordeel_risicobeoordeling,
+        beoordeel_verwerkersmelding, beoordeel_verwerking, beoordeel_zorgplicht, catalogus,
+        geimplementeerd, pas_correcties_toe, standaardmotor, Zorgplichtdrempels,
     },
 };
 
@@ -2033,4 +2034,211 @@ fn zrp_11_leest_de_gekoppelde_beoordeling_en_niet_de_koppeling() {
     let bev = beoordeel_zorgplicht(&motor, &d, &[concept], drempels(), nu());
     let r = bev.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
     assert!(r.toelichting.contains("zelf nog concept"));
+}
+
+/// Een regeltekst met een losse backslash erin.
+///
+/// Deze test bestaat omdat het is misgegaan: bij het schrijven van de RIS- en
+/// COR-regels bleven negen regelovergangen als `\\` in de bron staan, waardoor
+/// vier bevindingsteksten met een backslash en een rij spaties op het scherm
+/// kwamen. De tests keken naar losse woorden en merkten er niets van.
+///
+/// De bron zelf is hier het onderwerp: een regelovergang binnen een tekst
+/// hoort één backslash te zijn, en er is geen enkele reden waarom een
+/// bevindingstekst er een zou moeten tonen.
+#[test]
+fn geen_enkele_regeltekst_draagt_een_losse_backslash() {
+    for (naam, bron) in [
+        ("regels.rs", include_str!("../src/regels.rs")),
+        ("motor.rs", include_str!("../src/motor.rs")),
+    ] {
+        for (nummer, regel) in bron.lines().enumerate() {
+            assert!(
+                !regel.trim_end().ends_with("\\\\"),
+                "{naam}:{}: een tekst wordt afgebroken met twee backslashes; dat levert een \
+                 backslash in de uitvoer op",
+                nummer + 1
+            );
+        }
+    }
+}
+
+// --- de correctieplicht ------------------------------------------------------
+
+const AFWIJKINGSAANDEEL: u32 = 50;
+
+fn bevinding(motor: &Regelmotor, code: &str, kenmerk: &str) -> dpofg_rules::Bevinding {
+    motor
+        .bevind(code, "zorgplicht", "id-1", Some(kenmerk), "een tekortkoming", nu())
+        .expect("de regel hoort te bestaan")
+}
+
+fn correctie(soort: Correctiesoort, code: &str, dagen: i64) -> Correctie {
+    Correctie::nieuw(
+        "COR-001",
+        Bevindingsleutel::nieuw(code, "zorgplicht", "ZRP-2026"),
+        "een tekortkoming",
+        soort,
+        true,
+        "de security officer",
+        "J. Jansen",
+        nu() + Duration::days(dagen),
+        motivering("de uitdraaien worden bij de volgende kwartaalcontrole aangeleverd"),
+        "u1",
+        nu(),
+    )
+    .unwrap()
+}
+
+/// Een lopende afwijking vult het veld dat de regelmotor al had maar dat
+/// nergens werd gevuld. Een herstelafspraak doet dat niet.
+#[test]
+fn alleen_een_afwijking_legt_zich_over_de_bevinding_heen() {
+    let motor = standaardmotor();
+    let mut bevindingen = vec![bevinding(&motor, "ZRP-04", "ZRP-2026")];
+    pas_correcties_toe(&mut bevindingen, &[correctie(Correctiesoort::Herstel, "ZRP-04", 60)], nu());
+    assert!(bevindingen[0].afwijking.is_none(), "herstel onderdrukt niets");
+
+    pas_correcties_toe(
+        &mut bevindingen,
+        &[correctie(Correctiesoort::Afwijking, "ZRP-04", 60)],
+        nu(),
+    );
+    let a = bevindingen[0].afwijking.as_ref().expect("de afwijking hoort te zijn toegepast");
+    assert_eq!(a.geldig_tot, Some(nu() + Duration::days(60)));
+    assert!(a.door.contains("J. Jansen"));
+}
+
+/// Een afwijking die is verlopen, onderdrukt niets meer: anders wordt zij de
+/// nieuwe norm.
+#[test]
+fn een_verlopen_afwijking_onderdrukt_niets_meer() {
+    let motor = standaardmotor();
+    let mut bevindingen = vec![bevinding(&motor, "ZRP-04", "ZRP-2026")];
+    let c = [correctie(Correctiesoort::Afwijking, "ZRP-04", 60)];
+    pas_correcties_toe(&mut bevindingen, &c, nu() + Duration::days(90));
+    assert!(bevindingen[0].afwijking.is_none());
+}
+
+/// Een afwijking voor een ander record raakt deze bevinding niet.
+#[test]
+fn een_afwijking_geldt_alleen_voor_de_bevinding_waarover_zij_gaat() {
+    let motor = standaardmotor();
+    let mut bevindingen = vec![bevinding(&motor, "ZRP-04", "ZRP-9999")];
+    pas_correcties_toe(
+        &mut bevindingen,
+        &[correctie(Correctiesoort::Afwijking, "ZRP-04", 60)],
+        nu(),
+    );
+    assert!(bevindingen[0].afwijking.is_none());
+}
+
+#[test]
+fn cor_01_blokkeert_bij_een_verstreken_termijn() {
+    let motor = standaardmotor();
+    let c = [correctie(Correctiesoort::Herstel, "ZRP-04", 60)];
+    let bevindingen = [bevinding(&motor, "ZRP-04", "ZRP-2026")];
+
+    assert!(!codes(&beoordeel_correcties(&motor, &c, &bevindingen, AFWIJKINGSAANDEEL, nu()))
+        .contains(&"COR-01"));
+
+    let laat = beoordeel_correcties(
+        &motor,
+        &c,
+        &bevindingen,
+        AFWIJKINGSAANDEEL,
+        nu() + Duration::days(90),
+    );
+    let b = laat.iter().find(|x| x.regelcode == "COR-01").expect("COR-01 hoort aan te slaan");
+    assert_eq!(b.niveau, Niveau::Blokkerend);
+    assert!(b.toelichting.contains("30 dagen later"), "kreeg: {}", b.toelichting);
+    assert!(b.toelichting.contains("J. Jansen"));
+}
+
+/// De kern van de correctieplicht: een blokkerende bevinding waarover geen
+/// besluit is vastgelegd.
+#[test]
+fn cor_02_meldt_blokkerende_bevindingen_zonder_besluit() {
+    let motor = standaardmotor();
+    let bevindingen = [bevinding(&motor, "ZRP-02", "ZRP-2026")];
+    assert_eq!(bevindingen[0].niveau, Niveau::Blokkerend);
+
+    let b = beoordeel_correcties(&motor, &[], &bevindingen, AFWIJKINGSAANDEEL, nu());
+    let bev = b.iter().find(|x| x.regelcode == "COR-02").expect("COR-02 hoort aan te slaan");
+    assert!(bev.toelichting.contains("ZRP-02 op ZRP-2026"));
+
+    // Met een besluit erover zwijgt hij.
+    let c = [correctie(Correctiesoort::Herstel, "ZRP-02", 60)];
+    assert!(!codes(&beoordeel_correcties(&motor, &c, &bevindingen, AFWIJKINGSAANDEEL, nu()))
+        .contains(&"COR-02"));
+}
+
+/// Een signalerende bevinding vraagt geen besluit: dan zou elke melding een
+/// formulier oproepen en is de correctieplicht binnen een week een ritueel.
+#[test]
+fn cor_02_kijkt_alleen_naar_blokkerende_bevindingen() {
+    let motor = standaardmotor();
+    let bevindingen = [bevinding(&motor, "ZRP-04", "ZRP-2026")];
+    assert_eq!(bevindingen[0].niveau, Niveau::Signalerend);
+    assert!(!codes(&beoordeel_correcties(&motor, &[], &bevindingen, AFWIJKINGSAANDEEL, nu()))
+        .contains(&"COR-02"));
+}
+
+/// Een correctie voor iets wat niet meer aanslaat, hoort te worden afgesloten.
+#[test]
+fn cor_03_meldt_een_correctie_die_niets_meer_dekt() {
+    let motor = standaardmotor();
+    let c = [correctie(Correctiesoort::Herstel, "ZRP-04", 60)];
+
+    let met = beoordeel_correcties(
+        &motor,
+        &c,
+        &[bevinding(&motor, "ZRP-04", "ZRP-2026")],
+        AFWIJKINGSAANDEEL,
+        nu(),
+    );
+    assert!(!codes(&met).contains(&"COR-03"));
+
+    let zonder = beoordeel_correcties(&motor, &c, &[], AFWIJKINGSAANDEEL, nu());
+    let b = zonder.iter().find(|x| x.regelcode == "COR-03").expect("COR-03 hoort aan te slaan");
+    assert!(b.toelichting.contains("ZRP-04 op zorgplicht ZRP-2026"));
+}
+
+/// Elke ontsnapping wordt geteld. Dat stond al als bedoeling in de regelmotor
+/// en het gebeurt nu ook.
+#[test]
+fn cor_04_telt_hoe_vaak_er_wordt_afgeweken_in_plaats_van_hersteld() {
+    let motor = standaardmotor();
+    let mut herstel = correctie(Correctiesoort::Herstel, "ZRP-04", 60);
+    herstel.kenmerk = "COR-002".into();
+    let alleen_herstel = [herstel.clone()];
+    assert!(!codes(&beoordeel_correcties(&motor, &alleen_herstel, &[], AFWIJKINGSAANDEEL, nu()))
+        .contains(&"COR-04"));
+
+    let veel_afwijking = [
+        correctie(Correctiesoort::Afwijking, "ZRP-04", 60),
+        correctie(Correctiesoort::Afwijking, "ZRP-05", 60),
+        herstel,
+    ];
+    let b = beoordeel_correcties(&motor, &veel_afwijking, &[], AFWIJKINGSAANDEEL, nu());
+    let bev = b.iter().find(|x| x.regelcode == "COR-04").expect("COR-04 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Rapporterend);
+    assert_eq!(bev.ontvanger, Ontvangerrol::Directie);
+    assert!(bev.toelichting.contains("66 procent"), "kreeg: {}", bev.toelichting);
+}
+
+/// Een afgeronde correctie telt nergens meer mee.
+#[test]
+fn een_afgeronde_correctie_verdwijnt_uit_alle_tellingen() {
+    let motor = standaardmotor();
+    let mut c = correctie(Correctiesoort::Afwijking, "ZRP-04", 60);
+    c.rond_af("A. de Vries", motivering("de uitdraaien zijn aangeleverd"), nu()).unwrap();
+    let lijst = [c];
+
+    let b = beoordeel_correcties(&motor, &lijst, &[], AFWIJKINGSAANDEEL, nu());
+    assert!(b.is_empty(), "onverwachte bevindingen: {:?}", codes(&b));
+
+    let mut bevindingen = vec![bevinding(&motor, "ZRP-04", "ZRP-2026")];
+    pas_correcties_toe(&mut bevindingen, &lijst, nu());
+    assert!(bevindingen[0].afwijking.is_none(), "een afgeronde afwijking onderdrukt niets");
 }

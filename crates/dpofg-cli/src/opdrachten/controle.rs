@@ -5,17 +5,18 @@ use chrono::{DateTime, Utc};
 use clap::Args;
 use dpofg_audit::Handeling;
 use dpofg_domain::{
-    doorgifte::Doorgifte, risico::Risicobeoordeling, zorgplicht::Zorgplichtdossier, Dpia, Incident,
-    Leverancier, Verwerking,
+    correctie::Correctie, doorgifte::Doorgifte, risico::Risicobeoordeling,
+    zorgplicht::Zorgplichtdossier, Dpia, Incident, Leverancier, Verwerking,
 };
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
-        beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
-        beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
-        beoordeel_raadplegingstermijn, beoordeel_risicobeoordeling, beoordeel_verwerkersmelding,
-        beoordeel_verwerking, beoordeel_zorgplicht, standaardmotor, Zorgplichtdrempels,
+        beoordeel_budget, beoordeel_correcties, beoordeel_doorgifte, beoordeel_dpia,
+        beoordeel_incident, beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn,
+        beoordeel_oorzaakpatroon, beoordeel_raadplegingstermijn, beoordeel_risicobeoordeling,
+        beoordeel_verwerkersmelding, beoordeel_verwerking, beoordeel_zorgplicht,
+        pas_correcties_toe, standaardmotor, Zorgplichtdrempels,
     },
 };
 use std::path::PathBuf;
@@ -211,6 +212,24 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
     }
     bevindingen.extend(beoordeel_budget(&motor, &budget, nu));
 
+    // De correcties komen ná alle beoordelingen: zij gaan over de bevindingen
+    // van deze ronde en niet over een dossier. Eerst wordt de correctieplicht
+    // getoetst tegen het onbewerkte beeld — anders zou een lopende afwijking
+    // de bevinding waarover zij gaat uit het zicht halen en zou COR-03 elke
+    // afwijking als overbodig melden. Daarna pas worden de afwijkingen over de
+    // bevindingen heen gelegd.
+    let mut correcties: Vec<Correctie> = Vec::new();
+    for k in kluis.lijst("correctie")? {
+        correcties.push(kluis.laad("correctie", &k.id)?);
+    }
+    if !correcties.is_empty() || bevindingen.iter().any(|b| b.niveau == Niveau::Blokkerend) {
+        let over_correcties =
+            beoordeel_correcties(&motor, &correcties, &bevindingen, afwijkingsaandeel(&pakket), nu);
+        pas_correcties_toe(&mut bevindingen, &correcties, nu);
+        bevindingen.extend(over_correcties);
+        beoordeeld += correcties.len();
+    }
+
     let drempel: Niveau = o.vanaf.into();
     bevindingen.retain(|b| b.niveau >= drempel);
     if let Some(rol) = o.voor {
@@ -400,6 +419,17 @@ fn meldtermijndrempel(pakket: &dpofg_content::Pakketinhoud) -> u32 {
         .and_then(|v| v.as_u64())
         .and_then(|v| u32::try_from(v).ok())
         .unwrap_or(48)
+}
+
+/// Boven welk aandeel afwijkingen niet-herstel gewoonte wordt.
+fn afwijkingsaandeel(pakket: &dpofg_content::Pakketinhoud) -> u32 {
+    pakket
+        .aanvullend
+        .get("zorgplicht_drempels")
+        .and_then(|v| v.get("afwijkingsaandeel_procent"))
+        .and_then(|v| v.as_u64())
+        .and_then(|v| u32::try_from(v).ok())
+        .unwrap_or(50)
 }
 
 /// Hoeveel dagen vooruit een verlopende risicobeoordeling wordt gemeld.

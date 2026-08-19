@@ -82,6 +82,7 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
             "redactie".into(),
             "zorgplicht".into(),
             "risico".into(),
+            "correctie".into(),
         ]
     } else {
         o.soort.clone()

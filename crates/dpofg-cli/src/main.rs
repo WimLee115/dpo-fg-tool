@@ -91,6 +91,10 @@ enum Opdracht {
     #[command(subcommand)]
     Leverancier(opdrachten::leverancier::Leveranciersopdracht),
 
+    /// Wat er met een bevinding gebeurt: herstel of gemotiveerde afwijking.
+    #[command(subcommand)]
+    Correctie(opdrachten::correctie::Correctieopdracht),
+
     /// Welke eisen op een gekozen datum niet meer aantoonbaar zijn.
     Prognose(opdrachten::prognose::Prognoseargumenten),
 
@@ -161,6 +165,7 @@ fn draai() -> Result<()> {
         Opdracht::Lia(o) => opdrachten::lia::draai(o, args.kluis, nu),
         Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
         Opdracht::Leverancier(o) => opdrachten::leverancier::draai(o, args.kluis, nu),
+        Opdracht::Correctie(o) => opdrachten::correctie::draai(o, args.kluis, nu),
         Opdracht::Prognose(o) => opdrachten::prognose::draai(o, args.kluis, nu),
         Opdracht::Risico(o) => opdrachten::risico::draai(o, args.kluis, nu),
         Opdracht::Zorgplicht(o) => opdrachten::zorgplicht::draai(o, args.kluis, nu),
