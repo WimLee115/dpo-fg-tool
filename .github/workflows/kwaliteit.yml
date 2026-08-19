@@ -118,20 +118,33 @@ jobs:
       - name: netwerkgereedschap installeren
         # De enige stap in deze bouwstraat die zelf het netwerk op moet, en
         # daarmee de enige die op een trage spiegelserver kan blijven staan.
-        # Een eigen tijdslimiet plus twee nieuwe pogingen: hangen is hier een
-        # storing van buiten, en die hoort luid te falen in plaats van de baan
-        # een halve dag open te houden.
-        timeout-minutes: 6
+        #
+        # Drie maatregelen, in deze volgorde. Eerst kijken of strace er al
+        # staat: op de gangbare uitvoeromgeving is dat zo, en dan hoeft deze
+        # baan het netwerk helemaal niet op. Daarna per poging een eigen
+        # tijdslimiet, want zonder die limiet kan één hangende spiegelserver
+        # het hele budget van de stap opeten en komt de tweede poging er nooit.
+        # De limiet op de stap blijft er als laatste vangnet.
+        #
+        # libcap2-bin is hier weggelaten: dat pakket werd geïnstalleerd maar
+        # nergens gebruikt, en het verdubbelde de kans dat deze stap op een
+        # trage spiegelserver bleef staan.
+        timeout-minutes: 8
         run: |
           set -euo pipefail
+          if command -v strace > /dev/null; then
+            echo "strace staat er al; deze baan hoeft het netwerk niet op"
+            exit 0
+          fi
           for poging in 1 2 3; do
-            if sudo apt-get update -qq && sudo apt-get install -y -qq libcap2-bin strace; then
+            if timeout 90 sudo apt-get update -qq \
+               && timeout 90 sudo apt-get install -y -qq strace; then
               exit 0
             fi
-            echo "poging $poging mislukt; opnieuw over 15 seconden"
+            echo "poging $poging mislukt of duurde te lang; opnieuw over 15 seconden"
             sleep 15
           done
-          echo "::error::het netwerkgereedschap kon niet worden geïnstalleerd"
+          echo "::error::strace kon niet worden geïnstalleerd; de egresscontrole is niet gedraaid"
           exit 1
 
       - name: controleren dat het programma geen verbinding opent
