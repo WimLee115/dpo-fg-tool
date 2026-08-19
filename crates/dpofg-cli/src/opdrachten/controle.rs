@@ -3,10 +3,15 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::Args;
+use dpofg_audit::Handeling;
 use dpofg_domain::{Incident, Verwerking};
 use dpofg_rules::{
+    budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
-    regels::{beoordeel_incident, beoordeel_oorzaakpatroon, beoordeel_verwerking, standaardmotor},
+    regels::{
+        beoordeel_budget, beoordeel_incident, beoordeel_logboek, beoordeel_meldtermijn,
+        beoordeel_oorzaakpatroon, beoordeel_verwerking, standaardmotor,
+    },
 };
 use std::path::PathBuf;
 
@@ -86,16 +91,42 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
         beoordeeld += 1;
     }
 
+    // De meldtermijn wordt hier berekend en niet in de regel: de tweeënzeventig
+    // uur staat in het kennispakket, en een regel die zijn eigen termijn
+    // uitrekent gaat een tweede waarheid voeren naast de termijnenmotor.
+    let pakket = dpofg_content::startpakket(nu.date_naive());
+
     let mut incidenten = Vec::new();
     for k in kluis.lijst("incident")? {
         let i: Incident = kluis.laad("incident", &k.id)?;
         bevindingen.extend(beoordeel_incident(&motor, &i, nu));
+        if let Some(deadline) = meldtermijn_van(&pakket, &i) {
+            bevindingen.extend(beoordeel_meldtermijn(&motor, &i, &deadline, nu));
+        }
         incidenten.push(i);
         beoordeeld += 1;
     }
     // Het patroon over incidenten heen: drie maanden terug.
     let kwartaalgrens = nu - chrono::Duration::days(92);
     bevindingen.extend(beoordeel_oorzaakpatroon(&motor, &incidenten, nu, kwartaalgrens));
+
+    // Het systeem onder de dossiers: de keten en de klok.
+    let verificatie = kluis.verifieer_logboek()?;
+    bevindingen.extend(beoordeel_logboek(&motor, &verificatie, kluis.ketenstand().tijdstip, nu));
+
+    // Het waarschuwingsbudget wordt gevoed uit het logboek en niet uit deze
+    // ronde: een onderbreking is een moment waarop de gebruiker is
+    // tegengehouden, geen regel in een rapport. Zou de rapportagelus zelf
+    // tellen, dan overschrijden twee controlerondes op één middag het budget.
+    let mut budget = Waarschuwingsbudget::nieuw();
+    let weekgrens = nu - chrono::Duration::days(7);
+    for regel in kluis.logboek()? {
+        let g = &regel.gebeurtenis;
+        if g.handeling == Handeling::ControleGeblokkeerd && g.tijdstip > weekgrens {
+            budget.onderbreking(&g.actor.id, g.tijdstip);
+        }
+    }
+    bevindingen.extend(beoordeel_budget(&motor, &budget, nu));
 
     let drempel: Niveau = o.vanaf.into();
     bevindingen.retain(|b| b.niveau >= drempel);
@@ -197,4 +228,19 @@ fn toon_dekking(motor: &dpofg_rules::Regelmotor) -> Result<()> {
     }
     println!("{t}");
     Ok(())
+}
+
+/// De meldtermijn van één incident, of `None` wanneer de klok nog niet loopt.
+///
+/// Het anker is het moment van kennisname; zolang dat er niet is, is er niets
+/// te rekenen en dus niets waaraan te herinneren valt.
+fn meldtermijn_van(
+    pakket: &dpofg_content::Pakketinhoud,
+    i: &Incident,
+) -> Option<dpofg_terms::Deadline> {
+    let anker = i.anker_meldklok()?;
+    let soort = pakket.termijn("AVG-33-MELDING").ok()?;
+    let kalender = pakket.kalender("NL").ok()?;
+    let zone = dpofg_terms::tijdzone(dpofg_terms::TIJDZONE_NL).ok()?;
+    dpofg_terms::bereken(soort, anker, zone, kalender).ok()
 }

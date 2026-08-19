@@ -1000,6 +1000,112 @@ fn een_pad_met_een_accent_laat_het_logboek_heel() {
     assert!(uit.contains("Logboek"));
 }
 
+// --------------------------------------------------------------------------
+// De regelcatalogus: bevindingen moeten wegneembaar zijn
+// --------------------------------------------------------------------------
+
+/// De kern van een controleregel: hij moet weg te nemen zijn. Een bevinding
+/// die blijft staan wat de gebruiker ook doet, leert hem meldingen wegklikken.
+#[test]
+fn een_incident_is_aan_een_registerregel_te_koppelen() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("incident nieuw 2026-0041 'onbevoegde inzage'");
+
+    let uit = p.moet("incident koppel 2026-0041 --verwerking 0412-K");
+    assert!(uit.contains("gekoppeld aan 0412-K"));
+
+    // Nog eens koppelen is geen fout, maar verandert niets.
+    let nogmaals = p.moet("incident koppel 2026-0041 --verwerking 0412-K");
+    assert!(nogmaals.contains("was al gekoppeld"));
+
+    let ontkoppeld = p.moet("incident ontkoppel 2026-0041 --verwerking 0412-K");
+    assert!(ontkoppeld.contains("ontkoppeld van 0412-K"));
+    assert!(ontkoppeld.contains("LEK-15"), "de regel die weer gaat spreken, hoort erbij");
+}
+
+#[test]
+fn koppelen_aan_een_onbekende_registerregel_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'onbevoegde inzage'");
+    let uit = p.moet_falen("incident koppel 2026-0041 --verwerking bestaat-niet");
+    assert!(uit.contains("geen registerregel met kenmerk"));
+    assert!(uit.contains("register lijst"), "de opdracht die verder helpt, hoort erbij");
+}
+
+#[test]
+fn een_incident_is_af_te_ronden_met_oorzaak_en_maatregel() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'onbevoegde inzage'");
+
+    let uit = p.moet(
+        "incident afronden 2026-0041 --oorzaak menselijke-fout --maatregel 'vier-ogen bij verzending'",
+    );
+    assert!(uit.contains("menselijke-fout"));
+    assert!(uit.contains("vier-ogen bij verzending"));
+    assert!(uit.contains("LEK-13"), "waarvoor de oorzaakcategorie dient, hoort erbij");
+
+    // Zonder maatregel: geen fout, wel de blokkerende regel benoemd.
+    let p2 = Proef::nieuw();
+    p2.moet("incident nieuw 2026-0042 'verkeerd geadresseerde brief'");
+    let zonder = p2.moet("incident afronden 2026-0042 --oorzaak menselijke-fout");
+    assert!(zonder.contains("geen maatregel"));
+    assert!(zonder.contains("LEK-12"));
+}
+
+/// Een afhandelmoment in de toekomst is een invoerfout, geen planning.
+#[test]
+fn afronden_in_de_toekomst_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0041 'onbevoegde inzage'");
+    let uit = p.moet_falen(
+        "incident afronden 2026-0041 --oorzaak menselijke-fout --afgehandeld 2099-01-01T00:00:00Z",
+    );
+    assert!(uit.contains("in de toekomst"));
+}
+
+/// 'Ja' werd stilzwijgend als nee gelezen. Daardoor legde de gebruiker een
+/// burgerservicenummer aan dat niet werd vastgelegd, en zweeg de regel die
+/// daarop bewaakt.
+#[test]
+fn een_ja_nee_veld_leest_meer_dan_een_schrijfwijze() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+
+    for schrijfwijze in ["ja", "Ja", "JA", "j", "true"] {
+        p.moet(&format!("register vul 0412-K --veld bsn --waarde {schrijfwijze}"));
+    }
+    for schrijfwijze in ["nee", "Nee", "n", "false"] {
+        p.moet(&format!("register vul 0412-K --veld bsn --waarde {schrijfwijze}"));
+    }
+
+    let uit = p.moet_falen("register vul 0412-K --veld bsn --waarde misschien");
+    assert!(uit.contains("is geen antwoord"));
+    assert!(uit.contains("ja of nee"));
+}
+
+/// Een leeg veld dat als ingevuld wordt vastgelegd, haalt de bevinding weg
+/// zonder dat er iets is opgelost.
+#[test]
+fn een_leeg_verplicht_veld_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    let uit = p.moet_falen("register vul 0412-K --veld wettelijke-bepaling --waarde '   '");
+    assert!(uit.contains("mag niet leeg zijn"));
+}
+
+/// De dekkingsopdracht is de enige eerlijke bron over wat er wordt bewaakt.
+#[test]
+fn de_dekking_meldt_wat_er_werkelijk_draait() {
+    let p = Proef::nieuw();
+    let uit = p.moet("controle --dekking");
+    assert!(uit.contains("van de 55 regels"));
+    assert!(uit.contains("30 van de 55"), "kreeg:\n{uit}");
+    // En wat er níet draait, staat er met naam bij.
+    assert!(uit.contains("Nog zonder evaluatie"));
+    assert!(uit.contains("VWO-02"));
+}
+
 /// Haalt de 64 hexadecimale tekens uit de uitvoer van `kluis sleutel`.
 fn sleutel_uit(uitvoer: &str) -> String {
     uitvoer

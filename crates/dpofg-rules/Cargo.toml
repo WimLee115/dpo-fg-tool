@@ -12,6 +12,10 @@ description = "Continu draaiende controleregels over de gegevensverzameling"
 [dependencies]
 dpofg-domain.workspace = true
 dpofg-terms.workspace = true
+# Voor SYS-04 en SYS-10: die regels beoordelen het ketenlogboek zelf, en de
+# uitkomst daarvan is een Verificatierapport uit dpofg-audit. Geen cyclus —
+# dpofg-audit hangt alleen aan dpofg-crypto.
+dpofg-audit.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true

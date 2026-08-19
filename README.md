@@ -80,7 +80,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Termijnenmotor met getypeerde termijnen | werkt |
 | Verwerkingsregister (art. 30 AVG) met afgeleide verplichtingen | werkt |
 | Incidentdossier met de vijf klokken en het meldbesluit | werkt |
-| Controleregels over de samenhang | 21 van de 55 regels draaien |
+| Controleregels over de samenhang | 30 van de 55 regels draaien |
 | Kennispakketten met handtekening en terugrolbescherming | werkt |
 | Dossiers samenstellen en ondertekenen | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |

@@ -93,6 +93,39 @@ pub fn draai(o: Registeropdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>) 
 }
 
 /// Zoekt een verwerking op kenmerk.
+/// Leest een ja/nee-antwoord.
+///
+/// Een gesloten lezing en geen `waarde == "ja"`. Die vergelijking maakt van
+/// 'Ja', 'j' en 'true' stilzwijgend een nee, en dan meldt de gebruiker een
+/// burgerservicenummer aan terwijl het niet wordt vastgelegd — en de regel die
+/// daarop bewaakt, slaat nooit aan.
+fn lees_ja_nee(waarde: &str, veld: &str) -> Result<bool> {
+    match waarde.trim().to_lowercase().as_str() {
+        "ja" | "j" | "waar" | "true" | "1" => Ok(true),
+        "nee" | "n" | "onwaar" | "false" | "0" => Ok(false),
+        andere => anyhow::bail!(
+            "'{andere}' is geen antwoord op '{veld}'. Gebruik ja of nee; stilzwijgend als \
+             'nee' lezen zou betekenen dat het veld anders wordt vastgelegd dan u bedoelt"
+        ),
+    }
+}
+
+/// Neemt een tekstwaarde aan, maar weigert een lege.
+///
+/// Een leeg veld dat als ingevuld wordt vastgelegd, haalt de bijbehorende
+/// bevinding weg zonder dat er iets is opgelost. Dat is erger dan een
+/// openstaand veld: het openstaande veld vraagt om werk.
+fn niet_lege_tekst(waarde: &str, veld: &str) -> Result<Option<String>> {
+    let schoon = waarde.trim();
+    if schoon.is_empty() {
+        anyhow::bail!(
+            "'{veld}' mag niet leeg zijn. Een leeg veld dat als ingevuld wordt vastgelegd, \
+             laat de controleregel zwijgen zonder dat er iets is vastgelegd"
+        );
+    }
+    Ok(Some(schoon.to_string()))
+}
+
 fn zoek(kluis: &Kluis, kenmerk: &str) -> Result<Verwerking> {
     let kop = kluis
         .lijst(SOORT)?
@@ -333,7 +366,9 @@ fn vul(
         "grondslag-motivering" => {
             v.grondslag_motivering = Some(Motivering::nieuw(waarde, &super::actor().id, nu)?)
         }
-        "wettelijke-bepaling" => v.wettelijke_bepaling = Some(waarde.to_string()),
+        "wettelijke-bepaling" => {
+            v.wettelijke_bepaling = niet_lege_tekst(waarde, "wettelijke-bepaling")?
+        }
         "bewaartermijn" => {
             // Vorm: "7 jaar vanaf einde dienstverband | art. 52 AWR"
             let (termijn, grondslag) = waarde.split_once('|').ok_or_else(|| {
@@ -395,9 +430,9 @@ fn vul(
             });
         }
         "bsn" => {
-            v.burgerservicenummer = waarde == "ja";
+            v.burgerservicenummer = lees_ja_nee(waarde, "bsn")?;
         }
-        "bsn-grondslag" => v.bsn_grondslag = Some(waarde.to_string()),
+        "bsn-grondslag" => v.bsn_grondslag = niet_lege_tekst(waarde, "bsn-grondslag")?,
         andere => anyhow::bail!(
             "'{andere}' is geen veld dat via deze route te vullen is. Beschikbaar: doeleinden, \
              betrokkenen, gegevens, grondslag, grondslag-motivering, wettelijke-bepaling, \

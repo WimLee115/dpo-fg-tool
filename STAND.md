@@ -30,7 +30,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Volledigheidsmechanisme | werkt | Teller met grondslag; blokkerend onderscheiden van signalerend |
 | Incidentdossier | werkt | Vijf klokken op eigen ankers, meldbesluit met drie lagen |
 | Klokkenmotor | werkt | Leidt verplichtingen af; ankers vallen niet samen |
-| Controleregels | **deels** | 21 van de 55 regels in de catalogus hebben een evaluatiefunctie |
+| Controleregels | **deels** | 30 van de 55 regels in de catalogus hebben een evaluatiefunctie |
 | Kennispakketten | werkt | Ondertekend, met terugrolbescherming en consolidatiedatum |
 | Dossiers | werkt | Ondertekend manifest, weglatingen zichtbaar, voorbehoud meegetekend |
 | Verificatiebinary | werkt | Leest uitsluitend, geen wachtwoord, geen kluis nodig |
@@ -70,7 +70,11 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 **Compartimenten hangen aan één wachtwoord.** De scheiding is cryptografisch echt — elk compartiment heeft een eigen sleutel — maar alle sleutels hangen aan dezelfde kluissleutel. Het persoonlijke dossier van de functionaris, dat de organisatie níet moet kunnen openen, vereist een tweede wachtwoord.
 
-**De regelcatalogus is groter dan wat er draait.** 55 regels gedefinieerd, 21 met een evaluatiefunctie. `dpofg controle --dekking` toont welke nog niet draaien. Het aantal regels zegt niets over wat er wordt bewaakt; die opdracht wel.
+**De regelcatalogus is groter dan wat er draait.** 55 regels gedefinieerd, 30 met een evaluatiefunctie. `dpofg controle --dekking` toont welke nog niet draaien. Het aantal regels zegt niets over wat er wordt bewaakt; die opdracht wel.
+
+De 25 regels die nog niet draaien wachten bijna allemaal op een recordsoort die er niet is, en niet op programmeerwerk. De twee die het meeste opleveren: het verwerkersregister met de leveranciersgegevens ontsluit vijf regels, het effectbeoordelingsdossier drie van de vier DPIA-regels — DPIA-01 draait al. Daarnaast wachten er regels op een systeemregister, een doorgifterecord, een schoningsopdracht, een rollen- en aanstellingsregister, een rapportagespoor en een toezichtdossier.
+
+Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt ook in te vullen zijn. Bewaking certificeren die op producteigen gegevens nooit kan aanslaan, is erger dan een lege plek: het lege vakje vraagt om werk, het gevulde vakje sust.
 
 **Schemaversie 2 is eenrichtingsverkeer.** Een kluis die één keer met deze uitgave is geopend, staat op schemaversie 2 en wordt door uitgave 0.1.0 geweigerd — met de juiste melding, want het bestandsmerk blijft gelijk. Terug kan alleen met een reservekopie. Een logboek van een kluis die uit schemaversie 1 is gemigreerd, draagt bovendien de handelingsnaam `installatiesleutel_aangemaakt`; een oudere `dpofg-verify` loopt daarop stuk met afsluitcode 1 — luidruchtig, en dus acceptabel. Een kluis die met deze uitgave is aangemaakt, kent die regel niet: daar staat de sleutel in de omschrijving van `kluis_aangemaakt`, en dat leest een oudere binary gewoon.
 
@@ -84,8 +88,8 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 | | |
 |---|---|
-| Rust-code | ~10.650 regels, zonder commentaar en lege regels |
-| Tests | 370 testfuncties, 374 uitgevoerde tests |
+| Rust-code | ~10.950 regels, zonder commentaar en lege regels |
+| Tests | 395 testfuncties, 399 uitgevoerde tests |
 | Documentatie | ~4.700 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
@@ -112,3 +116,8 @@ Deze staan hier omdat ze laten zien waar het misging, en waarom de tests er zijn
 | Een gemanipuleerd dossier van de eigen installatie werd gemeld als "ondertekend met een andere sleutel", wat de lezer naar de onschuldige verklaring duwt | verificatiebinary |
 | Het wachtwoordloos voorlezen van de sleutel legde toch een WAL-index aan en brak daarmee op een alleen-lezen medium — precies het geval waarvoor die opdracht bestaat | opslaglaag |
 | `logboek toon` brak af op een dossierpad met een accent, doordat er op bytes en niet op tekens werd afgekapt | bedieningsschil |
+| GRO-04 en GRO-05 werden al beoordeeld maar stonden niet in de dekkingslijst, waardoor de opdracht die moet zeggen wát er bewaakt wordt, onder haar eigen stand meldde | regelmotor |
+| LEK-15 sloeg aan op elk incident terwijl er geen enkele opdracht bestond om een incident aan een verwerking te koppelen — honderd procent onwegneembare meldingen bij iemand die er niets aan kon doen | regelmotor |
+| LEK-12 stond als bewaakt aangemerkt terwijl er geen route was om een incident af te ronden, waardoor de regel op producteigen gegevens nooit kon aanslaan | regelmotor |
+| `register vul --veld bsn --waarde Ja` legde stilzwijgend 'nee' vast, doordat er letterlijk op "ja" werd vergeleken | bedieningsschil |
+| Een lege waarde voor een verplicht veld werd als ingevuld vastgelegd en haalde daarmee de bevinding weg zonder dat er iets was opgelost | bedieningsschil |

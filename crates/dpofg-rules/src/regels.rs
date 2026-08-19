@@ -25,10 +25,14 @@
 //! regels in de catalogus geen dekking suggereert die er niet is.
 
 use chrono::{DateTime, Duration, Utc};
+use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
     avg::Grondslag, Bewaartermijn, Incident, Meldbesluit, Risiconiveau, Status, Verwerking,
     Volledig,
 };
+use dpofg_terms::Deadline;
+
+use crate::budget::Waarschuwingsbudget;
 
 use crate::motor::{Bevinding, Niveau::*, Ontvangerrol::*, Regel, Regelmotor};
 
@@ -55,11 +59,23 @@ pub fn standaardmotor() -> Regelmotor {
 }
 
 /// De codes waarvoor in deze uitgave een evaluatiefunctie bestaat.
+///
+/// Deze lijst is de bron van `dpofg controle --dekking`, en dus de plaats waar
+/// het product zegt wat het bewaakt. Twee kanten daarvan worden bewaakt door
+/// tests: geen code die hier staat mag ontbreken in de catalogus, en geen code
+/// die een evaluatiefunctie kan afgeven mag hier ontbreken. Die tweede richting
+/// is niet theoretisch — GRO-04 en GRO-05 draaiden en werden niet gemeld.
+///
+/// Een code hoort hier pas thuis wanneer de gegevens waarop hij oordeelt ook
+/// daadwerkelijk in te vullen zijn. Bewaking certificeren die op producteigen
+/// gegevens nooit kan aanslaan, is erger dan een lege plek: het lege vakje
+/// vraagt om werk, het gevulde vakje sust.
 pub fn geimplementeerd() -> &'static [&'static str] {
     &[
-        "REG-01", "REG-02", "REG-03", "REG-04", "REG-05", "GRO-01", "GRO-02", "GRO-03", "BEW-01",
-        "BEW-02", "VWO-01", "EER-01", "DPIA-01", "LEK-01", "LEK-03", "LEK-04", "LEK-06", "LEK-07",
-        "LEK-08", "LEK-09", "LEK-12",
+        "REG-01", "REG-02", "REG-03", "REG-04", "REG-05", "GRO-01", "GRO-02", "GRO-03", "GRO-04",
+        "GRO-05", "BEW-01", "BEW-02", "BEW-04", "VWO-01", "EER-01", "DPIA-01", "LEK-01", "LEK-02",
+        "LEK-03", "LEK-04", "LEK-06", "LEK-07", "LEK-08", "LEK-09", "LEK-12", "LEK-13", "LEK-15",
+        "SYS-04", "SYS-06", "SYS-10",
     ]
 }
 
@@ -744,6 +760,32 @@ pub fn beoordeel_verwerking(
         }
     }
 
+    // BEW-04: een vastgestelde bewaartermijn zonder aanwijsbare bron.
+    //
+    // Dit gat kent de volledigheidscontrole niet: die kijkt of er een termijn
+    // ís, niet of er iets onder ligt. "twee jaar" zonder bron is een getal dat
+    // niemand kan verdedigen bij een uitvraag. Wat de bron inhoudelijk waard
+    // is, wordt hier niet beoordeeld — dat is een oordeel, geen feit.
+    match &v.bewaartermijn {
+        Some(Bewaartermijn::Vast { duur, eenheid, grondslag, .. })
+            if grondslag.trim().is_empty() =>
+        {
+            let eenheidstekst = if *duur == 1 { eenheid.enkelvoud() } else { eenheid.meervoud() };
+            voeg(
+                "BEW-04",
+                format!("bewaartermijn van {duur} {eenheidstekst} zonder aanwijsbare bron"),
+            );
+        }
+        Some(Bewaartermijn::ZolangToestand { toestand, grondslag, .. })
+            if grondslag.trim().is_empty() =>
+        {
+            voeg("BEW-04", format!("bewaren zolang '{toestand}' duurt, zonder aanwijsbare bron"));
+        }
+        // NogTeBepalen heeft geen grondslagveld en is al gedekt door BEW-01 en
+        // BEW-02; twee keer melden op hetzelfde gat is dubbele ruis.
+        _ => {}
+    }
+
     uit
 }
 
@@ -840,16 +882,163 @@ pub fn beoordeel_incident(motor: &Regelmotor, i: &Incident, nu: DateTime<Utc>) -
         if i.oorzaakcategorie.is_none() {
             voeg("LEK-12", "afgesloten zonder oorzaakcategorie".into());
         }
-        if i.maatregelen.is_empty() {
+        if i.zonder_maatregel() {
             voeg("LEK-12", "afgesloten zonder enige maatregel".into());
         }
     }
 
-    // LEK-15: geen koppeling aan een verwerking.
-    if i.getroffen_verwerkingen.is_empty() {
+    // LEK-15: geen koppeling aan een verwerking, na een respijt van twaalf uur.
+    //
+    // De koppeling is de uitkomst van het onderzoek en niet van de intake. Wie
+    // een incident registreert weet vaak nog niet welke verwerking is geraakt;
+    // meteen melden levert dan een bevinding op bij iemand die er op dat moment
+    // niets aan kan doen. Dezelfde orde van grootte als LEK-01.
+    if i.getroffen_verwerkingen.is_empty() && (nu - i.geregistreerd_op) > Duration::hours(12) {
         voeg("LEK-15", "het incident is aan geen enkele verwerking gekoppeld".into());
     }
 
+    uit
+}
+
+/// Beoordeelt de meldtermijn van één incident (LEK-02).
+///
+/// De termijn wordt niet hier berekend maar meegegeven. Dat is met opzet: de
+/// tweeënzeventig uur staat in het kennispakket en niet in de programmacode, en
+/// een regel die zijn eigen termijn uitrekent, gaat een tweede waarheid voeren
+/// naast de termijnenmotor.
+///
+/// De ondergrens is niet optioneel. Zonder `resterend > 0` blijft de regel na
+/// het verstrijken eeuwig afgaan op een incident waar niemand nog iets aan kan
+/// doen, en dat is precies hoe een gebruiker leert meldingen weg te klikken.
+pub fn beoordeel_meldtermijn(
+    motor: &Regelmotor,
+    i: &Incident,
+    meldtermijn: &Deadline,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    // Al besloten, al gemeld of al afgehandeld: dan valt er niets meer aan te
+    // herinneren.
+    if !matches!(i.meldbesluit, Meldbesluit::NogTeNemen)
+        || i.gemeld_op.is_some()
+        || i.afgehandeld_op.is_some()
+    {
+        return Vec::new();
+    }
+
+    let resterend = meldtermijn.resterend(nu);
+    if resterend <= Duration::zero() || resterend > VENSTER_MELDTERMIJN {
+        return Vec::new();
+    }
+
+    motor
+        .bevind(
+            "LEK-02",
+            "incident",
+            &i.id.to_string(),
+            Some(&i.kenmerk),
+            format!(
+                "nog {} uur tot het einde van de meldtermijn van {} (verstrijkt {}), meldbesluit nog niet genomen",
+                resterend.num_hours(),
+                meldtermijn.duur,
+                meldtermijn.lokaal
+            ),
+            nu,
+        )
+        .into_iter()
+        .collect()
+}
+
+/// Hoe lang vóór het verstrijken van de meldtermijn LEK-02 aanslaat.
+const VENSTER_MELDTERMIJN: Duration = Duration::hours(12);
+
+/// Beoordeelt de staat van het ketenlogboek (SYS-04 en SYS-10).
+///
+/// Deze regels gaan niet over de inhoud van een dossier maar over het systeem
+/// eronder. Ze staan daarom los van de recordbeoordelingen en krijgen
+/// `record_soort` "logboek".
+pub fn beoordeel_logboek(
+    motor: &Regelmotor,
+    rapport: &Verificatierapport,
+    ketenstand_tijdstip: Option<DateTime<Utc>>,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+    let mut voeg = |code: &str, id: String, toelichting: String| {
+        if let Some(b) = motor.bevind(code, "logboek", &id, None, toelichting, nu) {
+            uit.push(b);
+        }
+    };
+
+    for b in &rapport.bevindingen {
+        let code = match b.soort {
+            Bevindingsoort::TijdLooptTerug => "SYS-10",
+            Bevindingsoort::Ketenbreuk
+            | Bevindingsoort::OntbrekendeRegel
+            | Bevindingsoort::DubbeleRegel
+            | Bevindingsoort::InhoudGewijzigd => "SYS-04",
+        };
+        voeg(code, b.volgnummer.to_string(), format!("regel {}: {}", b.volgnummer, b.omschrijving));
+    }
+
+    // Het anker. `GeenAnker` is uitdrukkelijk géén bevinding: dat is de normale
+    // toestand van elke kluis waarvan nog geen anker buiten het systeem is
+    // bewaard, en de schil behandelt het al als advies. `AnkerOngeldig` evenmin
+    // — dat zegt iets over het anker, niet over de keten.
+    match &rapport.ankerstatus {
+        Ankerstatus::KetenIsIngekort { anker_volgnummer, keten_volgnummer } => voeg(
+            "SYS-04",
+            anker_volgnummer.to_string(),
+            format!(
+                "het anker verklaart regel {anker_volgnummer}, de keten eindigt bij {keten_volgnummer}"
+            ),
+        ),
+        Ankerstatus::HashWijktAf { volgnummer, .. } => voeg(
+            "SYS-04",
+            volgnummer.to_string(),
+            format!("op ankerpositie {volgnummer} wijkt de hash af van wat het anker verklaart"),
+        ),
+        _ => {}
+    }
+
+    // SYS-10: de klok staat vóór het laatst vastgelegde tijdstip. Uitsluitend
+    // vastleggingstijdstippen tellen mee; een incident dat achteraf wordt
+    // geregistreerd heeft een tijdstip in het verleden en dat is normaal.
+    if let Some(t) = ketenstand_tijdstip {
+        if nu < t {
+            voeg(
+                "SYS-10",
+                "klok".into(),
+                format!(
+                    "de klok van deze machine loopt {} minuten achter op het laatst vastgelegde tijdstip ({})",
+                    (t - nu).num_minutes(),
+                    t.format("%d-%m-%Y %H:%M UTC")
+                ),
+            );
+        }
+    }
+
+    uit
+}
+
+/// Beoordeelt het waarschuwingsbudget (SYS-06).
+///
+/// De drempel komt uit [`crate::budget`] zelf en niet uit deze regel: het
+/// budget is de norm, de regel maakt hem alleen zichtbaar.
+pub fn beoordeel_budget(
+    motor: &Regelmotor,
+    budget: &Waarschuwingsbudget,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+    for stand in budget.overschrijdingen(nu) {
+        if let Some(melding) = stand.defectmelding() {
+            if let Some(b) =
+                motor.bevind("SYS-06", "gebruiker", &stand.gebruiker, None, melding, nu)
+            {
+                uit.push(b);
+            }
+        }
+    }
     uit
 }
 
@@ -875,7 +1064,11 @@ pub fn beoordeel_oorzaakpatroon(
     }
 
     let mut uit = Vec::new();
-    for (oorzaak, groep) in tellers {
+    for (oorzaak, mut groep) in tellers {
+        // Op het oudste incident landen, en niet op het eerste in de
+        // aangeleverde volgorde: de opslaglaag levert op laatst gewijzigd, dus
+        // anders wisselt de bevinding van record zonder dat er iets verandert.
+        groep.sort_by_key(|i| (i.geregistreerd_op, i.kenmerk.as_str()));
         if groep.len() > 3 {
             if let Some(b) = motor.bevind(
                 "LEK-13",

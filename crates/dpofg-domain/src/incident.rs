@@ -227,7 +227,23 @@ pub struct Incident {
 
     // --- afronding ---
     pub oorzaakcategorie: Option<String>,
+    /// Verwijzingen naar records in het maatregelenregister.
+    ///
+    /// Dat register bestaat in deze uitgave nog niet; zolang dat zo is, wordt
+    /// een maatregel bij de afronding als tekst vastgelegd in
+    /// [`Incident::maatregelen_omschrijving`]. Twee velden voor één begrip is
+    /// geen fraaie toestand, maar de andere twee wegen zwaarder: een
+    /// verwijzing verzinnen naar een record dat niet bestaat maakt de
+    /// verwijzing waardeloos, en het veld leeg laten zou betekenen dat elk
+    /// afgerond incident een blokkerende bevinding houdt die niemand kan
+    /// wegnemen.
     pub maatregelen: Vec<Id>,
+    /// Maatregelen zoals bij de afronding opgeschreven.
+    ///
+    /// `serde(default)`: incidenten die met een eerdere uitgave zijn
+    /// weggeschreven kennen dit veld niet, en die moeten leesbaar blijven.
+    #[serde(default)]
+    pub maatregelen_omschrijving: Vec<String>,
     pub afgehandeld_op: Option<DateTime<Utc>>,
 
     pub behandelaar: String,
@@ -282,9 +298,19 @@ impl Incident {
             mededeling_betrokkenen_op: None,
             oorzaakcategorie: None,
             maatregelen: Vec::new(),
+            maatregelen_omschrijving: Vec::new(),
             afgehandeld_op: None,
             behandelaar: behandelaar.into(),
         }
+    }
+
+    /// Of er bij de afronding geen enkele maatregel is vastgelegd.
+    ///
+    /// Telt beide vormen: een verwijzing naar het maatregelenregister en een
+    /// omschrijving. Zolang dat register er niet is, is de omschrijving de
+    /// enige vorm die de gebruiker kan invullen.
+    pub fn zonder_maatregel(&self) -> bool {
+        self.maatregelen.is_empty() && self.maatregelen_omschrijving.is_empty()
     }
 
     /// Legt het moment van kennisname vast.
@@ -565,7 +591,7 @@ impl Volledig for Incident {
                 "art. 33 lid 5 AVG",
             ));
         }
-        if self.maatregelen.is_empty() {
+        if self.zonder_maatregel() {
             uit.push(Ontbrekend::blokkerend(
                 "incident.maatregelen",
                 "leg ten minste één maatregel vast met een eigenaar",

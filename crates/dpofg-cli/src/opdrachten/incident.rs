@@ -105,6 +105,44 @@ pub enum Incidentopdracht {
         #[arg(long)]
         motivering: String,
     },
+    /// Koppel het incident aan een registerregel die is geraakt.
+    ///
+    /// Zonder koppeling is niet vast te stellen welke gegevens het betreft,
+    /// welke bewaartermijn geldt of wie de verwerkers zijn. De koppeling is de
+    /// uitkomst van het onderzoek; de tool wacht er twaalf uur mee voordat zij
+    /// erom vraagt.
+    Koppel {
+        /// Het kenmerk van het incident.
+        kenmerk: String,
+        /// Het kenmerk van de registerregel. Herhaalbaar.
+        #[arg(long = "verwerking", required = true)]
+        verwerkingen: Vec<String>,
+    },
+    /// Maak een koppeling met een registerregel ongedaan.
+    Ontkoppel {
+        /// Het kenmerk van het incident.
+        kenmerk: String,
+        /// Het kenmerk van de registerregel.
+        #[arg(long = "verwerking", required = true)]
+        verwerkingen: Vec<String>,
+    },
+    /// Rond het incident af: oorzaak, maatregelen en afhandelmoment.
+    ///
+    /// Zonder oorzaakcategorie is er geen patroon te zien over incidenten heen,
+    /// en dat patroon is waar de structurele fout zichtbaar wordt.
+    Afronden {
+        /// Het kenmerk van het incident.
+        kenmerk: String,
+        /// De oorzaakcategorie uit het kennispakket.
+        #[arg(long)]
+        oorzaak: String,
+        /// Een genomen maatregel, als vrije aanduiding. Herhaalbaar.
+        #[arg(long = "maatregel")]
+        maatregelen: Vec<String>,
+        /// Het moment van afhandeling. Standaard: nu.
+        #[arg(long)]
+        afgehandeld: Option<String>,
+    },
     /// Besluit om niet te melden. Dit is de zwaarst beveiligde handeling.
     NietMelden {
         /// Het kenmerk van het incident.
@@ -205,10 +243,146 @@ pub fn draai(o: Incidentopdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>) 
         Incidentopdracht::Weging { kenmerk, uitkomst, motivering } => {
             weging(&mut kluis, &kenmerk, uitkomst.into(), &motivering, nu)
         }
+        Incidentopdracht::Koppel { kenmerk, verwerkingen } => {
+            koppel(&mut kluis, &kenmerk, &verwerkingen, true, nu)
+        }
+        Incidentopdracht::Ontkoppel { kenmerk, verwerkingen } => {
+            koppel(&mut kluis, &kenmerk, &verwerkingen, false, nu)
+        }
+        Incidentopdracht::Afronden { kenmerk, oorzaak, maatregelen, afgehandeld } => {
+            afronden(&mut kluis, &kenmerk, &oorzaak, &maatregelen, afgehandeld.as_deref(), nu)
+        }
         Incidentopdracht::NietMelden { kenmerk, motivering, tweede_persoon, afkoeluren } => {
             niet_melden(&mut kluis, &kenmerk, &motivering, tweede_persoon, afkoeluren, nu)
         }
     }
+}
+
+/// Koppelt registerregels aan een incident, of maakt de koppeling ongedaan.
+fn koppel(
+    kluis: &mut Kluis,
+    kenmerk: &str,
+    verwerkingen: &[String],
+    toevoegen: bool,
+    nu: DateTime<Utc>,
+) -> Result<()> {
+    let mut i = zoek(kluis, kenmerk)?;
+
+    // Eerst alle kenmerken opzoeken, dan pas wijzigen: half koppelen en dan
+    // afbreken op een typefout laat de gebruiker met een onduidelijke toestand
+    // achter.
+    let mut doelen = Vec::new();
+    for k in verwerkingen {
+        let kop = kluis
+            .lijst("verwerking")?
+            .into_iter()
+            .find(|r| r.kenmerk.as_deref() == Some(k.as_str()))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "geen registerregel met kenmerk '{k}'. Bekijk de lijst met \
+                     'dpofg register lijst'"
+                )
+            })?;
+        let v: dpofg_domain::Verwerking = kluis.laad("verwerking", &kop.id)?;
+        doelen.push((k.clone(), v.id));
+    }
+
+    let mut gewijzigd = Vec::new();
+    for (naam, id) in doelen {
+        let staat_er = i.getroffen_verwerkingen.contains(&id);
+        match (toevoegen, staat_er) {
+            (true, false) => {
+                i.getroffen_verwerkingen.push(id);
+                gewijzigd.push(naam);
+            }
+            (false, true) => {
+                i.getroffen_verwerkingen.retain(|x| x != &id);
+                gewijzigd.push(naam);
+            }
+            // Al gekoppeld of al ontkoppeld: geen fout, wel vermelden.
+            _ => terzijde(&format!(
+                "'{naam}' was al {}",
+                if toevoegen { "gekoppeld" } else { "niet gekoppeld" }
+            )),
+        }
+    }
+
+    if gewijzigd.is_empty() {
+        gelukt("er is niets gewijzigd");
+        return Ok(());
+    }
+
+    let omschrijving = if toevoegen {
+        format!("gekoppeld aan {}", gewijzigd.join(", "))
+    } else {
+        format!("ontkoppeld van {}", gewijzigd.join(", "))
+    };
+    bewaar(kluis, &i, Handeling::RecordGewijzigd, &omschrijving, nu)?;
+
+    gelukt(&omschrijving);
+    kop("Geraakte verwerkingen");
+    if i.getroffen_verwerkingen.is_empty() {
+        terzijde("geen");
+        let_op(
+            "Zonder koppeling is niet vast te stellen welke gegevens het betreft en welke \
+             verwerkers erbij betrokken zijn. Regel LEK-15 blijft dit signaleren.",
+        );
+    } else {
+        terzijde(&format!("{} registerregel(s)", i.getroffen_verwerkingen.len()));
+    }
+    Ok(())
+}
+
+/// Rondt een incident af met oorzaak en maatregelen.
+fn afronden(
+    kluis: &mut Kluis,
+    kenmerk: &str,
+    oorzaak: &str,
+    maatregelen: &[String],
+    afgehandeld: Option<&str>,
+    nu: DateTime<Utc>,
+) -> Result<()> {
+    let mut i = zoek(kluis, kenmerk)?;
+
+    if oorzaak.trim().is_empty() {
+        anyhow::bail!("de oorzaakcategorie is leeg; zonder oorzaak is er geen patroon te zien");
+    }
+    let moment = match afgehandeld {
+        Some(t) => lees_tijdstip(t)?,
+        None => nu,
+    };
+    if moment > nu {
+        anyhow::bail!("het afhandelmoment ligt in de toekomst; controleer het opgegeven tijdstip");
+    }
+
+    i.oorzaakcategorie = Some(oorzaak.trim().to_string());
+    i.maatregelen_omschrijving =
+        maatregelen.iter().map(|m| m.trim()).filter(|m| !m.is_empty()).map(String::from).collect();
+    i.afgehandeld_op = Some(moment);
+
+    bewaar(kluis, &i, Handeling::RecordGewijzigd, "incident afgerond", nu)?;
+
+    gelukt(&format!("afgerond op {}", moment.format("%d-%m-%Y %H:%M UTC")));
+    kop("Afronding");
+    let mut t = tabel(&["", ""]);
+    t.add_row(vec!["oorzaakcategorie", oorzaak.trim()]);
+    t.add_row(vec![
+        "maatregelen",
+        &if maatregelen.is_empty() { "geen".to_string() } else { maatregelen.join(", ") },
+    ]);
+    println!("{t}");
+
+    if i.zonder_maatregel() {
+        let_op(
+            "Er is geen maatregel vastgelegd. Een incident zonder maatregel betekent dat \
+             dezelfde oorzaak opnieuw kan optreden; regel LEK-12 blokkeert hierop.",
+        );
+    }
+    terzijde(
+        "De oorzaakcategorie voedt regel LEK-13: dezelfde oorzaak meer dan driemaal per \
+         kwartaal wijst op een structurele fout en niet op pech.",
+    );
+    Ok(())
 }
 
 fn zoek(kluis: &Kluis, kenmerk: &str) -> Result<Incident> {

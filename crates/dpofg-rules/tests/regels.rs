@@ -8,10 +8,11 @@ use dpofg_domain::{
     Termijneenheid, Verwerking,
 };
 use dpofg_rules::{
+    budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
-        beoordeel_incident, beoordeel_oorzaakpatroon, beoordeel_verwerking, catalogus,
-        geimplementeerd, standaardmotor,
+        beoordeel_budget, beoordeel_incident, beoordeel_logboek, beoordeel_meldtermijn,
+        beoordeel_oorzaakpatroon, beoordeel_verwerking, catalogus, geimplementeerd, standaardmotor,
     },
 };
 
@@ -129,6 +130,46 @@ fn de_werkelijke_dekking_is_opvraagbaar() {
     for code in geimplementeerd() {
         assert!(motor.regel(code).is_some(), "{code} staat als geïmplementeerd maar bestaat niet");
     }
+}
+
+/// De andere richting, en de belangrijkste: elke regel die een evaluatie kán
+/// afgeven, moet ook als geïmplementeerd worden gemeld.
+///
+/// Deze test bestaat omdat het mis is gegaan. GRO-04 en GRO-05 werden al
+/// beoordeeld — de takken staan in `beoordeel_verwerking` — maar ontbraken in
+/// `geimplementeerd()`, waardoor `dpofg controle --dekking` een lagere dekking
+/// meldde dan er draaide. Een teller die onder zijn stand meldt is minder erg
+/// dan een die erboven meldt, maar allebei zijn ze onbruikbaar als antwoord op
+/// de vraag "wat bewaakt dit product".
+///
+/// De controle leest de broncode van de regelmodule. Dat is ongebruikelijk,
+/// maar het alternatief — elke regel op een echte fixture laten aanslaan —
+/// vraagt vijfenvijftig fixtures om één lijst te bewaken.
+#[test]
+fn elke_regel_die_kan_aanslaan_wordt_ook_als_dekking_gemeld() {
+    const BRON: &str = include_str!("../src/regels.rs");
+
+    // Alles vanaf de eerste evaluatiefunctie tot aan de tests: daarvóór staan
+    // de definities, die dezelfde codes als tekst bevatten.
+    let start = BRON.find("pub fn beoordeel_verwerking").expect("de evaluaties beginnen hier");
+    let eind = BRON.find("\n#[cfg(test)]").unwrap_or(BRON.len());
+    let evaluaties = &BRON[start..eind];
+
+    let gemeld: Vec<&str> = geimplementeerd().to_vec();
+    let mut ontbreekt = Vec::new();
+
+    for regel in catalogus() {
+        let letterlijk = format!("\"{}\"", regel.code);
+        if evaluaties.contains(&letterlijk) && !gemeld.contains(&regel.code.as_str()) {
+            ontbreekt.push(regel.code.clone());
+        }
+    }
+
+    assert!(
+        ontbreekt.is_empty(),
+        "deze regels worden beoordeeld maar niet als dekking gemeld: {}",
+        ontbreekt.join(", ")
+    );
 }
 
 /// Blokkerende regels zijn in de minderheid. Wie alles blokkeert, leert mensen
@@ -366,8 +407,30 @@ fn een_incident_zonder_registerkoppeling_signaleert() {
     let motor = standaardmotor();
     let mut i = incident();
     i.getroffen_verwerkingen.clear();
-    let b = beoordeel_incident(&motor, &i, nu());
+    let b = beoordeel_incident(&motor, &i, nu() + Duration::hours(13));
     assert!(codes(&b).contains(&"LEK-15"));
+}
+
+/// De koppeling is de uitkomst van het onderzoek, niet van de intake. Wie een
+/// incident registreert weet vaak nog niet welke verwerking is geraakt; meteen
+/// melden levert een bevinding op bij iemand die er op dat moment niets aan kan
+/// doen.
+#[test]
+fn een_vers_incident_zonder_registerkoppeling_zwijgt() {
+    let motor = standaardmotor();
+    let mut i = incident();
+    i.getroffen_verwerkingen.clear();
+    let b = beoordeel_incident(&motor, &i, nu() + Duration::hours(1));
+    assert!(!codes(&b).contains(&"LEK-15"), "binnen het respijt hoort de regel te zwijgen");
+}
+
+#[test]
+fn een_gekoppeld_incident_blijft_stil() {
+    let motor = standaardmotor();
+    let i = incident();
+    assert!(!i.getroffen_verwerkingen.is_empty(), "de fixture hoort een koppeling te hebben");
+    let b = beoordeel_incident(&motor, &i, nu() + Duration::hours(48));
+    assert!(!codes(&b).contains(&"LEK-15"));
 }
 
 #[test]
@@ -458,4 +521,250 @@ fn een_leeg_rapport_is_hanteerbaar() {
     assert!(rapport.per_regel().is_empty());
     assert_eq!(rapport.onderbrekingen(), 0);
     assert_eq!(rapport.regels_gedraaid, motor.aantal());
+}
+
+// --------------------------------------------------------------------------
+// De bewaartermijn zonder bron
+// --------------------------------------------------------------------------
+
+#[test]
+fn een_bewaartermijn_zonder_bron_signaleert() {
+    let motor = standaardmotor();
+    let mut v = verwerking();
+    v.bewaartermijn = Some(Bewaartermijn::Vast {
+        duur: 2,
+        eenheid: Termijneenheid::Jaren,
+        grondslag: "  ".into(),
+        vanaf: "einde dienstverband".into(),
+    });
+    let b = beoordeel_verwerking(&motor, &v, nu());
+    let bev = b.iter().find(|x| x.regelcode == "BEW-04").expect("BEW-04 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Signalerend);
+    assert!(bev.toelichting.contains("2 jaar"), "kreeg: {}", bev.toelichting);
+}
+
+#[test]
+fn een_bewaartermijn_met_bron_zwijgt() {
+    let motor = standaardmotor();
+    let b = beoordeel_verwerking(&motor, &verwerking(), nu());
+    assert!(!codes(&b).contains(&"BEW-04"), "de fixture heeft 'art. 52 AWR' als bron");
+}
+
+/// Een termijn die nog moet worden bepaald heeft geen bronveld; die is al
+/// gedekt door BEW-01 en BEW-02, en twee keer melden op hetzelfde gat is ruis.
+#[test]
+fn een_nog_te_bepalen_termijn_levert_geen_bew_04() {
+    let motor = standaardmotor();
+    let mut v = verwerking();
+    v.bewaartermijn = Some(Bewaartermijn::NogTeBepalen {
+        motivering: motivering("wacht op de selectielijst"),
+        uiterlijk_bepaald_op: nu() + Duration::days(30),
+        eigenaar: "afdeling P&O".into(),
+    });
+    let b = beoordeel_verwerking(&motor, &v, nu());
+    assert!(!codes(&b).contains(&"BEW-04"));
+}
+
+// --------------------------------------------------------------------------
+// De meldtermijn die afloopt
+// --------------------------------------------------------------------------
+
+fn meldtermijn(verstrijkt: DateTime<Utc>) -> dpofg_terms::Deadline {
+    dpofg_terms::Deadline {
+        moment: verstrijkt,
+        lokaal: "21-08-2026 11:00 (Europe/Amsterdam)".into(),
+        tijdzone: "Europe/Amsterdam".into(),
+        anker: verstrijkt - Duration::hours(72),
+        code: "AVG-33-MELDING".into(),
+        duur: "72 uur".into(),
+        grondslag: "art. 33 lid 1 AVG".into(),
+        verlenging: dpofg_terms::ToegepasteVerlenging::NietVanToepassingBijUren,
+        verlengingsbepaling: "niet van toepassing".into(),
+        verantwoording: "72 uur na kennisname".into(),
+    }
+}
+
+#[test]
+fn een_aflopende_meldtermijn_zonder_besluit_signaleert() {
+    let motor = standaardmotor();
+    let i = incident();
+    let b = beoordeel_meldtermijn(&motor, &i, &meldtermijn(nu() + Duration::hours(7)), nu());
+    let bev = b.first().expect("LEK-02 hoort aan te slaan");
+    assert_eq!(bev.regelcode, "LEK-02");
+    assert_eq!(bev.niveau, Niveau::Signalerend);
+    assert_eq!(bev.ontvanger, Ontvangerrol::Functionaris);
+    assert!(bev.toelichting.contains("7 uur"), "kreeg: {}", bev.toelichting);
+}
+
+/// Zonder ondergrens blijft de regel na het verstrijken eeuwig afgaan op een
+/// incident waar niemand nog iets aan kan doen.
+#[test]
+fn een_verstreken_meldtermijn_zwijgt() {
+    let motor = standaardmotor();
+    let i = incident();
+    let b = beoordeel_meldtermijn(&motor, &i, &meldtermijn(nu() - Duration::hours(8)), nu());
+    assert!(b.is_empty());
+}
+
+#[test]
+fn een_meldtermijn_ver_weg_zwijgt() {
+    let motor = standaardmotor();
+    let i = incident();
+    let b = beoordeel_meldtermijn(&motor, &i, &meldtermijn(nu() + Duration::hours(40)), nu());
+    assert!(b.is_empty());
+}
+
+#[test]
+fn een_genomen_meldbesluit_maakt_de_herinnering_overbodig() {
+    let motor = standaardmotor();
+    let mut i = incident();
+    i.gemeld_op = Some(nu());
+    assert!(
+        beoordeel_meldtermijn(&motor, &i, &meldtermijn(nu() + Duration::hours(7)), nu()).is_empty()
+    );
+
+    let mut i = incident();
+    i.afgehandeld_op = Some(nu());
+    assert!(
+        beoordeel_meldtermijn(&motor, &i, &meldtermijn(nu() + Duration::hours(7)), nu()).is_empty()
+    );
+}
+
+// --------------------------------------------------------------------------
+// Het logboek zelf
+// --------------------------------------------------------------------------
+
+fn rapport(
+    bevindingen: Vec<dpofg_audit::Bevinding>,
+    ankerstatus: dpofg_audit::Ankerstatus,
+) -> dpofg_audit::Verificatierapport {
+    dpofg_audit::Verificatierapport {
+        regels: 5,
+        eerste_volgnummer: Some(1),
+        laatste_volgnummer: Some(5),
+        laatste_hash: Some("a".repeat(64)),
+        periode: None,
+        bevindingen,
+        ankerstatus,
+    }
+}
+
+fn ketenbevinding(volgnummer: u64, soort: dpofg_audit::Bevindingsoort) -> dpofg_audit::Bevinding {
+    dpofg_audit::Bevinding { volgnummer, soort, omschrijving: "proefbevinding".into() }
+}
+
+#[test]
+fn een_ongeschonden_logboek_zonder_anker_levert_niets_op() {
+    let motor = standaardmotor();
+    let b = beoordeel_logboek(
+        &motor,
+        &rapport(Vec::new(), dpofg_audit::Ankerstatus::GeenAnker),
+        Some(nu() - Duration::hours(1)),
+        nu(),
+    );
+    assert!(b.is_empty(), "geen anker is de normale toestand, geen bevinding");
+}
+
+#[test]
+fn een_gebroken_keten_blokkeert() {
+    use dpofg_audit::Bevindingsoort::*;
+    let motor = standaardmotor();
+    let b = beoordeel_logboek(
+        &motor,
+        &rapport(
+            vec![ketenbevinding(3, OntbrekendeRegel), ketenbevinding(4, Ketenbreuk)],
+            dpofg_audit::Ankerstatus::GeenAnker,
+        ),
+        None,
+        nu(),
+    );
+    assert_eq!(b.len(), 2);
+    for bev in &b {
+        assert_eq!(bev.regelcode, "SYS-04");
+        assert_eq!(bev.niveau, Niveau::Blokkerend);
+        assert_eq!(bev.record_soort, "logboek");
+    }
+}
+
+#[test]
+fn een_ingekorte_keten_blokkeert() {
+    let motor = standaardmotor();
+    let b = beoordeel_logboek(
+        &motor,
+        &rapport(
+            Vec::new(),
+            dpofg_audit::Ankerstatus::KetenIsIngekort { anker_volgnummer: 9, keten_volgnummer: 5 },
+        ),
+        None,
+        nu(),
+    );
+    assert_eq!(codes(&b), vec!["SYS-04"]);
+}
+
+#[test]
+fn een_teruglopend_tijdstip_signaleert() {
+    let motor = standaardmotor();
+    let b = beoordeel_logboek(
+        &motor,
+        &rapport(
+            vec![ketenbevinding(3, dpofg_audit::Bevindingsoort::TijdLooptTerug)],
+            dpofg_audit::Ankerstatus::GeenAnker,
+        ),
+        None,
+        nu(),
+    );
+    assert_eq!(codes(&b), vec!["SYS-10"]);
+}
+
+#[test]
+fn een_klok_die_achterloopt_signaleert() {
+    let motor = standaardmotor();
+    let b = beoordeel_logboek(
+        &motor,
+        &rapport(Vec::new(), dpofg_audit::Ankerstatus::GeenAnker),
+        Some(nu() + Duration::minutes(30)),
+        nu(),
+    );
+    let bev = b.first().expect("SYS-10 hoort aan te slaan");
+    assert_eq!(bev.regelcode, "SYS-10");
+    assert!(bev.toelichting.contains("30 minuten"), "kreeg: {}", bev.toelichting);
+}
+
+// --------------------------------------------------------------------------
+// Het waarschuwingsbudget
+// --------------------------------------------------------------------------
+
+#[test]
+fn zes_onderbrekingen_in_een_week_melden_een_ontwerpfout() {
+    let motor = standaardmotor();
+    let mut budget = Waarschuwingsbudget::nieuw();
+    for dag in 0..6 {
+        budget.onderbreking("a.devries", nu() - Duration::days(dag));
+    }
+    let b = beoordeel_budget(&motor, &budget, nu());
+    let bev = b.first().expect("SYS-06 hoort aan te slaan");
+    assert_eq!(bev.regelcode, "SYS-06");
+    assert_eq!(bev.niveau, Niveau::Rapporterend);
+    assert!(bev.toelichting.contains('6') && bev.toelichting.contains('5'));
+}
+
+#[test]
+fn vijf_onderbrekingen_blijven_binnen_het_budget() {
+    let motor = standaardmotor();
+    let mut budget = Waarschuwingsbudget::nieuw();
+    for dag in 0..5 {
+        budget.onderbreking("a.devries", nu() - Duration::days(dag));
+    }
+    assert!(beoordeel_budget(&motor, &budget, nu()).is_empty(), "vijf is precies de grens");
+}
+
+#[test]
+fn onderbrekingen_van_verschillende_gebruikers_tellen_apart() {
+    let motor = standaardmotor();
+    let mut budget = Waarschuwingsbudget::nieuw();
+    for dag in 0..3 {
+        budget.onderbreking("a.devries", nu() - Duration::days(dag));
+        budget.onderbreking("b.jansen", nu() - Duration::days(dag));
+    }
+    assert!(beoordeel_budget(&motor, &budget, nu()).is_empty());
 }
