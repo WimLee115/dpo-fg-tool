@@ -1417,6 +1417,7 @@ fn zorgplichtbewijs(rol: Bewijsrol, van: DateTime<Utc>, tot: DateTime<Utc>) -> B
         bewijskracht: Bewijskracht::Zelfgerapporteerd,
         aangewezen_door: "u1".into(),
         aangewezen_op: nu(),
+        ingetrokken: None,
     }
 }
 

@@ -183,7 +183,7 @@ fn verzamel_zorgplicht(
             if let Some(b) = m
                 .bewijs
                 .iter()
-                .filter(|b| b.rol == Bewijsrol::Uitvoering)
+                .filter(|b| b.rol == Bewijsrol::Uitvoering && !b.is_ingetrokken())
                 .max_by_key(|b| b.geldig_tot)
             {
                 if b.geldig_tot <= peildatum {
@@ -205,7 +205,7 @@ fn verzamel_zorgplicht(
                 m.frequentie.as_ref(),
                 m.bewijs
                     .iter()
-                    .filter(|b| b.rol == Bewijsrol::Uitvoering)
+                    .filter(|b| b.rol == Bewijsrol::Uitvoering && !b.is_ingetrokken())
                     .map(|b| b.geldig_van)
                     .max(),
             ) {
@@ -424,7 +424,7 @@ pub fn aantoonbaarheid(dossiers: &[Zorgplichtdossier], nu: DateTime<Utc>) -> Vec
                 continue;
             }
             let vastgesteld =
-                m.bewijs.iter().any(|b| b.rol == Bewijsrol::Vaststelling && b.geldt_op(nu));
+                m.bewijs.iter().any(|b| b.rol == Bewijsrol::Vaststelling && b.telt_mee(nu));
             let uitgevoerd = m.geldig_uitvoeringsbewijs(nu).is_some();
             let actueel = match (m.frequentie.as_ref(), m.maanden_sinds_uitvoering(nu)) {
                 (Some(f), Some(maanden)) => uitgevoerd && maanden <= i64::from(f.maanden),
@@ -505,6 +505,7 @@ mod tests {
             bewijskracht: Bewijskracht::Zelfgerapporteerd,
             aangewezen_door: "u1".into(),
             aangewezen_op: nu(),
+            ingetrokken: None,
         }
     }
 

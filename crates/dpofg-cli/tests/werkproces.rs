@@ -2713,3 +2713,50 @@ fn de_drie_factoren_leveren_drie_tellingen_op() {
     assert!(uit.contains("0 van de 1"), "uitvoering en actualiteit horen nul te zijn:\n{uit}");
     assert!(uit.contains("geen schaal, geen weging"), "kreeg:\n{uit}");
 }
+
+/// Intrekken is geen verwijderen. Het stuk blijft in het dossier staan met de
+/// reden erbij, telt niet meer mee, en een vaststelling die er mede op rustte
+/// gaat naar herziening.
+#[test]
+fn bewijs_is_in_te_trekken_zonder_dat_het_verdwijnt() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
+    p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
+    let bewijs = p.bestand("uitdraai.txt", "uitdraai van het sleutelbeheer");
+    p.moet(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2027-06-01T00:00:00Z"
+    ));
+    assert!(p.moet("zorgplicht toon ZRP-2026").contains("aantoonbaar"));
+
+    let uit = p.moet(
+        "zorgplicht bewijs-intrekken ZRP-2026 --maatregel CBB-13 --bestand uitdraai.txt \
+         --rol uitvoering --motivering 'de uitdraai bleek van het verkeerde systeem te komen'",
+    );
+    assert!(uit.contains("telt niet meer mee"), "kreeg:\n{uit}");
+    assert!(uit.contains("Intrekken is geen verwijderen"), "kreeg:\n{uit}");
+    assert!(uit.contains("niet langer aantoonbaar"), "kreeg:\n{uit}");
+
+    // Het stuk staat er nog, en de controleronde ziet de maatregel weer.
+    let uit = p.moet("zorgplicht toon ZRP-2026");
+    assert!(uit.contains("1 ingetrokken"), "kreeg:\n{uit}");
+    assert!(p.moet("controle").contains("ZRP-04"));
+
+    // En de prognose telt hem niet meer als iets dat nog gaat verlopen.
+    let uit = p.moet("prognose --uitgebreid --dagen 365");
+    assert!(!uit.contains("CBB-13"), "ingetrokken bewijs hoort niet in de prognose:\n{uit}");
+}
+
+/// Een stuk dat er niet is, of dat niet uit elkaar te houden is, wordt niet
+/// gegokt.
+#[test]
+fn een_intrekking_die_niet_te_plaatsen_is_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let uit = p.moet_falen(
+        "zorgplicht bewijs-intrekken ZRP-2026 --maatregel CBB-13 --bestand bestaat-niet.txt \
+         --rol uitvoering --motivering 'dit stuk hoort hier niet'",
+    );
+    assert!(uit.contains("niet-ingetrokken bewijsstuk"), "kreeg:\n{uit}");
+}

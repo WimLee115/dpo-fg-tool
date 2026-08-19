@@ -1618,12 +1618,12 @@ pub fn beoordeel_zorgplicht(
             let geldig: Vec<_> = m
                 .bewijs
                 .iter()
-                .filter(|b| b.rol == Bewijsrol::Toetsing && b.geldt_op(nu))
+                .filter(|b| b.rol == Bewijsrol::Toetsing && b.telt_mee(nu))
                 .collect();
             geldig.is_empty()
                 || geldig.iter().all(|b| b.bewijskracht == Bewijskracht::Zelfgerapporteerd)
         })
-        .filter(|m| !m.bewijs.is_empty())
+        .filter(|m| m.bewijs.iter().any(|b| !b.is_ingetrokken()))
         .map(|m| m.code.as_str())
         .collect();
     if !alleen_zelfgerapporteerd.is_empty() {

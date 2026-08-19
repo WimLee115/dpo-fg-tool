@@ -327,6 +327,19 @@ pub struct Frequentie {
     pub motivering: Motivering,
 }
 
+/// Het intrekken van een aangewezen bewijsstuk.
+///
+/// Intrekken is geen verwijderen. Een stuk dat ooit is aangewezen, heeft een
+/// dossier groen gemaakt en kan de grond zijn geweest onder een rapport of een
+/// vaststelling. Het blijft daarom staan, met de reden en de naam erbij; wat
+/// verandert is dat het niet meer meetelt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Intrekking {
+    pub door: String,
+    pub op: DateTime<Utc>,
+    pub motivering: Motivering,
+}
+
 /// Een bewijsstuk dat in de kluis staat, met het venster waarin het geldt.
 ///
 /// `geldig_tot` is met opzet geen `Option`. Bewijs zonder einddatum houdt een
@@ -344,12 +357,29 @@ pub struct Bewijsaanwijzing {
     pub bewijskracht: Bewijskracht,
     pub aangewezen_door: String,
     pub aangewezen_op: DateTime<Utc>,
+    /// Of dit stuk is ingetrokken, en zo ja door wie en waarom.
+    ///
+    /// Zonder `serde(default)`: een ontbrekend veld zou terugvallen op "niet
+    /// ingetrokken", en dat is de kant die bewijs laat meetellen.
+    pub ingetrokken: Option<Intrekking>,
 }
 
 impl Bewijsaanwijzing {
     /// Of het venster op dit moment openstaat.
+    ///
+    /// Zegt niets over intrekking; gebruik `telt_mee` om te weten of dit stuk
+    /// vandaag nog iets onderbouwt.
     pub fn geldt_op(&self, nu: DateTime<Utc>) -> bool {
         self.geldig_van <= nu && nu < self.geldig_tot
+    }
+
+    pub fn is_ingetrokken(&self) -> bool {
+        self.ingetrokken.is_some()
+    }
+
+    /// Of dit stuk op dit moment iets onderbouwt.
+    pub fn telt_mee(&self, nu: DateTime<Utc>) -> bool {
+        !self.is_ingetrokken() && self.geldt_op(nu)
     }
 
     /// Over hoeveel dagen het bewijs vervalt. Negatief als het al verlopen is.
@@ -427,13 +457,13 @@ impl Zorgplichtmaatregel {
     pub fn geldig_uitvoeringsbewijs(&self, nu: DateTime<Utc>) -> Option<&Bewijsaanwijzing> {
         self.bewijs
             .iter()
-            .filter(|b| b.rol == Bewijsrol::Uitvoering && b.geldt_op(nu))
+            .filter(|b| b.rol == Bewijsrol::Uitvoering && b.telt_mee(nu))
             .max_by_key(|b| (b.geldig_van, b.aangewezen_op))
     }
 
     /// Het bewijsstuk dat als eerste vervalt van de stukken die nu gelden.
     pub fn eerst_vervallend(&self, nu: DateTime<Utc>) -> Option<&Bewijsaanwijzing> {
-        self.bewijs.iter().filter(|b| b.geldt_op(nu)).min_by_key(|b| b.geldig_tot)
+        self.bewijs.iter().filter(|b| b.telt_mee(nu)).min_by_key(|b| b.geldig_tot)
     }
 
     /// De stand van deze maatregel. Berekend, in volgorde van zwaarte.
@@ -470,7 +500,7 @@ impl Zorgplichtmaatregel {
     pub fn maanden_sinds_uitvoering(&self, nu: DateTime<Utc>) -> Option<i64> {
         self.bewijs
             .iter()
-            .filter(|b| b.rol == Bewijsrol::Uitvoering)
+            .filter(|b| b.rol == Bewijsrol::Uitvoering && !b.is_ingetrokken())
             .map(|b| b.geldig_van)
             .filter(|v| *v <= nu)
             .max()
@@ -917,6 +947,7 @@ impl Zorgplichtdossier {
             bewijskracht: Bewijskracht::Zelfgerapporteerd,
             aangewezen_door: String::new(),
             aangewezen_op: nu,
+            ingetrokken: None,
         }
         .controleer(nu)
     }
@@ -930,10 +961,84 @@ impl Zorgplichtdossier {
     ) -> Resultaat<()> {
         aanwijzing.controleer(op)?;
         let m = self.maatregel_mut(code)?;
-        m.bewijs.retain(|b| b.bijlagehash != aanwijzing.bijlagehash || b.rol != aanwijzing.rol);
+        // Ontdubbelt alleen tegen stukken die nog meetellen. Een ingetrokken
+        // stuk blijft staan, ook wanneer hetzelfde bestand opnieuw wordt
+        // aangewezen: de intrekking is zelf een feit, en die uitwissen zou de
+        // enige plaats zijn waar niet meer te zien is dat er iets is
+        // teruggenomen.
+        m.bewijs.retain(|b| {
+            b.is_ingetrokken() || b.bijlagehash != aanwijzing.bijlagehash || b.rol != aanwijzing.rol
+        });
         m.bewijs.push(aanwijzing);
         self.herkomst.wijzig(format!("bewijs bij {code} aangewezen"), op);
         Ok(())
+    }
+
+    /// Trekt een aangewezen bewijsstuk in.
+    ///
+    /// Het stuk blijft in het dossier staan en telt vanaf dit moment niet meer
+    /// mee. Was de maatregel daardoor aantoonbaar en is hij dat niet langer,
+    /// dan gaat een vastgesteld dossier naar herziening nodig: de vaststelling
+    /// rustte mede op dit stuk, en dat feit hoort niet stil te verdwijnen.
+    ///
+    /// Geeft terug of de stand van de maatregel erdoor is gedaald.
+    pub fn trek_bewijs_in(
+        &mut self,
+        code: &str,
+        bestandsnaam: &str,
+        rol: Bewijsrol,
+        door: impl Into<String>,
+        motivering: Motivering,
+        op: DateTime<Utc>,
+    ) -> Resultaat<bool> {
+        let voor = self.maatregel(code).map(|m| m.stand(op)).ok_or_else(|| {
+            DomeinFout::OntbrekendeVerwijzing {
+                veld: "zorgplicht.maatregel".into(),
+                naar: format!("maatregel met code '{code}' in dit kader"),
+            }
+        })?;
+
+        let m = self.maatregel_mut(code)?;
+        let kandidaten: Vec<usize> = m
+            .bewijs
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.bestandsnaam == bestandsnaam && b.rol == rol && !b.is_ingetrokken())
+            .map(|(i, _)| i)
+            .collect();
+        match kandidaten.len() {
+            0 => {
+                return Err(DomeinFout::OntbrekendeVerwijzing {
+                    veld: "zorgplicht.bewijs".into(),
+                    naar: format!(
+                        "niet-ingetrokken bewijsstuk '{bestandsnaam}' met de rol {} bij {code}",
+                        rol.omschrijving()
+                    ),
+                })
+            }
+            1 => {}
+            aantal => {
+                return Err(DomeinFout::OngeldigeWaarde {
+                    veld: "zorgplicht.bewijs".into(),
+                    reden: format!(
+                        "er staan {aantal} stukken met de naam '{bestandsnaam}' en de rol {} \
+                         bij {code}; welke daarvan moet worden ingetrokken is zo niet te \
+                         bepalen",
+                        rol.omschrijving()
+                    ),
+                })
+            }
+        }
+        m.bewijs[kandidaten[0]].ingetrokken =
+            Some(Intrekking { door: door.into(), op, motivering });
+
+        let na = self.maatregel(code).expect("zojuist gewijzigd").stand(op);
+        let gedaald = na < voor;
+        self.herkomst.wijzig(format!("bewijs bij {code} ingetrokken"), op);
+        if gedaald && self.status == Status::Vastgesteld {
+            self.status = Status::HerzieningNodig;
+        }
+        Ok(gedaald)
     }
 
     /// Koppelt de risicobeoordeling waarop de controlset steunt.
@@ -1239,7 +1344,7 @@ impl Volledig for Zorgplichtdossier {
             // dat verlopen bewijs de maatregel laat terugvallen, blijkt uit de
             // stand en uit regel ZRP-04, niet uit deze teller.
             if matches!(m.toepassing, Toepassing::Ingericht)
-                && !m.bewijs.iter().any(|b| b.rol == Bewijsrol::Uitvoering)
+                && !m.bewijs.iter().any(|b| b.rol == Bewijsrol::Uitvoering && !b.is_ingetrokken())
             {
                 uit.push(Ontbrekend::signalerend(
                     format!("zorgplicht.maatregel.{}.bewijs", m.code),
@@ -1332,6 +1437,7 @@ mod tests {
             bewijskracht: Bewijskracht::Zelfgerapporteerd,
             aangewezen_door: "u1".into(),
             aangewezen_op: nu(),
+            ingetrokken: None,
         }
     }
 
@@ -2056,6 +2162,199 @@ mod tests {
                 nu()
             )
             .is_err());
+    }
+
+    /// Intrekken is geen verwijderen: het stuk blijft staan met de reden
+    /// erbij, en telt vanaf dat moment niet meer mee.
+    #[test]
+    fn ingetrokken_bewijs_blijft_staan_maar_telt_niet_meer() {
+        let mut d = dossier();
+        d.wijs_eigenaar_toe("CBB-a", "beleidsadviseur", "J. Jansen", nu()).unwrap();
+        d.richt_in("CBB-a", nu()).unwrap();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(300)),
+            nu(),
+        )
+        .unwrap();
+        assert_eq!(d.maatregel("CBB-a").unwrap().stand(nu()), Maatregelstand::Aantoonbaar);
+
+        let gedaald = d
+            .trek_bewijs_in(
+                "CBB-a",
+                "uitdraai.pdf",
+                Bewijsrol::Uitvoering,
+                "A. de Vries",
+                motivering("het stuk hoorde bij een andere maatregel"),
+                nu(),
+            )
+            .unwrap();
+        assert!(gedaald);
+
+        let m = d.maatregel("CBB-a").unwrap();
+        assert_eq!(m.stand(nu()), Maatregelstand::VastgesteldNietAantoonbaar);
+        assert_eq!(m.bewijs.len(), 1, "het stuk hoort te blijven staan");
+        assert!(m.bewijs[0].is_ingetrokken());
+        assert!(m.geldig_uitvoeringsbewijs(nu()).is_none());
+        assert!(m.maanden_sinds_uitvoering(nu()).is_none());
+    }
+
+    /// Een vaststelling die mede op dit stuk rustte, houdt niet stilzwijgend
+    /// stand.
+    #[test]
+    fn intrekken_zet_een_vastgesteld_dossier_op_herziening() {
+        let mut d = dossier();
+        for code in d.maatregelen.iter().map(|m| m.code.clone()).collect::<Vec<_>>() {
+            d.wijs_eigenaar_toe(&code, "beleidsadviseur", "J. Jansen", nu()).unwrap();
+            d.richt_in(&code, nu()).unwrap();
+            d.wijs_bewijs_aan(
+                &code,
+                bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(300)),
+                nu(),
+            )
+            .unwrap();
+        }
+        d.koppel_risicobeoordeling("RIS-2026", Id::nieuw(), nu()).unwrap();
+        d.leg_bestuursvaststelling_vast(
+            Bestuursvaststelling {
+                datum: nu() - Duration::days(5),
+                besluittekst: "het maatregelenpakket is vastgesteld".into(),
+                goedgekeurde_kaderversie: "2026-08-01".into(),
+                aanwezigen: vec!["de directie".into()],
+                bewijs: bewijs(
+                    Bewijsrol::Vaststelling,
+                    nu() - Duration::days(5),
+                    nu() + Duration::days(300),
+                ),
+            },
+            nu(),
+        )
+        .unwrap();
+        d.stel_vast("A. de Vries", nu()).unwrap();
+        assert_eq!(d.status, Status::Vastgesteld);
+
+        d.trek_bewijs_in(
+            "CBB-a",
+            "uitdraai.pdf",
+            Bewijsrol::Uitvoering,
+            "A. de Vries",
+            motivering("de uitdraai bleek van het verkeerde systeem te komen"),
+            nu(),
+        )
+        .unwrap();
+        assert_eq!(d.status, Status::HerzieningNodig);
+    }
+
+    /// Een intrekking die de stand niet raakt, hoeft geen herziening op te
+    /// roepen: dan is er niets veranderd aan wat het dossier beweert.
+    #[test]
+    fn intrekken_van_overtollig_bewijs_raakt_de_stand_niet() {
+        let mut d = dossier();
+        d.wijs_eigenaar_toe("CBB-a", "beleidsadviseur", "J. Jansen", nu()).unwrap();
+        d.richt_in("CBB-a", nu()).unwrap();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Vaststelling, nu(), nu() + Duration::days(300)),
+            nu(),
+        )
+        .unwrap();
+        let mut uitvoering = bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(300));
+        uitvoering.bijlagehash = "b".repeat(64);
+        uitvoering.bestandsnaam = "verslag.pdf".into();
+        d.wijs_bewijs_aan("CBB-a", uitvoering, nu()).unwrap();
+
+        let gedaald = d
+            .trek_bewijs_in(
+                "CBB-a",
+                "uitdraai.pdf",
+                Bewijsrol::Vaststelling,
+                "A. de Vries",
+                motivering("dit beleidsstuk is vervangen door een nieuwe versie"),
+                nu(),
+            )
+            .unwrap();
+        assert!(!gedaald);
+        assert_eq!(d.maatregel("CBB-a").unwrap().stand(nu()), Maatregelstand::Aantoonbaar);
+    }
+
+    /// Hetzelfde bestand opnieuw aanwijzen wist de intrekking niet uit: dat
+    /// zou de enige plaats zijn waar nog te zien is dat er iets is
+    /// teruggenomen.
+    #[test]
+    fn opnieuw_aanwijzen_wist_de_intrekking_niet() {
+        let mut d = dossier();
+        d.wijs_eigenaar_toe("CBB-a", "beleidsadviseur", "J. Jansen", nu()).unwrap();
+        d.richt_in("CBB-a", nu()).unwrap();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(300)),
+            nu(),
+        )
+        .unwrap();
+        d.trek_bewijs_in(
+            "CBB-a",
+            "uitdraai.pdf",
+            Bewijsrol::Uitvoering,
+            "A. de Vries",
+            motivering("het stuk was per ongeluk aangewezen"),
+            nu(),
+        )
+        .unwrap();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(300)),
+            nu(),
+        )
+        .unwrap();
+
+        let m = d.maatregel("CBB-a").unwrap();
+        assert_eq!(m.bewijs.len(), 2);
+        assert_eq!(m.bewijs.iter().filter(|b| b.is_ingetrokken()).count(), 1);
+        assert_eq!(m.stand(nu()), Maatregelstand::Aantoonbaar);
+    }
+
+    #[test]
+    fn een_stuk_dat_er_niet_is_intrekken_wordt_geweigerd() {
+        let mut d = dossier();
+        let fout = d
+            .trek_bewijs_in(
+                "CBB-a",
+                "bestaat-niet.pdf",
+                Bewijsrol::Uitvoering,
+                "A. de Vries",
+                motivering("dit stuk hoort hier niet"),
+                nu(),
+            )
+            .unwrap_err();
+        assert!(fout.to_string().contains("niet-ingetrokken bewijsstuk"), "kreeg: {fout}");
+    }
+
+    /// Twee stukken met dezelfde naam en rol zijn zo niet uit elkaar te
+    /// houden; dan is het beter om te weigeren dan om te gokken.
+    #[test]
+    fn een_dubbelzinnige_intrekking_wordt_geweigerd() {
+        let mut d = dossier();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(300)),
+            nu(),
+        )
+        .unwrap();
+        let mut tweede = bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(200));
+        tweede.bijlagehash = "b".repeat(64);
+        d.wijs_bewijs_aan("CBB-a", tweede, nu()).unwrap();
+
+        let fout = d
+            .trek_bewijs_in(
+                "CBB-a",
+                "uitdraai.pdf",
+                Bewijsrol::Uitvoering,
+                "A. de Vries",
+                motivering("een van beide hoort hier niet"),
+                nu(),
+            )
+            .unwrap_err();
+        assert!(fout.to_string().contains("2 stukken"), "kreeg: {fout}");
     }
 
     #[test]

@@ -134,6 +134,26 @@ pub enum Zorgplichtopdracht {
         #[arg(long)]
         geverifieerd: bool,
     },
+    /// Trek een aangewezen bewijsstuk in.
+    ///
+    /// Intrekken is geen verwijderen: het stuk blijft in het dossier staan met
+    /// de reden erbij, en telt vanaf dat moment niet meer mee.
+    BewijsIntrekken {
+        /// Kenmerk van het dossier.
+        kenmerk: String,
+        /// De maatregelcode.
+        #[arg(long)]
+        maatregel: String,
+        /// De naam van het bestand dat wordt ingetrokken.
+        #[arg(long)]
+        bestand: String,
+        /// Wat het stuk bewees.
+        #[arg(long, value_enum)]
+        rol: Bewijsrolkeuze,
+        /// Waarom het wordt ingetrokken.
+        #[arg(long)]
+        motivering: String,
+    },
     /// Koppel de risicobeoordeling waarop de controlset steunt.
     Risicobeoordeling {
         /// Kenmerk van het dossier.
@@ -260,6 +280,17 @@ pub fn draai(o: Zorgplichtopdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>
             geverifieerd,
             nu,
         ),
+        Zorgplichtopdracht::BewijsIntrekken { kenmerk, maatregel, bestand, rol, motivering } => {
+            bewijs_intrekken(
+                &mut kluis,
+                &kenmerk,
+                &maatregel,
+                &bestand,
+                rol.into(),
+                &motivering,
+                nu,
+            )
+        }
         Zorgplichtopdracht::Risicobeoordeling { kenmerk, beoordeling } => {
             risicobeoordeling(&mut kluis, &kenmerk, &beoordeling, nu)
         }
@@ -412,6 +443,7 @@ fn neem_bewijs_op(
         },
         aangewezen_door: actor.naam.clone(),
         aangewezen_op: nu,
+        ingetrokken: None,
     })
 }
 
@@ -667,6 +699,45 @@ fn bewijs(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn bewijs_intrekken(
+    kluis: &mut Kluis,
+    kenmerk: &str,
+    code: &str,
+    bestand: &str,
+    rol: Bewijsrol,
+    motivering: &str,
+    nu: DateTime<Utc>,
+) -> Result<()> {
+    let mut d = zoek(kluis, kenmerk)?;
+    let actor = super::actor();
+    let m = Motivering::nieuw(motivering, &actor.id, nu)?;
+    let was_vastgesteld = d.status == dpofg_domain::Status::Vastgesteld;
+    let gedaald = d.trek_bewijs_in(code, bestand, rol, &actor.naam, m, nu)?;
+    bewaar(kluis, &d, Handeling::RecordGewijzigd, &format!("bewijs bij {code} ingetrokken"), nu)?;
+
+    gelukt(&format!("'{bestand}' telt niet meer mee bij {code}"));
+    terzijde(
+        "Het stuk blijft in het dossier staan met de reden erbij. Intrekken is geen \
+         verwijderen: wat ooit is aangewezen, kan de grond zijn geweest onder een rapport of \
+         een vaststelling.",
+    );
+    let stand = d.maatregel(code).map(|m| m.stand(nu));
+    if let Some(stand) = stand {
+        terzijde(&format!("stand van {code}: {}", stand.omschrijving()));
+    }
+    if gedaald && was_vastgesteld {
+        blokkade(
+            "Het dossier staat hierdoor op herziening nodig: de vaststelling rustte mede op \
+             dit stuk.",
+        );
+    } else if gedaald {
+        let_op("Deze maatregel is hierdoor niet langer aantoonbaar.");
+    }
+    toon_ontbrekend(&d);
+    Ok(())
+}
+
 fn risicobeoordeling(
     kluis: &mut Kluis,
     kenmerk: &str,
@@ -893,10 +964,13 @@ fn toon(kluis: &Kluis, kenmerk: &str, onder: Option<&str>, nu: DateTime<Utc>) ->
         "bewijs geldig tot",
     ]);
     for m in d.maatregelen.iter().filter(|m| filter.is_none_or(|o| m.onderdeel == o)) {
+        let ingetrokken = m.bewijs.iter().filter(|b| b.is_ingetrokken()).count();
         let bewijs = m
             .geldig_uitvoeringsbewijs(nu)
             .map(|b| b.geldig_tot.format("%d-%m-%Y").to_string())
             .unwrap_or_else(|| "—".into());
+        let bewijs =
+            if ingetrokken > 0 { format!("{bewijs} ({ingetrokken} ingetrokken)") } else { bewijs };
         t.add_row(vec![
             m.onderdeel.letter().to_string(),
             m.code.clone(),

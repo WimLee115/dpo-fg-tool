@@ -45,7 +45,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Belangenafweging | werkt | Vier onderdelen vóór de uitkomst; waarborgen kantelen de uitslag maar vervangen de afweging niet |
 | Doorgiften buiten de EER | werkt | Instrument, doorgiftebeoordeling, artikel 49 met telling, controle tegen het kennispakket |
 | Leveranciersregister | werkt | De acht onderdelen van art. 28 lid 3 met vindplaats per onderdeel, contractuele meldtermijn, subverwerkerslijst met controledatum |
-| Zorgplichtcontrolset | werkt | De tien onderdelen van art. 21 lid 3 Cbw, afgeleid uit het kennispakket; bewijs met een geldigheidsvenster maakt een maatregel aantoonbaar, of niet |
+| Zorgplichtcontrolset | werkt | De tien onderdelen van art. 21 lid 3 Cbw, afgeleid uit het kennispakket; bewijs met een geldigheidsvenster maakt een maatregel aantoonbaar, of niet, en is in te trekken zonder te verdwijnen |
 | Risicobeoordeling | werkt | Eigen dossier met methode, reikwijdte, bronnen en onderkende risico's; het restrisico daalt alleen met een maatregel erbij, en een hoog restrisico aanvaardt het bestuur |
 | Vervalprognose | werkt | Welke eisen op 30, 90 en 365 dagen niet meer aantoonbaar zijn, met oorzaak, eigenaar en datum; over vijf dossiersoorten heen |
 | De drie factoren van aantoonbaarheid | **deels** | Vastgesteld, uitgevoerd en actueel als drie tellingen; geen gewogen score, want het plan geeft daarvoor geen schaal |
@@ -123,7 +123,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 707 testfuncties, 711 uitgevoerde tests; ~6.400 regels in `tests` |
+| Tests | 715 testfuncties, 719 uitgevoerde tests; ~6.500 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
