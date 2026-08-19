@@ -1408,6 +1408,19 @@ De maatregelen van artikel 21 lid 3 van de Cyberbeveiligingswet. Eén blokkerend
 
 > **Toegevoegd na de eerste opsomming.** Deze groep stond niet in de oorspronkelijke catalogus van 124 regels. Zij is er gekomen toen de controlset werd gebouwd en er bleek dat de zorgplicht met de bestaande NIS-regels wel op incidentniveau werd bewaakt, maar nergens op maatregelniveau.
 
+#### Risicobeoordeling (RIS)
+
+De beoordeling waarop de zorgplichtmaatregelen steunen. Eén blokkerende regel: een hoog restrisico dat niemand heeft aanvaard is geen werk in uitvoering maar een besluit dat niet is genomen.
+
+| ID | Naam | Wat het controleert | Niveau | Naar |
+|---|---|---|---|---|
+| RIS-01 | Beoordeling verlopen | de geldigheidsduur is verstreken | S | security officer |
+| RIS-02 | Beoordeling verloopt binnen de horizon | verstrijkt binnen de termijn uit het kennispakket | S | security officer |
+| RIS-03 | Hoog restrisico niet aanvaard | restrisico van klasse hoog zonder vastgelegde aanvaarding | B | directie |
+| RIS-04 | Risico zonder maatregel | onderkend risico zonder enige genoemde maatregel | S | security officer |
+| RIS-05 | Geen bron geraadpleegd | beoordeling die uitsluitend op het eigen beeld berust | S | security officer |
+| RIS-06 | Aanvaarding ouder dan de beoordeling | aanvaard vóór de laatste wijziging van de beoordeling | S | directie |
+
 #### Integriteit van de applicatie zelf (SYS)
 
 | ID | Naam | Wat het controleert | Niveau | Naar |
@@ -1423,7 +1436,7 @@ De maatregelen van artikel 21 lid 3 van de Cyberbeveiligingswet. Eén blokkerend
 | SYS-09 | Termijnmodule niet geverifieerd | testgevallen van de termijnmodule niet groen na een update | B op alle termijnberekeningen | beheerder |
 | SYS-10 | Klokafwijking | systeemklok wijkt af van de monotone referentie | S | beheerder |
 
-**Totaal: 137 controleregels** — 17 REG, 12 GRO, 8 BEW, 9 DPIA, 13 VWO, 8 EER, 16 LEK, 12 BTR, 7 NIS, 13 ZRP, 12 ORG, 10 SYS.
+**Totaal: 143 controleregels** — 17 REG, 12 GRO, 8 BEW, 9 DPIA, 13 VWO, 8 EER, 16 LEK, 12 BTR, 7 NIS, 13 ZRP, 6 RIS, 12 ORG, 10 SYS.
 
 > De eerdere opgave van 123 klopte niet met de opsomming eronder: die telde 124 regels. Met de dertien regels van de zorgplichtcontrolset erbij zijn het er 137.
 

@@ -28,6 +28,7 @@ use chrono::{DateTime, Duration, Utc};
 use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
     avg::Grondslag,
+    risico::Risicobeoordeling,
     zorgplicht::{
         Bewijsaanwijzing, Bewijskracht, Bewijsrol, Maatregelstand, Toepassing, Zorgplichtdossier,
     },
@@ -52,6 +53,7 @@ pub fn catalogus() -> Vec<Regel> {
     uit.extend(effectbeoordeling());
     uit.extend(organisatie());
     uit.extend(zorgplicht());
+    uit.extend(risicobeoordeling());
     uit.extend(systeem());
     uit
 }
@@ -82,8 +84,8 @@ pub fn geimplementeerd() -> &'static [&'static str] {
         "LEK-03", "LEK-04", "LEK-06", "LEK-07", "LEK-08", "LEK-09", "LEK-12", "LEK-13", "LEK-15",
         "DPIA-03", "DPIA-06", "DPIA-07", "EER-03", "EER-06", "EER-07", "VWO-02", "VWO-04",
         "VWO-09", "VWO-13", "LEK-16", "ZRP-01", "ZRP-02", "ZRP-03", "ZRP-04", "ZRP-05", "ZRP-06",
-        "ZRP-07", "ZRP-08", "ZRP-09", "ZRP-10", "ZRP-11", "ZRP-12", "ZRP-13", "SYS-04", "SYS-06",
-        "SYS-10",
+        "ZRP-07", "ZRP-08", "ZRP-09", "ZRP-10", "ZRP-11", "ZRP-12", "ZRP-13", "RIS-01", "RIS-02",
+        "RIS-03", "RIS-04", "RIS-05", "RIS-06", "SYS-04", "SYS-06", "SYS-10",
     ]
 }
 
@@ -755,6 +757,77 @@ fn zorgplicht() -> Vec<Regel> {
     ]
 }
 
+/// De risicobeoordeling als zelfstandig artefact.
+///
+/// Eén blokkerende regel: een hoog restrisico dat niemand heeft aanvaard.
+/// Dat is geen werk in uitvoering maar een besluit dat niet is genomen, en
+/// zolang het niet is genomen, staat de organisatie bloot aan iets waarvan
+/// niemand heeft gezegd dat het aanvaardbaar is.
+fn risicobeoordeling() -> Vec<Regel> {
+    vec![
+        Regel::nieuw(
+            "RIS-01",
+            "risicobeoordeling",
+            "Beoordeling verlopen",
+            "de geldigheidsduur van de risicobeoordeling is verstreken",
+            Signalerend,
+            SecurityOfficer,
+            "art. 21 lid 1 Cyberbeveiligingswet",
+            true,
+        ),
+        Regel::nieuw(
+            "RIS-02",
+            "risicobeoordeling",
+            "Beoordeling verloopt binnen de horizon",
+            "de geldigheidsduur verstrijkt binnen de termijn uit het kennispakket",
+            Signalerend,
+            SecurityOfficer,
+            "interne norm; geen wettelijke termijn",
+            true,
+        ),
+        Regel::nieuw(
+            "RIS-03",
+            "risicobeoordeling",
+            "Hoog restrisico niet aanvaard",
+            "een restrisico van klasse hoog zonder vastgelegde aanvaarding",
+            Blokkerend,
+            Directie,
+            "art. 24 lid 1 Cyberbeveiligingswet",
+            false,
+        ),
+        Regel::nieuw(
+            "RIS-04",
+            "risicobeoordeling",
+            "Risico zonder maatregel",
+            "een onderkend risico waarbij geen enkele maatregel is genoemd",
+            Signalerend,
+            SecurityOfficer,
+            "art. 21 lid 1 Cyberbeveiligingswet",
+            true,
+        ),
+        Regel::nieuw(
+            "RIS-05",
+            "risicobeoordeling",
+            "Geen bron geraadpleegd",
+            "een beoordeling die uitsluitend op het eigen beeld berust",
+            Signalerend,
+            SecurityOfficer,
+            "interne norm; methodische onderbouwing",
+            true,
+        ),
+        Regel::nieuw(
+            "RIS-06",
+            "risicobeoordeling",
+            "Aanvaarding ouder dan de beoordeling",
+            "een restrisico is aanvaard vóór de laatste wijziging van de beoordeling",
+            Signalerend,
+            Directie,
+            "interne norm",
+            true,
+        ),
+    ]
+}
+
 fn systeem() -> Vec<Regel> {
     vec![
         Regel::nieuw(
@@ -1362,6 +1435,7 @@ pub struct Zorgplichtdrempels {
 pub fn beoordeel_zorgplicht(
     motor: &Regelmotor,
     d: &Zorgplichtdossier,
+    beoordelingen: &[Risicobeoordeling],
     drempels: Zorgplichtdrempels,
     nu: DateTime<Utc>,
 ) -> Vec<Bevinding> {
@@ -1586,19 +1660,37 @@ pub fn beoordeel_zorgplicht(
     match &d.risicobeoordeling {
         None => voeg(
             "ZRP-11",
-            "er ligt geen risicobeoordeling onder deze controlset; zonder beoordeling is niet \
-             te zeggen of dit de passende maatregelen zijn"
+            "er is geen risicobeoordeling aan deze controlset gekoppeld; zonder beoordeling is \
+             niet te zeggen of dit de passende maatregelen zijn"
                 .to_string(),
         ),
-        Some(r) if r.is_verlopen(nu) => voeg(
-            "ZRP-11",
-            format!(
-                "de risicobeoordeling van {} is op {} verlopen",
-                r.uitgevoerd_op.format("%d-%m-%Y"),
-                r.geldig_tot.format("%d-%m-%Y")
+        Some(k) => match beoordelingen.iter().find(|b| b.id == k.id) {
+            None => voeg(
+                "ZRP-11",
+                format!(
+                    "de gekoppelde beoordeling {} staat niet in deze kluis; de koppeling wijst \
+                     naar iets wat er niet is",
+                    k.kenmerk
+                ),
             ),
-        ),
-        Some(_) => {}
+            Some(b) if b.is_verlopen(nu) => voeg(
+                "ZRP-11",
+                format!(
+                    "de gekoppelde beoordeling {} is op {} verlopen",
+                    b.kenmerk,
+                    b.geldig_tot.format("%d-%m-%Y")
+                ),
+            ),
+            Some(b) if b.status != Status::Vastgesteld => voeg(
+                "ZRP-11",
+                format!(
+                    "de gekoppelde beoordeling {} is nog niet vastgesteld; een controlset kan \
+                     niet steunen op een beoordeling die zelf nog concept is",
+                    b.kenmerk
+                ),
+            ),
+            Some(_) => {}
+        },
     }
 
     if let Some(aandeel) = d.aandeel_niet_toegepast() {
@@ -1615,6 +1707,102 @@ pub fn beoordeel_zorgplicht(
             );
         }
     }
+    uit
+}
+
+/// Beoordeelt één risicobeoordeling (RIS-01 tot en met RIS-06).
+pub fn beoordeel_risicobeoordeling(
+    motor: &Regelmotor,
+    b: &Risicobeoordeling,
+    horizon_dagen: i64,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+    let kenmerk = Some(b.kenmerk.as_str());
+    let id = b.id.to_string();
+
+    let mut voeg = |code: &str, toelichting: String| {
+        if let Some(bev) = motor.bevind(code, "risico", &id, kenmerk, toelichting, nu) {
+            uit.push(bev);
+        }
+    };
+
+    if b.is_verlopen(nu) {
+        voeg(
+            "RIS-01",
+            format!(
+                "de beoordeling van {} is op {} verlopen; de maatregelen eronder steunen op \\
+                 een beeld dat niet meer is getoetst",
+                b.uitgevoerd_op.format("%d-%m-%Y"),
+                b.geldig_tot.format("%d-%m-%Y")
+            ),
+        );
+    } else if b.dagen_tot_verval(nu) <= horizon_dagen {
+        voeg(
+            "RIS-02",
+            format!(
+                "de beoordeling verloopt over {} dagen, op {}",
+                b.dagen_tot_verval(nu),
+                b.geldig_tot.format("%d-%m-%Y")
+            ),
+        );
+    }
+
+    let hoog: Vec<&str> = b
+        .risicos
+        .iter()
+        .filter(|r| r.vraagt_bestuur() && r.aanvaarding.is_none())
+        .map(|r| r.code.as_str())
+        .collect();
+    if !hoog.is_empty() {
+        voeg(
+            "RIS-03",
+            format!("het restrisico van {} is hoog en door niemand aanvaard", hoog.join(", ")),
+        );
+    }
+
+    let zonder: Vec<&str> = b.zonder_maatregel().iter().map(|r| r.code.as_str()).collect();
+    if !zonder.is_empty() {
+        voeg(
+            "RIS-04",
+            format!(
+                "bij {} is geen enkele maatregel genoemd; het restrisico is daarmee gelijk aan \\
+                 het risico",
+                zonder.join(", ")
+            ),
+        );
+    }
+
+    if b.bronnen.is_empty() {
+        voeg(
+            "RIS-05",
+            "er is geen enkele bron vastgelegd; een beoordeling die alleen op het eigen beeld \\
+             berust, ziet wat de organisatie al wist"
+                .to_string(),
+        );
+    }
+
+    // De aanvaarding gaat over het restrisico zoals dat gold toen zij werd
+    // gegeven. Het domein laat een aanvaarding vervallen zodra het restrisico
+    // wijzigt, maar een beoordeling kan ook op andere gronden zijn bijgewerkt;
+    // dan is het besluit ouder dan het stuk waarover het gaat.
+    let verouderd: Vec<&str> = b
+        .risicos
+        .iter()
+        .filter(|r| r.aanvaarding.as_ref().is_some_and(|a| a.op < b.herkomst.gewijzigd_op))
+        .map(|r| r.code.as_str())
+        .collect();
+    if !verouderd.is_empty() && b.status == Status::Vastgesteld {
+        voeg(
+            "RIS-06",
+            format!(
+                "de aanvaarding van {} dateert van vóór de laatste wijziging van deze \\
+                 beoordeling",
+                verouderd.join(", ")
+            ),
+        );
+    }
+
     uit
 }
 

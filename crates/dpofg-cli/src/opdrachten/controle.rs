@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 use clap::Args;
 use dpofg_audit::Handeling;
 use dpofg_domain::{
-    doorgifte::Doorgifte, zorgplicht::Zorgplichtdossier, Dpia, Incident, Leverancier, Verwerking,
+    doorgifte::Doorgifte, risico::Risicobeoordeling, zorgplicht::Zorgplichtdossier, Dpia, Incident,
+    Leverancier, Verwerking,
 };
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
@@ -13,8 +14,8 @@ use dpofg_rules::{
     regels::{
         beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
         beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
-        beoordeel_raadplegingstermijn, beoordeel_verwerkersmelding, beoordeel_verwerking,
-        beoordeel_zorgplicht, standaardmotor, Zorgplichtdrempels,
+        beoordeel_raadplegingstermijn, beoordeel_risicobeoordeling, beoordeel_verwerkersmelding,
+        beoordeel_verwerking, beoordeel_zorgplicht, standaardmotor, Zorgplichtdrempels,
     },
 };
 use std::path::PathBuf;
@@ -125,10 +126,28 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
         beoordeeld += 1;
     }
 
+    // De beoordelingen worden eerst geladen: regel ZRP-11 kijkt of de
+    // gekoppelde beoordeling bestaat, is vastgesteld en nog geldt, en dat weet
+    // alleen het beoordelingsdossier zelf.
+    let beoordelingshorizon = beoordelingshorizon(&pakket);
+    let mut beoordelingen: Vec<Risicobeoordeling> = Vec::new();
+    for k in kluis.lijst("risico")? {
+        let b: Risicobeoordeling = kluis.laad("risico", &k.id)?;
+        bevindingen.extend(beoordeel_risicobeoordeling(&motor, &b, beoordelingshorizon, nu));
+        beoordelingen.push(b);
+        beoordeeld += 1;
+    }
+
     let zorgplichtdrempels = zorgplichtdrempels(&pakket);
     for k in kluis.lijst("zorgplicht")? {
         let d: Zorgplichtdossier = kluis.laad("zorgplicht", &k.id)?;
-        bevindingen.extend(beoordeel_zorgplicht(&motor, &d, zorgplichtdrempels, nu));
+        bevindingen.extend(beoordeel_zorgplicht(
+            &motor,
+            &d,
+            &beoordelingen,
+            zorgplichtdrempels,
+            nu,
+        ));
         beoordeeld += 1;
     }
 
@@ -381,6 +400,16 @@ fn meldtermijndrempel(pakket: &dpofg_content::Pakketinhoud) -> u32 {
         .and_then(|v| v.as_u64())
         .and_then(|v| u32::try_from(v).ok())
         .unwrap_or(48)
+}
+
+/// Hoeveel dagen vooruit een verlopende risicobeoordeling wordt gemeld.
+fn beoordelingshorizon(pakket: &dpofg_content::Pakketinhoud) -> i64 {
+    pakket
+        .termijn("INTERN-RISICOBEOORDELING-HORIZON")
+        .ok()
+        .filter(|t| t.eenheid == dpofg_terms::Eenheid::Kalenderdagen)
+        .map(|t| i64::from(t.duur))
+        .unwrap_or(60)
 }
 
 /// De vijf drempels waartegen de zorgplichtcontrolset wordt gemeten.

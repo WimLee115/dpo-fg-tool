@@ -7,8 +7,7 @@ use dpofg_audit::Handeling;
 use dpofg_domain::{
     zorgplicht::{
         Bestuursvaststelling, Bewijsaanwijzing, Bewijskracht, Bewijsrol, Kaderdefinitie,
-        Maatregelstand, Niettoepassing, Risicobeoordeling, Toepassing, Zorgplichtdossier,
-        Zorgplichtonderdeel,
+        Maatregelstand, Niettoepassing, Toepassing, Zorgplichtdossier, Zorgplichtonderdeel,
     },
     Motivering, Volledig,
 };
@@ -135,31 +134,13 @@ pub enum Zorgplichtopdracht {
         #[arg(long)]
         geverifieerd: bool,
     },
-    /// Leg de risicobeoordeling vast waarop de controlset steunt.
+    /// Koppel de risicobeoordeling waarop de controlset steunt.
     Risicobeoordeling {
         /// Kenmerk van het dossier.
         kenmerk: String,
-        /// De gebruikte methode.
+        /// Het kenmerk van de risicobeoordeling.
         #[arg(long)]
-        methode: String,
-        /// De reikwijdte van de beoordeling.
-        #[arg(long)]
-        scope: String,
-        /// Wie de beoordeling heeft uitgevoerd.
-        #[arg(long)]
-        uitgevoerd_door: String,
-        /// Wanneer. Standaard: nu.
-        #[arg(long)]
-        uitgevoerd_op: Option<String>,
-        /// Tot wanneer de beoordeling geldig is.
-        #[arg(long)]
-        geldig_tot: String,
-        /// Het verslag van de beoordeling.
-        #[arg(long)]
-        bestand: PathBuf,
-        /// Een korte aanduiding van het verslag.
-        #[arg(long)]
-        omschrijving: String,
+        beoordeling: String,
     },
     /// Leg het bestuursbesluit vast waarmee het pakket is vastgesteld.
     Bestuursvaststelling {
@@ -279,27 +260,9 @@ pub fn draai(o: Zorgplichtopdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>
             geverifieerd,
             nu,
         ),
-        Zorgplichtopdracht::Risicobeoordeling {
-            kenmerk,
-            methode,
-            scope,
-            uitgevoerd_door,
-            uitgevoerd_op,
-            geldig_tot,
-            bestand,
-            omschrijving,
-        } => risicobeoordeling(
-            &mut kluis,
-            &kenmerk,
-            &methode,
-            &scope,
-            &uitgevoerd_door,
-            uitgevoerd_op.as_deref(),
-            &geldig_tot,
-            &bestand,
-            &omschrijving,
-            nu,
-        ),
+        Zorgplichtopdracht::Risicobeoordeling { kenmerk, beoordeling } => {
+            risicobeoordeling(&mut kluis, &kenmerk, &beoordeling, nu)
+        }
         Zorgplichtopdracht::Bestuursvaststelling {
             kenmerk,
             datum,
@@ -704,53 +667,34 @@ fn bewijs(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn risicobeoordeling(
     kluis: &mut Kluis,
     kenmerk: &str,
-    methode: &str,
-    scope: &str,
-    uitgevoerd_door: &str,
-    uitgevoerd_op: Option<&str>,
-    geldig_tot: &str,
-    bestand: &std::path::Path,
-    omschrijving: &str,
+    beoordelingskenmerk: &str,
     nu: DateTime<Utc>,
 ) -> Result<()> {
     let mut d = zoek(kluis, kenmerk)?;
-    let uitgevoerd = match uitgevoerd_op {
-        Some(t) => lees_tijdstip(t)?,
-        None => nu,
-    };
-    let tot = lees_tijdstip(geldig_tot)?;
-    let id = d.id.to_string();
-    let aanwijzing = neem_bewijs_op(
-        kluis,
-        &id,
-        bestand,
-        Bewijsrol::Toetsing,
-        omschrijving,
-        uitgevoerd,
-        tot,
-        false,
-        nu,
-    )?;
-    d.leg_risicobeoordeling_vast(
-        Risicobeoordeling {
-            omschrijving: omschrijving.to_string(),
-            methode: methode.to_string(),
-            scope: scope.to_string(),
-            uitgevoerd_door: uitgevoerd_door.to_string(),
-            uitgevoerd_op: uitgevoerd,
-            geldig_tot: tot,
-            bewijs: aanwijzing,
-        },
-        nu,
-    )?;
-    bewaar(kluis, &d, Handeling::RecordGewijzigd, "risicobeoordeling vastgelegd", nu)?;
+    let b = super::risico::zoek(kluis, beoordelingskenmerk).map_err(|_| {
+        anyhow::anyhow!(
+            "geen risicobeoordeling met kenmerk '{beoordelingskenmerk}'. Maak er een met \
+             'dpofg risico nieuw' of bekijk de lijst met 'dpofg risico lijst'"
+        )
+    })?;
+    d.koppel_risicobeoordeling(&b.kenmerk, b.id, nu)?;
+    bewaar(kluis, &d, Handeling::RecordGewijzigd, "risicobeoordeling gekoppeld", nu)?;
 
-    gelukt("de risicobeoordeling is vastgelegd");
-    terzijde(&format!("geldig tot {}", tot.format("%d-%m-%Y")));
+    gelukt(&format!("{} is gekoppeld aan beoordeling {}", d.kenmerk, b.kenmerk));
+    terzijde(&format!("reikwijdte: {}", b.reikwijdte));
+    terzijde(&format!("geldig tot {}", b.geldig_tot.format("%d-%m-%Y")));
+    if b.is_verlopen(nu) {
+        let_op("Deze beoordeling is verlopen; regel ZRP-11 blijft dat melden.");
+    }
+    if b.status != dpofg_domain::Status::Vastgesteld {
+        let_op(
+            "Deze beoordeling is nog niet vastgesteld. Een controlset kan niet steunen op een \
+             beoordeling die zelf nog concept is.",
+        );
+    }
     toon_ontbrekend(&d);
     Ok(())
 }
@@ -966,21 +910,16 @@ fn toon(kluis: &Kluis, kenmerk: &str, onder: Option<&str>, nu: DateTime<Utc>) ->
     println!("{t}");
     toon_standen(&d, nu);
 
-    if let Some(r) = &d.risicobeoordeling {
+    if let Some(k) = &d.risicobeoordeling {
         kop("Risicobeoordeling");
         let mut t = tabel(&["", ""]);
-        t.add_row(vec!["methode", &r.methode]);
-        t.add_row(vec!["reikwijdte", &r.scope]);
-        t.add_row(vec!["uitgevoerd door", &r.uitgevoerd_door]);
-        let uitgevoerd = r.uitgevoerd_op.format("%d-%m-%Y").to_string();
-        t.add_row(vec!["uitgevoerd op", &uitgevoerd]);
-        let tot = r.geldig_tot.format("%d-%m-%Y").to_string();
-        t.add_row(vec!["geldig tot", &tot]);
+        t.add_row(vec!["kenmerk", &k.kenmerk]);
+        let gekoppeld = k.gekoppeld_op.format("%d-%m-%Y").to_string();
+        t.add_row(vec!["gekoppeld op", &gekoppeld]);
         println!("{t}");
-        if r.is_verlopen(nu) {
-            let_op("de risicobeoordeling is verlopen");
-        }
+        terzijde("bekijk de beoordeling met 'dpofg risico toon'");
     }
+
     if let Some(b) = &d.bestuursvaststelling {
         kop("Bestuursvaststelling");
         let mut t = tabel(&["", ""]);

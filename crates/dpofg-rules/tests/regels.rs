@@ -6,10 +6,11 @@ use dpofg_domain::{
     doorgifte::{Beoordelingsuitkomst, Doorgifte, Doorgiftebeoordeling, Doorgifteinstrumentsoort},
     incident::Herkomstkanaal,
     leverancier::{Contracteis, Leverancier},
+    risico::{Inschatting, Risicobeoordeling, Risicoklasse},
     zorgplicht::{
         Bestuursvaststelling, Bewijsaanwijzing, Bewijskracht, Bewijsrol, Kaderdefinitie,
-        Kadermaatregel, Niettoepassing, Niettoepassingsvorm, Raamwerkvariant, Risicobeoordeling,
-        Zorgplichtdossier, Zorgplichtonderdeel,
+        Kadermaatregel, Niettoepassing, Niettoepassingsvorm, Raamwerkvariant, Zorgplichtdossier,
+        Zorgplichtonderdeel,
     },
     Aantasting, Bewaartermijn, Dpia, Id, Incident, Motivering, Ontvanger, Overgenomen,
     Restrisiconiveau, Risiconiveau, Status, Termijneenheid, Verwerking, Volledig, Voortoets,
@@ -20,8 +21,9 @@ use dpofg_rules::{
     regels::{
         beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
         beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
-        beoordeel_raadplegingstermijn, beoordeel_verwerkersmelding, beoordeel_verwerking,
-        beoordeel_zorgplicht, catalogus, geimplementeerd, standaardmotor, Zorgplichtdrempels,
+        beoordeel_raadplegingstermijn, beoordeel_risicobeoordeling, beoordeel_verwerkersmelding,
+        beoordeel_verwerking, beoordeel_zorgplicht, catalogus, geimplementeerd, standaardmotor,
+        Zorgplichtdrempels,
     },
 };
 
@@ -1445,23 +1447,7 @@ fn zorgplichtdossier() -> Zorgplichtdossier {
         )
         .unwrap();
     }
-    d.leg_risicobeoordeling_vast(
-        Risicobeoordeling {
-            omschrijving: "jaarlijkse beoordeling".into(),
-            methode: "scenarioanalyse".into(),
-            scope: "de hele organisatie".into(),
-            uitgevoerd_door: "de security officer".into(),
-            uitgevoerd_op: nu() - Duration::days(30),
-            geldig_tot: nu() + Duration::days(300),
-            bewijs: zorgplichtbewijs(
-                Bewijsrol::Toetsing,
-                nu() - Duration::days(30),
-                nu() + Duration::days(300),
-            ),
-        },
-        nu(),
-    )
-    .unwrap();
+    d.koppel_risicobeoordeling(beoordeling().kenmerk.clone(), beoordeling().id, nu()).unwrap();
     d.leg_bestuursvaststelling_vast(
         Bestuursvaststelling {
             datum: nu() - Duration::days(30),
@@ -1480,10 +1466,62 @@ fn zorgplichtdossier() -> Zorgplichtdossier {
     d
 }
 
+/// Een vastgestelde beoordeling met een vaste identiteit, zodat de koppeling
+/// vanuit het zorgplichtdossier ernaar kan wijzen.
+fn beoordeling() -> Risicobeoordeling {
+    let mut b = Risicobeoordeling::nieuw(
+        "RIS-2026",
+        "de netwerk- en informatiesystemen van de hele organisatie",
+        "scenarioanalyse",
+        "eigen methodebeschrijving",
+        "de security officer",
+        nu() - Duration::days(30),
+        nu() + Duration::days(300),
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    // Een vaste identiteit: de fixture wordt twee keer aangeroepen en de
+    // koppeling moet naar hetzelfde dossier wijzen.
+    b.id = vaste_id();
+    b.raadpleeg_bron("dreigingsbeeld", "publicatie", nu() - Duration::days(10), nu()).unwrap();
+    b.onderken(
+        "R-01",
+        "uitval van het rekencentrum",
+        "een langdurige stroomstoring",
+        "de dienstverlening ligt meer dan een dag stil",
+        Inschatting::Gemiddeld,
+        Inschatting::Gemiddeld,
+        nu(),
+    )
+    .unwrap();
+    b.verklein("R-01", vec!["CBB-09".into()], Inschatting::Laag, Inschatting::Gemiddeld, nu())
+        .unwrap();
+    b.aanvaard_restrisico(
+        "R-01",
+        "P. de Boer",
+        "bestuurder",
+        true,
+        motivering("dit restrisico is aanvaardbaar gelet op de kosten van meer maatregelen"),
+        nu(),
+    )
+    .unwrap();
+    b.status = Status::Vastgesteld;
+    b
+}
+
+/// Een vaste identiteit voor de fixture hierboven.
+fn vaste_id() -> Id {
+    // Wordt eenmaal aangemaakt en daarna hergebruikt binnen deze test-binary.
+    use std::sync::OnceLock;
+    static ID: OnceLock<Id> = OnceLock::new();
+    *ID.get_or_init(Id::nieuw)
+}
+
 #[test]
 fn een_dossier_dat_op_orde_is_levert_geen_enkele_bevinding() {
     let motor = standaardmotor();
-    let b = beoordeel_zorgplicht(&motor, &zorgplichtdossier(), drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &zorgplichtdossier(), &[beoordeling()], drempels(), nu());
     assert!(b.is_empty(), "onverwachte bevindingen: {:?}", codes(&b));
 }
 
@@ -1502,7 +1540,8 @@ fn elke_regel_geeft_hoogstens_een_bevinding_per_dossier() {
         nu(),
     )
     .unwrap();
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(60));
+    let b =
+        beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu() + Duration::days(60));
 
     let mut gezien: Vec<&str> = codes(&b);
     gezien.sort_unstable();
@@ -1524,7 +1563,7 @@ fn zrp_01_noemt_de_maatregelen_zonder_eigenaar() {
         nu(),
     )
     .unwrap();
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-01").expect("ZRP-01 hoort aan te slaan");
     assert_eq!(bev.niveau, Niveau::Signalerend);
     assert!(bev.toelichting.contains("10 van de 10"));
@@ -1536,10 +1575,11 @@ fn zrp_01_noemt_de_maatregelen_zonder_eigenaar() {
 fn zrp_02_slaat_aan_na_een_rolwissel_en_blokkeert() {
     let motor = standaardmotor();
     let mut d = zorgplichtdossier();
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-02"));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-02"));
 
     d.wijzig_aangemelde_functionaris("J. Jansen", nu()).unwrap();
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-02").expect("ZRP-02 hoort aan te slaan");
     assert_eq!(bev.niveau, Niveau::Blokkerend);
     assert_eq!(bev.ontvanger, Ontvangerrol::Directie);
@@ -1562,8 +1602,10 @@ fn zrp_03_wacht_de_beoordelingstermijn_af() {
     )
     .unwrap();
 
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-03"));
-    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(31));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-03"));
+    let laat =
+        beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu() + Duration::days(31));
     let bev = laat.iter().find(|x| x.regelcode == "ZRP-03").expect("ZRP-03 hoort aan te slaan");
     assert!(bev.toelichting.contains("31 dagen"));
 }
@@ -1574,10 +1616,11 @@ fn zrp_03_wacht_de_beoordelingstermijn_af() {
 fn zrp_04_scheidt_ingericht_van_aantoonbaar() {
     let motor = standaardmotor();
     let mut d = zorgplichtdossier();
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-04"));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-04"));
 
     d.maatregelen[0].bewijs.clear();
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-04").expect("ZRP-04 hoort aan te slaan");
     assert!(bev.toelichting.contains("CBB-a"));
 }
@@ -1588,9 +1631,11 @@ fn zrp_04_scheidt_ingericht_van_aantoonbaar() {
 fn zrp_05_meldt_verlopend_bewijs_binnen_de_horizon() {
     let motor = standaardmotor();
     let mut d = zorgplichtdossier();
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-05"));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-05"));
 
-    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(250));
+    let laat =
+        beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu() + Duration::days(250));
     assert!(codes(&laat).contains(&"ZRP-05"));
 
     // En met een ruimere horizon slaat hij eerder aan; de drempel komt van
@@ -1598,7 +1643,9 @@ fn zrp_05_meldt_verlopend_bewijs_binnen_de_horizon() {
     let mut ruim = drempels();
     ruim.bewijshorizon_dagen = 365;
     d.maatregelen[0].bewijs.clear();
-    assert!(codes(&beoordeel_zorgplicht(&motor, &d, ruim, nu())).contains(&"ZRP-05"));
+    assert!(
+        codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], ruim, nu())).contains(&"ZRP-05")
+    );
 }
 
 #[test]
@@ -1616,13 +1663,14 @@ fn zrp_06_slaat_aan_bij_een_periodieke_maatregel_zonder_termijn() {
         nu(),
     )
     .unwrap();
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-06").expect("ZRP-06 hoort aan te slaan");
     assert!(bev.toelichting.contains("CBB-a"));
 
     d.stel_frequentie_vast("CBB-a", 6, "de directie", motivering("halfjaarlijks is passend"), nu())
         .unwrap();
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-06"));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-06"));
 }
 
 /// Hoeveel maanden te lang is, staat niet in de regel maar in het pakket.
@@ -1650,10 +1698,13 @@ fn zrp_07_meet_tegen_de_meegegeven_drempel() {
     )
     .unwrap();
 
-    assert!(codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-07"));
+    assert!(codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-07"));
     let mut ruim = drempels();
     ruim.frequentiedrempel_maanden = 36;
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, ruim, nu())).contains(&"ZRP-07"));
+    assert!(
+        !codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], ruim, nu())).contains(&"ZRP-07")
+    );
 }
 
 /// Een eigen termijn die nooit wordt gehaald, is geen termijn maar een
@@ -1688,7 +1739,7 @@ fn zrp_08_slaat_aan_wanneer_de_uitvoering_achterloopt() {
     )
     .unwrap();
 
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-08").expect("ZRP-08 hoort aan te slaan");
     assert!(bev.toelichting.contains("termijn 6"));
 }
@@ -1698,13 +1749,15 @@ fn zrp_09_en_zrp_10_bewaken_de_bestuursvaststelling() {
     let motor = standaardmotor();
     let mut d = zorgplichtdossier();
     let zonder = std::mem::take(&mut d.bestuursvaststelling);
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-09").expect("ZRP-09 hoort aan te slaan");
     assert!(bev.toelichting.contains("2026-08-01"));
 
     d.bestuursvaststelling = zonder;
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-10"));
-    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(400));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-10"));
+    let laat =
+        beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu() + Duration::days(400));
     assert!(codes(&laat).contains(&"ZRP-10"));
 }
 
@@ -1713,12 +1766,13 @@ fn zrp_11_slaat_aan_bij_een_ontbrekende_en_bij_een_verlopen_beoordeling() {
     let motor = standaardmotor();
     let mut d = zorgplichtdossier();
     let bewaard = std::mem::take(&mut d.risicobeoordeling);
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
     assert!(bev.toelichting.contains("geen risicobeoordeling"));
 
     d.risicobeoordeling = bewaard;
-    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(400));
+    let laat =
+        beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu() + Duration::days(400));
     let bev = laat.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
     assert!(bev.toelichting.contains("verlopen"));
 }
@@ -1748,13 +1802,15 @@ fn zrp_12_scheidt_zelfgerapporteerd_van_geverifieerd() {
         nu(),
     )
     .unwrap();
-    assert!(codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-12"));
+    assert!(codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-12"));
 
     let mut getoetst = zorgplichtbewijs(Bewijsrol::Toetsing, nu(), nu() + Duration::days(300));
     getoetst.bewijskracht = Bewijskracht::Geverifieerd;
     getoetst.bijlagehash = "b".repeat(64);
     d.wijs_bewijs_aan("CBB-a", getoetst, nu()).unwrap();
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-12"));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-12"));
 }
 
 /// Niet-toepassing mag een uitzondering zijn. Zodra het gewoonte wordt, is dat
@@ -1763,7 +1819,8 @@ fn zrp_12_scheidt_zelfgerapporteerd_van_geverifieerd() {
 fn zrp_13_telt_hoe_vaak_er_wordt_afgeweken() {
     let motor = standaardmotor();
     let mut d = zorgplichtdossier();
-    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-13"));
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-13"));
 
     for code in ["CBB-a", "CBB-b", "CBB-c"] {
         d.pas_niet_toe(
@@ -1775,7 +1832,7 @@ fn zrp_13_telt_hoe_vaak_er_wordt_afgeweken() {
         )
         .unwrap();
     }
-    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let b = beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu());
     let bev = b.iter().find(|x| x.regelcode == "ZRP-13").expect("ZRP-13 hoort aan te slaan");
     assert_eq!(bev.niveau, Niveau::Rapporterend);
     assert_eq!(bev.ontvanger, Ontvangerrol::Directie);
@@ -1822,13 +1879,157 @@ fn tijdelijk_zrp12_verlopen_audit() {
     }
     println!(
         "MET verlopen audit: {:?}",
-        codes(&beoordeel_zorgplicht(&motor, &d, drempels(), later))
+        codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), later))
     );
 
     let mut zonder = d.clone();
     zonder.maatregelen.iter_mut().for_each(|m| m.bewijs.retain(|b| b.rol != Bewijsrol::Toetsing));
     println!(
         "ZONDER audit:       {:?}",
-        codes(&beoordeel_zorgplicht(&motor, &zonder, drempels(), later))
+        codes(&beoordeel_zorgplicht(&motor, &zonder, &[beoordeling()], drempels(), later))
     );
+}
+
+// --- de risicobeoordeling ----------------------------------------------------
+
+const BEOORDELINGSHORIZON: i64 = 60;
+
+/// Een verse beoordeling die op orde is, levert geen enkele bevinding op.
+#[test]
+fn een_beoordeling_die_op_orde_is_zwijgt() {
+    let motor = standaardmotor();
+    let b = beoordeling();
+    let bev = beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu());
+    assert!(bev.is_empty(), "onverwachte bevindingen: {:?}", codes(&bev));
+}
+
+#[test]
+fn ris_01_en_ris_02_scheiden_verlopen_van_bijna_verlopen() {
+    let motor = standaardmotor();
+    let b = beoordeling();
+
+    assert!(codes(&beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu())).is_empty());
+
+    let bijna =
+        beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu() + Duration::days(260));
+    assert!(codes(&bijna).contains(&"RIS-02"));
+    assert!(!codes(&bijna).contains(&"RIS-01"));
+
+    let voorbij =
+        beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu() + Duration::days(400));
+    assert!(codes(&voorbij).contains(&"RIS-01"));
+    assert!(!codes(&voorbij).contains(&"RIS-02"), "verlopen en bijna verlopen sluiten elkaar uit");
+}
+
+/// De enige blokkerende regel van deze groep: een besluit dat niet is genomen.
+#[test]
+fn ris_03_blokkeert_bij_een_hoog_restrisico_dat_niemand_aanvaardt() {
+    let motor = standaardmotor();
+    let mut b = beoordeling();
+    b.onderken(
+        "R-02",
+        "gijzelsoftware",
+        "een besmetting via een bijlage",
+        "de gegevens zijn versleuteld",
+        Inschatting::Hoog,
+        Inschatting::ZeerHoog,
+        nu(),
+    )
+    .unwrap();
+    assert_eq!(b.risico("R-02").unwrap().restklasse(), Risicoklasse::Hoog);
+
+    let bev = beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu());
+    let r = bev.iter().find(|x| x.regelcode == "RIS-03").expect("RIS-03 hoort aan te slaan");
+    assert_eq!(r.niveau, Niveau::Blokkerend);
+    assert_eq!(r.ontvanger, Ontvangerrol::Directie);
+    assert!(r.toelichting.contains("R-02"));
+
+    b.aanvaard_restrisico(
+        "R-02",
+        "P. de Boer",
+        "bestuurder",
+        true,
+        motivering("verdere maatregelen wegen niet op tegen de kosten"),
+        nu(),
+    )
+    .unwrap();
+    assert!(!codes(&beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu()))
+        .contains(&"RIS-03"));
+}
+
+#[test]
+fn ris_04_noemt_de_risicos_zonder_maatregel() {
+    let motor = standaardmotor();
+    let mut b = beoordeling();
+    b.onderken(
+        "R-03",
+        "verlies van een laptop",
+        "diefstal uit een auto",
+        "gegevens komen bij een derde terecht",
+        Inschatting::Laag,
+        Inschatting::Laag,
+        nu(),
+    )
+    .unwrap();
+    let bev = beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu());
+    let r = bev.iter().find(|x| x.regelcode == "RIS-04").expect("RIS-04 hoort aan te slaan");
+    assert!(r.toelichting.contains("R-03"));
+    assert!(!r.toelichting.contains("R-01"), "R-01 heeft wél een maatregel");
+}
+
+/// Een beoordeling die alleen op het eigen beeld berust, ziet wat de
+/// organisatie al wist.
+#[test]
+fn ris_05_slaat_aan_zonder_geraadpleegde_bron() {
+    let motor = standaardmotor();
+    let mut b = beoordeling();
+    b.bronnen.clear();
+    assert!(codes(&beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu()))
+        .contains(&"RIS-05"));
+}
+
+/// Een besluit dat ouder is dan het stuk waarover het gaat, is geen besluit
+/// over dat stuk.
+#[test]
+fn ris_06_meldt_een_aanvaarding_van_voor_de_laatste_wijziging() {
+    let motor = standaardmotor();
+    let mut b = beoordeling();
+    assert!(!codes(&beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu()))
+        .contains(&"RIS-06"));
+
+    b.herkomst.wijzig("bijgewerkt na een nieuw dreigingsbeeld", nu() + Duration::days(10));
+    let bev =
+        beoordeel_risicobeoordeling(&motor, &b, BEOORDELINGSHORIZON, nu() + Duration::days(10));
+    let r = bev.iter().find(|x| x.regelcode == "RIS-06").expect("RIS-06 hoort aan te slaan");
+    assert!(r.toelichting.contains("R-01"));
+}
+
+/// ZRP-11 kijkt niet naar een veld in het zorgplichtdossier maar naar het
+/// beoordelingsdossier zelf. Anders zou de koppeling kunnen blijven staan
+/// terwijl de beoordeling allang is verlopen.
+#[test]
+fn zrp_11_leest_de_gekoppelde_beoordeling_en_niet_de_koppeling() {
+    let motor = standaardmotor();
+    let d = zorgplichtdossier();
+
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu()))
+        .contains(&"ZRP-11"));
+
+    // De beoordeling staat niet in de kluis.
+    let bev = beoordeel_zorgplicht(&motor, &d, &[], drempels(), nu());
+    let r = bev.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
+    assert!(r.toelichting.contains("wijst naar iets wat er niet is"));
+
+    // De beoordeling is verlopen.
+    let bev =
+        beoordeel_zorgplicht(&motor, &d, &[beoordeling()], drempels(), nu() + Duration::days(400));
+    let r = bev.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
+    assert!(r.toelichting.contains("verlopen"));
+
+    // De beoordeling is nog concept.
+    let mut concept = beoordeling();
+    concept.status = Status::Concept;
+    let bev = beoordeel_zorgplicht(&motor, &d, &[concept], drempels(), nu());
+    let r = bev.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
+    assert!(r.toelichting.contains("zelf nog concept"));
 }

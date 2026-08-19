@@ -524,25 +524,19 @@ impl Kaderdefinitie {
     }
 }
 
-/// De risicobeoordeling waarop de controlset steunt.
+/// De verwijzing naar de risicobeoordeling waarop de controlset steunt.
 ///
-/// Nog geen zelfstandig dossier: hier alleen de verwijzing met het bewijs
-/// erbij, zodat het dossier niet kan doen alsof er een beoordeling ligt.
+/// De beoordeling zelf is een eigen dossier (`crate::risico`). Hier staat
+/// alleen waarnaar wordt verwezen: twee plaatsen waar dezelfde beoordeling
+/// staat, lopen uit elkaar, en dan is de vraag welke van de twee gold.
+///
+/// Of de beoordeling nog geldig is, staat dus niet in dit veld. Dat weet
+/// alleen het beoordelingsdossier, en regel ZRP-11 kijkt daar.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Risicobeoordeling {
-    pub omschrijving: String,
-    pub methode: String,
-    pub scope: String,
-    pub uitgevoerd_door: String,
-    pub uitgevoerd_op: DateTime<Utc>,
-    pub geldig_tot: DateTime<Utc>,
-    pub bewijs: Bewijsaanwijzing,
-}
-
-impl Risicobeoordeling {
-    pub fn is_verlopen(&self, nu: DateTime<Utc>) -> bool {
-        self.geldig_tot <= nu
-    }
+pub struct Beoordelingskoppeling {
+    pub kenmerk: String,
+    pub id: Id,
+    pub gekoppeld_op: DateTime<Utc>,
 }
 
 /// Het besluit waarmee het bestuur het maatregelenpakket heeft vastgesteld.
@@ -586,7 +580,7 @@ pub struct Zorgplichtdossier {
     pub aangemelde_functionaris: String,
 
     pub maatregelen: Vec<Zorgplichtmaatregel>,
-    pub risicobeoordeling: Option<Risicobeoordeling>,
+    pub risicobeoordeling: Option<Beoordelingskoppeling>,
     pub bestuursvaststelling: Option<Bestuursvaststelling>,
 }
 
@@ -942,35 +936,27 @@ impl Zorgplichtdossier {
         Ok(())
     }
 
-    /// Legt de risicobeoordeling vast waarop de controlset steunt.
-    pub fn leg_risicobeoordeling_vast(
+    /// Koppelt de risicobeoordeling waarop de controlset steunt.
+    ///
+    /// Het dossier bewaart geen kopie van de beoordeling. Of zij geldig is,
+    /// weet alleen het beoordelingsdossier zelf; deze koppeling zegt niet meer
+    /// dan waarnaar wordt verwezen.
+    pub fn koppel_risicobeoordeling(
         &mut self,
-        beoordeling: Risicobeoordeling,
+        kenmerk: impl Into<String>,
+        id: Id,
         op: DateTime<Utc>,
     ) -> Resultaat<()> {
-        if beoordeling.methode.trim().is_empty() || beoordeling.scope.trim().is_empty() {
-            return Err(DomeinFout::OngeldigeWaarde {
+        let kenmerk = kenmerk.into();
+        if kenmerk.trim().is_empty() {
+            return Err(DomeinFout::OntbrekendeVerwijzing {
                 veld: "zorgplicht.risicobeoordeling".into(),
-                reden: "noem de methode en de reikwijdte; zonder die twee is een beoordeling \
-                        niet te herhalen en niet te toetsen"
-                    .into(),
+                naar: "risicobeoordeling met een kenmerk".into(),
             });
         }
-        if beoordeling.uitgevoerd_op > op {
-            return Err(DomeinFout::OnmogelijkTijdstip {
-                veld: "zorgplicht.risicobeoordeling.uitgevoerd_op".into(),
-                reden: "de beoordeling zou in de toekomst zijn uitgevoerd".into(),
-            });
-        }
-        if beoordeling.geldig_tot <= beoordeling.uitgevoerd_op {
-            return Err(DomeinFout::OnmogelijkTijdstip {
-                veld: "zorgplicht.risicobeoordeling.geldig_tot".into(),
-                reden: "de beoordeling zou verlopen voordat zij is uitgevoerd".into(),
-            });
-        }
-        beoordeling.bewijs.controleer(op)?;
-        self.risicobeoordeling = Some(beoordeling);
-        self.herkomst.wijzig("risicobeoordeling vastgelegd", op);
+        self.risicobeoordeling =
+            Some(Beoordelingskoppeling { kenmerk: kenmerk.trim().into(), id, gekoppeld_op: op });
+        self.herkomst.wijzig(format!("risicobeoordeling {} gekoppeld", kenmerk.trim()), op);
         Ok(())
     }
 
@@ -1268,8 +1254,8 @@ impl Volledig for Zorgplichtdossier {
         if self.risicobeoordeling.is_none() {
             uit.push(Ontbrekend::blokkerend(
                 "zorgplicht.risicobeoordeling",
-                "leg vast welke risicobeoordeling aan deze controlset ten grondslag ligt, met \
-                 methode, reikwijdte, uitvoerder en bewijs",
+                "koppel de risicobeoordeling waarop deze controlset steunt; maak er eerst een \
+                 met 'dpofg risico nieuw'",
                 "art. 21 lid 1 en 2 Cyberbeveiligingswet",
             ));
         }
@@ -1731,27 +1717,10 @@ mod tests {
     }
 
     #[test]
-    fn een_risicobeoordeling_zonder_methode_wordt_geweigerd() {
+    fn een_koppeling_zonder_kenmerk_wordt_geweigerd() {
         let mut d = dossier();
-        let fout = d
-            .leg_risicobeoordeling_vast(
-                Risicobeoordeling {
-                    omschrijving: "jaarlijkse beoordeling".into(),
-                    methode: "  ".into(),
-                    scope: "de hele organisatie".into(),
-                    uitgevoerd_door: "de security officer".into(),
-                    uitgevoerd_op: nu() - Duration::days(30),
-                    geldig_tot: nu() + Duration::days(300),
-                    bewijs: bewijs(
-                        Bewijsrol::Toetsing,
-                        nu() - Duration::days(30),
-                        nu() + Duration::days(300),
-                    ),
-                },
-                nu(),
-            )
-            .unwrap_err();
-        assert!(fout.to_string().contains("methode en de reikwijdte"), "kreeg: {fout}");
+        let fout = d.koppel_risicobeoordeling("   ", Id::nieuw(), nu()).unwrap_err();
+        assert!(fout.to_string().contains("risicobeoordeling"), "kreeg: {fout}");
     }
 
     /// Een kader dat niemand tegen de bron heeft gehouden, mag wel worden
@@ -1840,23 +1809,7 @@ mod tests {
             d.wijs_eigenaar_toe(&code, "beleidsadviseur", "J. Jansen", nu()).unwrap();
             d.richt_in(&code, nu()).unwrap();
         }
-        d.leg_risicobeoordeling_vast(
-            Risicobeoordeling {
-                omschrijving: "jaarlijkse beoordeling".into(),
-                methode: "scenarioanalyse".into(),
-                scope: "de hele organisatie".into(),
-                uitgevoerd_door: "de security officer".into(),
-                uitgevoerd_op: nu() - Duration::days(30),
-                geldig_tot: nu() + Duration::days(300),
-                bewijs: bewijs(
-                    Bewijsrol::Toetsing,
-                    nu() - Duration::days(30),
-                    nu() + Duration::days(300),
-                ),
-            },
-            nu(),
-        )
-        .unwrap();
+        d.koppel_risicobeoordeling("RIS-2026", Id::nieuw(), nu()).unwrap();
         d.leg_bestuursvaststelling_vast(
             Bestuursvaststelling {
                 datum: nu() - Duration::days(5),

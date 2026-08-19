@@ -30,7 +30,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Volledigheidsmechanisme | werkt | Teller met grondslag; blokkerend onderscheiden van signalerend |
 | Incidentdossier | werkt | Vijf klokken op eigen ankers, meldbesluit met drie lagen |
 | Klokkenmotor | werkt | Leidt verplichtingen af; ankers vallen niet samen |
-| Controleregels | **deels** | 54 van de 68 regels in de catalogus hebben een evaluatiefunctie |
+| Controleregels | **deels** | 60 van de 74 regels in de catalogus hebben een evaluatiefunctie |
 | Kennispakketten | werkt | Ondertekend, met terugrolbescherming en consolidatiedatum |
 | Dossiers | werkt | Ondertekend manifest, weglatingen zichtbaar, voorbehoud meegetekend |
 | Verificatiebinary | werkt | Leest uitsluitend, geen wachtwoord, geen kluis nodig |
@@ -46,6 +46,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Doorgiften buiten de EER | werkt | Instrument, doorgiftebeoordeling, artikel 49 met telling, controle tegen het kennispakket |
 | Leveranciersregister | werkt | De acht onderdelen van art. 28 lid 3 met vindplaats per onderdeel, contractuele meldtermijn, subverwerkerslijst met controledatum |
 | Zorgplichtcontrolset | werkt | De tien onderdelen van art. 21 lid 3 Cbw, afgeleid uit het kennispakket; bewijs met een geldigheidsvenster maakt een maatregel aantoonbaar, of niet |
+| Risicobeoordeling | werkt | Eigen dossier met methode, reikwijdte, bronnen en onderkende risico's; het restrisico daalt alleen met een maatregel erbij, en een hoog restrisico aanvaardt het bestuur |
 
 ---
 
@@ -59,7 +60,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Raamwerkvariant B en C | 3 | Het mechanisme staat er; de kaders zelf ontbreken in het kennispakket |
 | Driefactorscore en volwassenheidsniveau | 3 | Het plan geeft vier veldnamen en geen enkele schaal of weging |
 | Crosswalk naar informatiebeveiligingsnormen | 3 | Vereist een mappinggraaf met reviewhoudbaarheid per rand |
-| Vervalprognose over alle dossiers heen | 3 | De geldigheidsvensters bestaan nu binnen de controlset; een prognose over het hele dossierbestand nog niet |
+| Vervalprognose over alle dossiers heen | 3 | De geldigheidsvensters bestaan nu in de controlset en in de risicobeoordeling; een prognose over het hele dossierbestand nog niet |
 | Ketenbewijs tussen organisaties | 4 | |
 | Persoonlijk dossier van de functionaris | 1 | De cryptografische structuur ligt er; een tweede wachtwoord ontbreekt |
 | Grafische schil | 1 | De opdrachtregel is bewust eerst gebouwd |
@@ -119,7 +120,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 666 testfuncties, 670 uitgevoerde tests; ~5.900 regels in `tests` |
+| Tests | 696 testfuncties, 700 uitgevoerde tests; ~6.200 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

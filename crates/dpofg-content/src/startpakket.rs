@@ -255,6 +255,15 @@ fn termijnen() -> Vec<Termijnsoort> {
             "interne norm; geen wettelijke grondslag",
         ),
         Termijnsoort::kalender(
+            "INTERN-RISICOBEOORDELING-HORIZON",
+            "horizon waarbinnen een verlopende risicobeoordeling wordt gemeld",
+            60,
+            Eenheid::Kalenderdagen,
+            Rechtsstelsel::ZelfGesteld,
+            Aanvang::VanafGebeurtenis,
+            "interne norm; geen wettelijke termijn",
+        ),
+        Termijnsoort::kalender(
             "INTERN-ZORGPLICHT-BEOORDELINGSTERMIJN",
             "termijn waarbinnen een afgeleide maatregel beoordeeld hoort te zijn",
             30,
@@ -420,7 +429,9 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                 "welke van die maatregelen een voorbehoud kennen waardoor afwijken met een \
                  motivering is toegestaan",
                 "de termijn waarbinnen het bestuur het maatregelenpakket opnieuw vaststelt",
-                "de drempel waarboven een zelf vastgestelde uitvoeringsfrequentie te lang is"
+                "de drempel waarboven een zelf vastgestelde uitvoeringsfrequentie te lang is",
+                "de geldigheidsduur van een risicobeoordeling en de termijn waarbinnen een \
+                 verlopende beoordeling wordt gemeld"
             ]
         }),
     );

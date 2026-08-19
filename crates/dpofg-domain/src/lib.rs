@@ -71,6 +71,7 @@ pub mod klokken;
 pub mod leverancier;
 pub mod mapping;
 pub mod redactie;
+pub mod risico;
 pub mod verwerking;
 pub mod verzoek;
 pub mod volledigheid;

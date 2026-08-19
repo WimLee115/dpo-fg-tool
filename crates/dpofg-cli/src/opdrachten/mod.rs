@@ -13,6 +13,7 @@ pub mod mapping;
 pub mod pakket;
 pub mod redactie;
 pub mod register;
+pub mod risico;
 pub mod termijn;
 pub mod verzoek;
 pub mod woo;

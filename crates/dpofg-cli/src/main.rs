@@ -91,6 +91,10 @@ enum Opdracht {
     #[command(subcommand)]
     Leverancier(opdrachten::leverancier::Leveranciersopdracht),
 
+    /// Risicobeoordelingen waarop de zorgplichtmaatregelen steunen.
+    #[command(subcommand)]
+    Risico(opdrachten::risico::Risicoopdracht),
+
     /// De zorgplichtcontrolset van artikel 21 lid 3 Cyberbeveiligingswet.
     #[command(subcommand)]
     Zorgplicht(opdrachten::zorgplicht::Zorgplichtopdracht),
@@ -154,6 +158,7 @@ fn draai() -> Result<()> {
         Opdracht::Lia(o) => opdrachten::lia::draai(o, args.kluis, nu),
         Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
         Opdracht::Leverancier(o) => opdrachten::leverancier::draai(o, args.kluis, nu),
+        Opdracht::Risico(o) => opdrachten::risico::draai(o, args.kluis, nu),
         Opdracht::Zorgplicht(o) => opdrachten::zorgplicht::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),

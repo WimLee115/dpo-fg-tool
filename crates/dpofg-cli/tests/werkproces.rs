@@ -1993,8 +1993,8 @@ fn een_leeg_verplicht_veld_wordt_geweigerd() {
 fn de_dekking_meldt_wat_er_werkelijk_draait() {
     let p = Proef::nieuw();
     let uit = p.moet("controle --dekking");
-    assert!(uit.contains("van de 68 regels"));
-    assert!(uit.contains("54 van de 68"), "kreeg:\n{uit}");
+    assert!(uit.contains("van de 74 regels"));
+    assert!(uit.contains("60 van de 74"), "kreeg:\n{uit}");
     // En wat er níet draait, staat er met naam bij.
     assert!(uit.contains("Nog zonder evaluatie"));
     assert!(uit.contains("SYS-09"), "kreeg:\n{uit}");
@@ -2444,13 +2444,8 @@ fn de_controlset_is_met_het_meegeleverde_pakket_af_te_maken() {
              --door 'de directie' --motivering 'jaarlijks sluit aan op de planning en control'"
         ));
     }
-    let verslag = p.bestand("risicobeoordeling.txt", "verslag van de risicobeoordeling");
-    p.moet(&format!(
-        "zorgplicht risicobeoordeling ZRP-2026 --methode scenarioanalyse \
-         --scope 'de hele organisatie' --uitgevoerd-door 'de security officer' \
-         --geldig-tot 2027-06-01T00:00:00Z --bestand {verslag} \
-         --omschrijving 'verslag van de jaarlijkse beoordeling'"
-    ));
+    beoordeling_opzetten(&p);
+    p.moet("zorgplicht risicobeoordeling ZRP-2026 --beoordeling RIS-2026");
     let besluit = p.bestand("besluit.txt", "besluit van het bestuur");
     p.moet(&format!(
         "zorgplicht bestuursvaststelling ZRP-2026 --besluit 'het maatregelenpakket is \
@@ -2490,4 +2485,152 @@ fn het_aandeel_afwijkingen_meet_over_wat_afwijkbaar_is() {
     let uit = p.moet("controle --vanaf rapporterend");
     assert!(uit.contains("ZRP-13"), "kreeg:\n{uit}");
     assert!(uit.contains("100 procent"), "kreeg:\n{uit}");
+}
+
+// --------------------------------------------------------------------------
+// De risicobeoordeling als eigen dossier
+// --------------------------------------------------------------------------
+
+fn beoordeling_opzetten(p: &Proef) {
+    p.moet(
+        "risico nieuw RIS-2026 --reikwijdte 'de netwerk- en informatiesystemen' \
+         --methode scenarioanalyse --uitgevoerd-door 'de security officer' \
+         --geldig-tot 2027-06-01T00:00:00Z",
+    );
+    p.moet("risico bron RIS-2026 --aanduiding 'het dreigingsbeeld' --soort publicatie");
+    p.moet(
+        "risico onderken RIS-2026 --code R-01 --omschrijving 'uitval van het rekencentrum' \
+         --oorzaak 'een langdurige stroomstoring' \
+         --gevolg 'de dienstverlening ligt meer dan een dag stil' \
+         --waarschijnlijkheid gemiddeld --impact gemiddeld",
+    );
+    p.moet(
+        "risico verklein RIS-2026 --code R-01 --maatregel CBB-09 \
+         --restwaarschijnlijkheid laag --restimpact gemiddeld",
+    );
+    p.moet(
+        "risico aanvaarden RIS-2026 --code R-01 --door 'P. de Boer' --functie bestuurder \
+         --motivering 'verdere maatregelen wegen niet op tegen de kosten'",
+    );
+    p.moet("risico vaststellen RIS-2026");
+}
+
+/// De inschatting bijstellen in plaats van het risico aanpakken is de stilste
+/// manier om een dossier op orde te krijgen.
+#[test]
+fn een_restrisico_verlagen_zonder_maatregel_kan_niet() {
+    let p = Proef::nieuw();
+    p.moet(
+        "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
+         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
+    );
+    p.moet(
+        "risico onderken RIS-2026 --code R-01 --omschrijving 'uitval' --oorzaak 'een storing' \
+         --gevolg 'de dienstverlening ligt stil' --waarschijnlijkheid hoog --impact hoog",
+    );
+    let uit = p.moet_falen(
+        "risico verklein RIS-2026 --code R-01 --restwaarschijnlijkheid laag --restimpact laag",
+    );
+    assert!(uit.contains("geen beoordeling maar een aanname"), "kreeg:\n{uit}");
+
+    let uit = p.moet_falen(
+        "risico verklein RIS-2026 --code R-01 --maatregel CBB-09 \
+         --restwaarschijnlijkheid zeer-hoog --restimpact hoog",
+    );
+    assert!(uit.contains("maken een risico niet groter"), "kreeg:\n{uit}");
+}
+
+/// Wie de gevolgen draagt, neemt het besluit. En het besluit gaat over een
+/// bepaald restrisico: verandert dat, dan vervalt het.
+#[test]
+fn een_hoog_restrisico_aanvaardt_het_bestuur() {
+    let p = Proef::nieuw();
+    p.moet(
+        "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
+         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
+    );
+    p.moet(
+        "risico onderken RIS-2026 --code R-02 --omschrijving gijzelsoftware \
+         --oorzaak 'een besmetting via een bijlage' --gevolg 'de gegevens zijn versleuteld' \
+         --waarschijnlijkheid hoog --impact zeer-hoog",
+    );
+    let uit = p.moet_falen(
+        "risico aanvaarden RIS-2026 --code R-02 --door 'J. Jansen' \
+         --functie 'de security officer' \
+         --motivering 'meer maatregelen zijn niet haalbaar binnen het budget'",
+    );
+    assert!(uit.contains("dat aanvaardt het bestuur"), "kreeg:\n{uit}");
+
+    p.moet(
+        "risico aanvaarden RIS-2026 --code R-02 --door 'P. de Boer' --functie bestuurder \
+         --bestuurder --motivering 'meer maatregelen zijn niet haalbaar binnen het budget'",
+    );
+
+    let uit = p.moet(
+        "risico verklein RIS-2026 --code R-02 --maatregel CBB-08 \
+         --restwaarschijnlijkheid laag --restimpact hoog",
+    );
+    assert!(uit.contains("eerdere aanvaarding is vervallen"), "kreeg:\n{uit}");
+}
+
+/// Een controlset kan niet steunen op een beoordeling die zelf nog concept is,
+/// en evenmin op een die er niet meer is.
+#[test]
+fn de_controlset_steunt_op_een_vastgestelde_beoordeling() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet(
+        "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
+         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
+    );
+    let uit = p.moet("zorgplicht risicobeoordeling ZRP-2026 --beoordeling RIS-2026");
+    assert!(uit.contains("nog niet vastgesteld"), "kreeg:\n{uit}");
+
+    let uit = p.moet("controle");
+    assert!(uit.contains("ZRP-11"), "kreeg:\n{uit}");
+    assert!(uit.contains("zelf nog concept"), "kreeg:\n{uit}");
+
+    let uit = p.moet_falen("zorgplicht risicobeoordeling ZRP-2026 --beoordeling RIS-9999");
+    assert!(uit.contains("dpofg risico lijst"), "kreeg:\n{uit}");
+}
+
+/// Er komt geen score uit. Wat eruit komt zijn twee inschattingen, een klasse
+/// die één doel dient, en wie het overblijvende risico aanvaardt.
+#[test]
+fn de_beoordeling_levert_geen_score_op() {
+    let p = Proef::nieuw();
+    beoordeling_opzetten(&p);
+    let uit = p.moet("risico toon RIS-2026");
+    assert!(uit.contains("gemiddeld / gemiddeld"), "kreeg:\n{uit}");
+    assert!(uit.contains("laag / gemiddeld"), "kreeg:\n{uit}");
+    assert!(uit.contains("leveren geen getal op"), "kreeg:\n{uit}");
+    assert!(uit.contains("P. de Boer"), "kreeg:\n{uit}");
+}
+
+/// Een beoordeling zonder risico's is een verklaring dat er niets aan de hand
+/// is, en die wordt niet vastgesteld.
+#[test]
+fn vaststellen_vergt_ten_minste_een_risico() {
+    let p = Proef::nieuw();
+    p.moet(
+        "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
+         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
+    );
+    let uit = p.moet_falen("risico vaststellen RIS-2026");
+    assert!(uit.contains("risico.risicos"), "kreeg:\n{uit}");
+}
+
+/// Een verlopen beoordeling laat de maatregelen eronder op een beeld steunen
+/// dat niet meer is getoetst.
+#[test]
+fn een_verlopen_beoordeling_wordt_gemeld() {
+    let p = Proef::nieuw();
+    p.moet(
+        "risico nieuw RIS-2025 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
+         --uitgevoerd-door 'de security officer' --uitgevoerd-op 2026-01-01T09:00:00Z \
+         --geldig-tot 2026-07-01T00:00:00Z",
+    );
+    let uit = p.moet("controle");
+    assert!(uit.contains("RIS-01"), "kreeg:\n{uit}");
+    assert!(uit.contains("verlopen"), "kreeg:\n{uit}");
 }
