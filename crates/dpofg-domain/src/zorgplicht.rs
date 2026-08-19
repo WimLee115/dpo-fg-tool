@@ -418,11 +418,17 @@ pub struct Zorgplichtmaatregel {
 
 impl Zorgplichtmaatregel {
     /// Het uitvoeringsbewijs dat op dit moment geldt, als dat er is.
+    ///
+    /// Bij meerdere geldige stukken wint het stuk waarvan de uitvoering het
+    /// meest recent is, en niet het stuk met het ruimste venster. Anders zou
+    /// een oud stuk met een lange looptijd een verse uitdraai blijven
+    /// overschaduwen, en zou de vervaldatum die het dossier toont niet de
+    /// datum zijn waarop de laatste uitvoering vervalt.
     pub fn geldig_uitvoeringsbewijs(&self, nu: DateTime<Utc>) -> Option<&Bewijsaanwijzing> {
         self.bewijs
             .iter()
             .filter(|b| b.rol == Bewijsrol::Uitvoering && b.geldt_op(nu))
-            .max_by_key(|b| b.geldig_tot)
+            .max_by_key(|b| (b.geldig_van, b.aangewezen_op))
     }
 
     /// Het bewijsstuk dat als eerste vervalt van de stukken die nu gelden.
@@ -456,11 +462,17 @@ impl Zorgplichtmaatregel {
     /// Gemeten aan het begin van het geldigheidsvenster: dat is het moment
     /// waarop de uitvoering plaatsvond, niet het moment waarop het stuk
     /// verloopt.
+    ///
+    /// Stukken waarvan het venster nog moet ingaan tellen niet mee. Een
+    /// uitvoering die nog moet plaatsvinden, heeft niet plaatsgevonden; zou
+    /// zo een stuk wel meetellen, dan zou het aanwijzen van bewijs met een
+    /// datum in de toekomst regel ZRP-08 het zwijgen opleggen.
     pub fn maanden_sinds_uitvoering(&self, nu: DateTime<Utc>) -> Option<i64> {
         self.bewijs
             .iter()
             .filter(|b| b.rol == Bewijsrol::Uitvoering)
             .map(|b| b.geldig_van)
+            .filter(|v| *v <= nu)
             .max()
             .map(|v| (nu - v).num_days() / 30)
     }
@@ -473,10 +485,17 @@ pub struct Kadermaatregel {
     pub onderdeel: Zorgplichtonderdeel,
     pub normvindplaats: String,
     pub omschrijving: String,
-    #[serde(default)]
+    /// Of het kader deze maatregel periodiek uitgevoerd wil zien.
+    ///
+    /// Zonder `serde(default)`, met opzet: een ontbrekend veld zou terugvallen
+    /// op `false`, en dat is de kant die controle wegneemt. Een kader met een
+    /// typefout hoort te weigeren en niet stilzwijgend de frequentie-eis te
+    /// laten vervallen.
     pub periodiek: bool,
     pub niettoepassingsvorm: Niettoepassingsvorm,
-    #[serde(default)]
+    /// Of het kader bij deze maatregel toetsing door een ander verwacht.
+    ///
+    /// Zonder `serde(default)`, om dezelfde reden als bij `periodiek`.
     pub externe_toetsing_verwacht: bool,
 }
 
@@ -871,6 +890,43 @@ impl Zorgplichtdossier {
         Ok(())
     }
 
+    /// Keurt een voorgenomen bewijsaanwijzing zonder iets vast te leggen.
+    ///
+    /// Bestaat omdat de bedieningsschil het bestand versleuteld in de kluis
+    /// zet vóórdat het dossier wordt bewaard, en die handeling in de keten
+    /// hangt en dus niet terug te draaien is. Wie eerst keurt, laat bij een
+    /// typefout in de maatregelcode geen bijlage achter die aan niets hangt.
+    pub fn keur_bewijs(
+        &self,
+        code: &str,
+        rol: Bewijsrol,
+        omschrijving: &str,
+        geldig_van: DateTime<Utc>,
+        geldig_tot: DateTime<Utc>,
+        nu: DateTime<Utc>,
+    ) -> Resultaat<()> {
+        if self.maatregel(code).is_none() {
+            return Err(DomeinFout::OntbrekendeVerwijzing {
+                veld: "zorgplicht.maatregel".into(),
+                naar: format!("maatregel met code '{code}' in dit kader"),
+            });
+        }
+        Bewijsaanwijzing {
+            rol,
+            omschrijving: omschrijving.to_string(),
+            // Een geldige plaatsvervangende hash: de echte komt pas uit de
+            // kluis, en die stap volgt op deze keuring.
+            bijlagehash: "0".repeat(64),
+            bestandsnaam: String::new(),
+            geldig_van,
+            geldig_tot,
+            bewijskracht: Bewijskracht::Zelfgerapporteerd,
+            aangewezen_door: String::new(),
+            aangewezen_op: nu,
+        }
+        .controleer(nu)
+    }
+
     /// Wijst een bewijsstuk aan bij een maatregel.
     pub fn wijs_bewijs_aan(
         &mut self,
@@ -1011,28 +1067,57 @@ impl Zorgplichtdossier {
         uit
     }
 
-    /// Het aandeel maatregelen dat gemotiveerd niet wordt toegepast, in
-    /// procenten.
-    pub fn aandeel_niet_toegepast(&self) -> u32 {
-        if self.maatregelen.is_empty() {
-            return 0;
+    /// Het aandeel afwijkbare maatregelen dat gemotiveerd niet wordt
+    /// toegepast, in procenten.
+    ///
+    /// De noemer is niet de hele set maar het aantal maatregelen waarvan het
+    /// kader zegt dat afwijken is toegestaan. Dat is de enige noemer die iets
+    /// zegt: bij een kader waarin dertien van de vijftien maatregelen
+    /// onvoorwaardelijk zijn, kan het aandeel over de hele set nooit boven de
+    /// dertien procent komen, en zou elke drempel daarboven een regel
+    /// opleveren die nooit kan aanslaan.
+    ///
+    /// `None` wanneer er geen enkele afwijkbare maatregel is: dan valt er
+    /// niets te meten, en nul melden zou suggereren dat er niet wordt
+    /// afgeweken terwijl er niet afgeweken kán worden.
+    pub fn aandeel_niet_toegepast(&self) -> Option<u32> {
+        let afwijkbaar = self
+            .maatregelen
+            .iter()
+            .filter(|m| m.niettoepassingsvorm != Niettoepassingsvorm::Verboden)
+            .count();
+        if afwijkbaar == 0 {
+            return None;
         }
         let aantal = self
             .maatregelen
             .iter()
             .filter(|m| matches!(m.toepassing, Toepassing::NietToegepast(_)))
             .count();
-        ((aantal * 100) / self.maatregelen.len()) as u32
+        Some(((aantal * 100) / afwijkbaar) as u32)
+    }
+
+    /// Hoeveel maatregelen het kader afwijkbaar noemt.
+    pub fn aantal_afwijkbaar(&self) -> usize {
+        self.maatregelen
+            .iter()
+            .filter(|m| m.niettoepassingsvorm != Niettoepassingsvorm::Verboden)
+            .count()
     }
 
     /// Wat er op een peildatum niet meer met geldig bewijs is te onderbouwen.
     ///
     /// Geen prognose met een score, maar een lijst: code, omschrijving,
     /// eigenaar en de datum waarop het bewijs vervalt.
+    ///
+    /// Meet aan het bewijs en niet aan de stand. Een maatregel die op
+    /// menselijk oordeel wacht omdat de eigenaar of de frequentie ontbreekt,
+    /// kan wel degelijk geldig uitvoeringsbewijs dragen; die uit de lijst
+    /// weglaten zou juist de dossiers waar het meeste openstaat het rustigst
+    /// laten ogen.
     pub fn vervalt_voor(&self, peildatum: DateTime<Utc>, nu: DateTime<Utc>) -> Vec<Vervalregel> {
         self.maatregelen
             .iter()
-            .filter(|m| m.stand(nu) == Maatregelstand::Aantoonbaar)
             .filter_map(|m| {
                 let bewijs = m.geldig_uitvoeringsbewijs(nu)?;
                 if bewijs.geldig_tot > peildatum {
@@ -1094,8 +1179,14 @@ impl Volledig for Zorgplichtdossier {
     fn aantal_verplichte_onderdelen(&self) -> usize {
         // Per maatregel: een eigenaar en een oordeel over de toepassing.
         let mut totaal = self.maatregelen.len() * 2;
-        // Voor periodieke maatregelen daarbovenop een frequentie.
-        totaal += self.maatregelen.iter().filter(|m| m.periodiek).count();
+        // Voor periodieke maatregelen daarbovenop een frequentie, tenzij
+        // juist is besloten dat de maatregel niet wordt uitgevoerd: hoe vaak
+        // iets gebeurt dat niet gebeurt, is geen zinnige vraag.
+        totaal += self
+            .maatregelen
+            .iter()
+            .filter(|m| m.periodiek && !matches!(m.toepassing, Toepassing::NietToegepast(_)))
+            .count();
         // Voor ingerichte maatregelen daarbovenop geldig uitvoeringsbewijs.
         totaal += self
             .maatregelen
@@ -1109,15 +1200,22 @@ impl Volledig for Zorgplichtdossier {
     fn ontbrekende_onderdelen(&self) -> Vec<Ontbrekend> {
         let mut uit = Vec::new();
 
+        // Signalerend en niet blokkerend. De verificatie van het kader is werk
+        // van een jurist buiten deze toepassing, en het meegeleverde pakket
+        // draagt die stempel uitdrukkelijk niet. Zou dit vaststellen
+        // tegenhouden, dan levert het product een werkproces dat met de eigen
+        // inhoud nooit is af te maken — en dat is geen bewaking maar een dood
+        // spoor. Het gat blijft wel in elke uitvoer en in elk dossier staan.
         if self.kader_geverifieerd_op.is_none() {
-            uit.push(Ontbrekend::blokkerend(
+            uit.push(Ontbrekend::signalerend(
                 "zorgplicht.kader",
                 format!(
-                    "het kader '{}' is niet tegen de bron geverifieerd; laat de indeling van \
-                     de maatregelen controleren voordat u dit dossier vaststelt",
+                    "het kader '{}' is niet tegen de bron geverifieerd; de indeling van de \
+                     maatregelen over de tien onderdelen is een vertrekpunt en geen \
+                     vastgestelde controlset",
                     self.kaderkenmerk
                 ),
-                "art. 6 lid 4 Cyberbeveiligingsbesluit",
+                "voorbehoud bij het kennispakket; geen wettelijke bepaling",
             ));
         }
 
@@ -1126,7 +1224,7 @@ impl Volledig for Zorgplichtdossier {
                 uit.push(Ontbrekend::blokkerend(
                     format!("zorgplicht.maatregel.{}.eigenaar", m.code),
                     format!("wijs een rol met bezetting aan voor: {}", m.omschrijving),
-                    m.onderdeel.grondslag(),
+                    "art. 6 lid 4 Cyberbeveiligingsbesluit",
                 ));
             }
             if matches!(m.toepassing, Toepassing::NogNietBeoordeeld) {
@@ -1136,13 +1234,16 @@ impl Volledig for Zorgplichtdossier {
                     m.onderdeel.grondslag(),
                 ));
             }
-            if m.periodiek && m.frequentie.is_none() {
+            if m.periodiek
+                && m.frequentie.is_none()
+                && !matches!(m.toepassing, Toepassing::NietToegepast(_))
+            {
                 uit.push(Ontbrekend::blokkerend(
                     format!("zorgplicht.maatregel.{}.frequentie", m.code),
                     "stel zelf vast hoe vaak deze maatregel wordt uitgevoerd, met een \
                      motivering waarom die termijn passend is"
                         .to_string(),
-                    "art. 18 Cyberbeveiligingsbesluit",
+                    "zelf vastgestelde termijn; de wet noemt hier geen frequentie",
                 ));
             }
             // Op de rol en niet op "er ligt iets": een vastgesteld beleidsstuk
@@ -1159,7 +1260,7 @@ impl Volledig for Zorgplichtdossier {
                     "deze maatregel is ingericht maar er ligt geen bewijs van de uitvoering; \
                      tot dat er is, geldt hij als vastgesteld en niet als aantoonbaar"
                         .to_string(),
-                    "art. 5 lid 2 AVG; art. 6 lid 4 Cyberbeveiligingsbesluit",
+                    "art. 6 lid 4 Cyberbeveiligingsbesluit",
                 ));
             }
         }
@@ -1799,17 +1900,209 @@ mod tests {
         assert_eq!(vervalt[0].eigenaar.as_ref().unwrap().persoon, "J. Jansen");
     }
 
+    /// De noemer is het aantal maatregelen waar het kader afwijken toestaat.
+    /// Zou hij de hele set zijn, dan kon het aandeel bij een kader met
+    /// overwegend onvoorwaardelijke eisen nooit boven een zinnige drempel
+    /// komen, en had regel ZRP-13 nooit kunnen aanslaan.
     #[test]
-    fn het_aandeel_niet_toegepaste_maatregelen_is_te_bepalen() {
-        let mut d = dossier();
-        assert_eq!(d.aandeel_niet_toegepast(), 0);
+    fn het_aandeel_meet_over_de_maatregelen_waar_afwijken_mag() {
+        let mut k = kader();
+        for m in &mut k.maatregelen {
+            m.niettoepassingsvorm = Niettoepassingsvorm::Verboden;
+        }
+        k.maatregelen[0].niettoepassingsvorm = Niettoepassingsvorm::EigenMotivering;
+        k.maatregelen[1].niettoepassingsvorm = Niettoepassingsvorm::EigenMotivering;
+        let mut d = Zorgplichtdossier::leid_af(
+            "ZRP-2026",
+            "Gemeente Voorbeeld",
+            "A. de Vries",
+            &k,
+            None,
+            "u1",
+            nu(),
+        )
+        .unwrap();
+
+        assert_eq!(d.aantal_afwijkbaar(), 2);
+        assert_eq!(d.aandeel_niet_toegepast(), Some(0));
+
         d.pas_niet_toe(
             "CBB-a",
             Niettoepassing::EigenMotivering(motivering("dit past niet bij onze omvang")),
             nu(),
         )
         .unwrap();
-        assert_eq!(d.aandeel_niet_toegepast(), 10);
+        assert_eq!(d.aandeel_niet_toegepast(), Some(50));
+    }
+
+    /// Kan er nergens worden afgeweken, dan valt er niets te meten. Nul melden
+    /// zou suggereren dat er niet wordt afgeweken terwijl er niet afgeweken
+    /// kán worden.
+    #[test]
+    fn zonder_afwijkbare_maatregelen_is_er_geen_aandeel() {
+        let mut k = kader();
+        for m in &mut k.maatregelen {
+            m.niettoepassingsvorm = Niettoepassingsvorm::Verboden;
+        }
+        let d = Zorgplichtdossier::leid_af(
+            "ZRP-2026",
+            "Gemeente Voorbeeld",
+            "A. de Vries",
+            &k,
+            None,
+            "u1",
+            nu(),
+        )
+        .unwrap();
+        assert_eq!(d.aandeel_niet_toegepast(), None);
+    }
+
+    /// Bewijs waarvan het venster nog moet ingaan, bewijst geen uitvoering die
+    /// al heeft plaatsgevonden. Telde het mee, dan legde het aanwijzen van een
+    /// toekomstige datum regel ZRP-08 het zwijgen op.
+    #[test]
+    fn toekomstig_bewijs_verschuift_de_laatste_uitvoering_niet() {
+        let mut d = dossier();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu() - Duration::days(400), nu() + Duration::days(30)),
+            nu(),
+        )
+        .unwrap();
+        assert_eq!(d.maatregel("CBB-a").unwrap().maanden_sinds_uitvoering(nu()), Some(13));
+
+        let mut later =
+            bewijs(Bewijsrol::Uitvoering, nu() + Duration::days(300), nu() + Duration::days(600));
+        later.bijlagehash = "b".repeat(64);
+        d.wijs_bewijs_aan("CBB-a", later, nu()).unwrap();
+        assert_eq!(d.maatregel("CBB-a").unwrap().maanden_sinds_uitvoering(nu()), Some(13));
+    }
+
+    /// Bij twee geldige stukken wint de meest recente uitvoering, niet het
+    /// ruimste venster: anders blijft een oud stuk met een lange looptijd een
+    /// verse uitdraai overschaduwen.
+    #[test]
+    fn het_nieuwste_uitvoeringsbewijs_wint() {
+        let mut d = dossier();
+        d.wijs_eigenaar_toe("CBB-a", "beleidsadviseur", "J. Jansen", nu()).unwrap();
+        d.richt_in("CBB-a", nu()).unwrap();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu() - Duration::days(300), nu() + Duration::days(400)),
+            nu(),
+        )
+        .unwrap();
+        let mut vers =
+            bewijs(Bewijsrol::Uitvoering, nu() - Duration::days(5), nu() + Duration::days(90));
+        vers.bijlagehash = "c".repeat(64);
+        d.wijs_bewijs_aan("CBB-a", vers, nu()).unwrap();
+
+        let gekozen = d.maatregel("CBB-a").unwrap().geldig_uitvoeringsbewijs(nu()).unwrap();
+        assert_eq!(gekozen.geldig_tot, nu() + Duration::days(90));
+    }
+
+    /// Hoe vaak iets gebeurt dat niet gebeurt, is geen zinnige vraag.
+    #[test]
+    fn een_niet_toegepaste_maatregel_vraagt_geen_uitvoeringstermijn() {
+        let mut k = kader();
+        k.maatregelen[0].periodiek = true;
+        let mut d = Zorgplichtdossier::leid_af(
+            "ZRP-2026",
+            "Gemeente Voorbeeld",
+            "A. de Vries",
+            &k,
+            None,
+            "u1",
+            nu(),
+        )
+        .unwrap();
+        let velden: Vec<_> = d.ontbrekende_onderdelen().into_iter().map(|o| o.veld).collect();
+        assert!(velden.contains(&"zorgplicht.maatregel.CBB-a.frequentie".to_string()));
+
+        d.pas_niet_toe(
+            "CBB-a",
+            Niettoepassing::EigenMotivering(motivering("dit past niet bij onze omvang")),
+            nu(),
+        )
+        .unwrap();
+        let velden: Vec<_> = d.ontbrekende_onderdelen().into_iter().map(|o| o.veld).collect();
+        assert!(!velden.contains(&"zorgplicht.maatregel.CBB-a.frequentie".to_string()));
+    }
+
+    /// De vervallijst meet aan het bewijs en niet aan de stand: juist het
+    /// dossier waar nog het meeste openstaat, zou anders het rustigst ogen.
+    #[test]
+    fn de_vervallijst_slaat_wachtende_maatregelen_niet_over() {
+        let mut d = dossier();
+        // Geen eigenaar, dus de stand is menselijk oordeel vereist — maar het
+        // uitvoeringsbewijs vervalt wel degelijk.
+        d.richt_in("CBB-a", nu()).unwrap();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(45)),
+            nu(),
+        )
+        .unwrap();
+        assert_eq!(
+            d.maatregel("CBB-a").unwrap().stand(nu()),
+            Maatregelstand::MenselijkOordeelVereist
+        );
+
+        let vervalt = d.vervalt_voor(nu() + Duration::days(90), nu());
+        assert_eq!(vervalt.len(), 1);
+        assert_eq!(vervalt[0].code, "CBB-a");
+    }
+
+    /// Een kader met een ontbrekend veld hoort te weigeren en niet stilzwijgend
+    /// terug te vallen op de kant die controle wegneemt.
+    #[test]
+    fn een_kader_zonder_periodiek_wordt_niet_gelezen() {
+        let json = serde_json::json!({
+            "code": "CBB-06",
+            "onderdeel": "beleid",
+            "normvindplaats": "art. 6 Cbb",
+            "omschrijving": "beleid voor informatiebeveiliging",
+            "niettoepassingsvorm": "verboden",
+            "externe_toetsing_verwacht": false
+        });
+        assert!(serde_json::from_value::<Kadermaatregel>(json).is_err());
+    }
+
+    /// De keuring gaat vooraf aan het opslaan, omdat het opslaan in de kluis
+    /// niet terug te draaien is.
+    #[test]
+    fn een_bewijsaanwijzing_is_vooraf_te_keuren() {
+        let d = dossier();
+        assert!(d
+            .keur_bewijs(
+                "CBB-a",
+                Bewijsrol::Uitvoering,
+                "uitdraai",
+                nu(),
+                nu() + Duration::days(30),
+                nu()
+            )
+            .is_ok());
+        assert!(d
+            .keur_bewijs(
+                "BESTAAT-NIET",
+                Bewijsrol::Uitvoering,
+                "uitdraai",
+                nu(),
+                nu() + Duration::days(30),
+                nu()
+            )
+            .is_err());
+        assert!(d
+            .keur_bewijs(
+                "CBB-a",
+                Bewijsrol::Uitvoering,
+                "uitdraai",
+                nu() - Duration::days(400),
+                nu() - Duration::days(10),
+                nu()
+            )
+            .is_err());
     }
 
     #[test]

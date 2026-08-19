@@ -28,7 +28,9 @@ use chrono::{DateTime, Duration, Utc};
 use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
     avg::Grondslag,
-    zorgplicht::{Maatregelstand, Toepassing, Zorgplichtdossier},
+    zorgplicht::{
+        Bewijsaanwijzing, Bewijskracht, Bewijsrol, Maatregelstand, Toepassing, Zorgplichtdossier,
+    },
     Bewaartermijn, Doorgifte, Dpia, Incident, Leverancier, Meldbesluit, Risiconiveau, Status,
     Verwerking, Volledig, Voortoets,
 };
@@ -627,7 +629,7 @@ fn zorgplicht() -> Vec<Regel> {
             "een maatregel uit de controlset zonder rol met bezetting",
             Signalerend,
             Directie,
-            "art. 21 lid 3 Cyberbeveiligingswet",
+            "art. 6 lid 4 Cyberbeveiligingsbesluit",
             false,
         ),
         Regel::nieuw(
@@ -647,7 +649,7 @@ fn zorgplicht() -> Vec<Regel> {
             "een maatregel staat na de beoordelingstermijn nog op nog niet beoordeeld",
             Signalerend,
             SecurityOfficer,
-            "art. 21 lid 3 Cyberbeveiligingswet",
+            "art. 21 lid 3 Cyberbeveiligingswet; de termijn is zelf vastgesteld",
             true,
         ),
         Regel::nieuw(
@@ -677,7 +679,7 @@ fn zorgplicht() -> Vec<Regel> {
             "een maatregel die het kader periodiek noemt zonder zelf vastgestelde termijn",
             Signalerend,
             SecurityOfficer,
-            "art. 18 Cyberbeveiligingsbesluit",
+            "zelf vastgestelde termijn; de wet noemt hier geen frequentie",
             false,
         ),
         Regel::nieuw(
@@ -687,7 +689,7 @@ fn zorgplicht() -> Vec<Regel> {
             "een zelf vastgestelde uitvoeringsfrequentie boven de drempel uit het pakket",
             Signalerend,
             SecurityOfficer,
-            "art. 18 Cyberbeveiligingsbesluit",
+            "interne norm; geen wettelijke drempel",
             true,
         ),
         Regel::nieuw(
@@ -744,7 +746,7 @@ fn zorgplicht() -> Vec<Regel> {
             "ZRP-13",
             "zorgplicht",
             "Niet-toepassing is gewoonte geworden",
-            "het aandeel gemotiveerd niet toegepaste maatregelen ligt boven de drempel",
+            "van de maatregelen waar afwijken mag, wordt een te groot deel niet toegepast",
             Rapporterend,
             Directie,
             "interne norm; geen wettelijke drempel",
@@ -1506,22 +1508,22 @@ pub fn beoordeel_zorgplicht(
         );
     }
 
-    let vervallend: Vec<&dpofg_domain::zorgplicht::Zorgplichtmaatregel> = d
+    // Meet op uitvoeringsbewijs, want daar verwijst de toelichting naar. Zou
+    // deze tak op elk bewijsstuk aanslaan en de vervallijst alleen op
+    // uitvoering, dan stuurt een alarm de gebruiker naar een lege lijst — en
+    // een alarm dat naar niets wijst, is de snelste weg naar wegklikken.
+    let vervallend: Vec<&Bewijsaanwijzing> = d
         .maatregelen
         .iter()
-        .filter(|m| {
-            m.eerst_vervallend(nu)
-                .is_some_and(|b| b.dagen_tot_verval(nu) <= drempels.bewijshorizon_dagen)
-        })
+        .filter_map(|m| m.geldig_uitvoeringsbewijs(nu))
+        .filter(|b| b.dagen_tot_verval(nu) <= drempels.bewijshorizon_dagen)
         .collect();
-    if let Some(eerste) =
-        vervallend.iter().filter_map(|m| m.eerst_vervallend(nu)).min_by_key(|b| b.geldig_tot)
-    {
+    if let Some(eerste) = vervallend.iter().min_by_key(|b| b.geldig_tot) {
         voeg(
             "ZRP-05",
             format!(
-                "bij {} maatregel(en) verloopt het bewijs binnen {} dagen; het eerste op {}. \
-                 Bekijk de lijst met 'dpofg zorgplicht vervalt'",
+                "bij {} maatregel(en) verloopt het uitvoeringsbewijs binnen {} dagen; het \
+                 eerste op {}. Bekijk de lijst met 'dpofg zorgplicht vervalt'",
                 vervallend.len(),
                 drempels.bewijshorizon_dagen,
                 eerste.geldig_tot.format("%d-%m-%Y")
@@ -1529,23 +1531,33 @@ pub fn beoordeel_zorgplicht(
         );
     }
 
+    // Kijkt naar wat vandaag geldt, en alleen naar toetsingsbewijs. Overal
+    // elders in deze module telt verlopen bewijs als geen bewijs; deed deze
+    // tak dat niet, dan zou één auditverklaring uit het verleden de regel voor
+    // altijd het zwijgen opleggen — en er is geen opdracht om bewijs weer weg
+    // te halen.
     let alleen_zelfgerapporteerd: Vec<&str> = d
         .maatregelen
         .iter()
-        .filter(|m| m.externe_toetsing_verwacht && !m.bewijs.is_empty())
+        .filter(|m| m.externe_toetsing_verwacht)
         .filter(|m| {
-            m.bewijs.iter().all(|b| {
-                b.bewijskracht == dpofg_domain::zorgplicht::Bewijskracht::Zelfgerapporteerd
-            })
+            let geldig: Vec<_> = m
+                .bewijs
+                .iter()
+                .filter(|b| b.rol == Bewijsrol::Toetsing && b.geldt_op(nu))
+                .collect();
+            geldig.is_empty()
+                || geldig.iter().all(|b| b.bewijskracht == Bewijskracht::Zelfgerapporteerd)
         })
+        .filter(|m| !m.bewijs.is_empty())
         .map(|m| m.code.as_str())
         .collect();
     if !alleen_zelfgerapporteerd.is_empty() {
         voeg(
             "ZRP-12",
             format!(
-                "het kader verwacht toetsing door een ander bij {}; al het bewijs berust daar \
-                 op de eigen verklaring",
+                "het kader verwacht toetsing door een ander bij {}; daar ligt op dit moment \
+                 geen geldige verklaring van een ander",
                 codes(&alleen_zelfgerapporteerd)
             ),
         );
@@ -1589,18 +1601,20 @@ pub fn beoordeel_zorgplicht(
         Some(_) => {}
     }
 
-    let aandeel = d.aandeel_niet_toegepast();
-    if aandeel > drempels.afwijkingsaandeel_procent {
-        voeg(
-            "ZRP-13",
-            format!(
-                "{aandeel} procent van de maatregelen wordt gemotiveerd niet toegepast; boven \
-                 {} procent is niet-toepassing geen uitzondering meer",
-                drempels.afwijkingsaandeel_procent
-            ),
-        );
+    if let Some(aandeel) = d.aandeel_niet_toegepast() {
+        if aandeel > drempels.afwijkingsaandeel_procent {
+            voeg(
+                "ZRP-13",
+                format!(
+                    "van de {} maatregelen waar het kader afwijken toestaat, wordt {aandeel} \
+                     procent gemotiveerd niet toegepast; boven {} procent is afwijken geen \
+                     uitzondering meer",
+                    d.aantal_afwijkbaar(),
+                    drempels.afwijkingsaandeel_procent
+                ),
+            );
+        }
     }
-
     uit
 }
 

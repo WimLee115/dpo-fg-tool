@@ -2401,3 +2401,93 @@ fn een_verse_controlset_levert_een_leesbare_controleronde() {
     let aantal = uit.matches("[ZRP-").count();
     assert!(aantal <= 6, "{aantal} bevindingen voor één vers dossier:\n{uit}");
 }
+
+/// Het hele werkproces met het meegeleverde kennispakket, tot en met
+/// vaststellen. Deze test bestaat omdat de kaderverificatie eerst blokkerend
+/// was: het product leverde daarmee een werkproces dat met de eigen inhoud
+/// nooit was af te maken, en geen enkele test merkte dat op.
+#[test]
+fn de_controlset_is_met_het_meegeleverde_pakket_af_te_maken() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+
+    let codes = [
+        "CBB-06",
+        "CBB-07",
+        "CBB-08",
+        "CBB-09",
+        "CBB-10",
+        "CBB-11",
+        "CBB-17",
+        "CBB-18",
+        "CBB-12",
+        "CBB-13",
+        "CBB-13-E",
+        "CBB-14",
+        "CBB-15",
+        "CBB-16",
+        "CBB-15-MFA",
+    ];
+    for code in codes {
+        p.moet(&format!(
+            "zorgplicht eigenaar ZRP-2026 --maatregel {code} --rol 'de systeembeheerder' \
+             --persoon 'J. Jansen'"
+        ));
+        p.moet(&format!("zorgplicht inrichten ZRP-2026 --maatregel {code}"));
+    }
+    for code in [
+        "CBB-06", "CBB-07", "CBB-08", "CBB-09", "CBB-10", "CBB-11", "CBB-18", "CBB-12", "CBB-15",
+        "CBB-16",
+    ] {
+        p.moet(&format!(
+            "zorgplicht frequentie ZRP-2026 --maatregel {code} --maanden 12 \
+             --door 'de directie' --motivering 'jaarlijks sluit aan op de planning en control'"
+        ));
+    }
+    let verslag = p.bestand("risicobeoordeling.txt", "verslag van de risicobeoordeling");
+    p.moet(&format!(
+        "zorgplicht risicobeoordeling ZRP-2026 --methode scenarioanalyse \
+         --scope 'de hele organisatie' --uitgevoerd-door 'de security officer' \
+         --geldig-tot 2027-06-01T00:00:00Z --bestand {verslag} \
+         --omschrijving 'verslag van de jaarlijkse beoordeling'"
+    ));
+    let besluit = p.bestand("besluit.txt", "besluit van het bestuur");
+    p.moet(&format!(
+        "zorgplicht bestuursvaststelling ZRP-2026 --besluit 'het maatregelenpakket is \
+         vastgesteld' --aanwezige 'de directie' --aanwezige 'de security officer' \
+         --bestand {besluit} --geldig-tot 2027-06-01T00:00:00Z"
+    ));
+
+    let uit = p.moet("zorgplicht vaststellen ZRP-2026");
+    assert!(uit.contains("vastgesteld"), "kreeg:\n{uit}");
+
+    // En toch is geen enkele maatregel aantoonbaar. Dat hoort te blijven staan.
+    assert!(uit.contains("vastgesteld, niet aantoonbaar"), "kreeg:\n{uit}");
+    let uit = p.moet("controle");
+    assert!(uit.contains("ZRP-04"), "kreeg:\n{uit}");
+    // Het kader is niet tegen de bron gehouden; dat blokkeert niet en verdwijnt
+    // ook niet.
+    let uit = p.moet("zorgplicht toon ZRP-2026");
+    assert!(uit.contains("niet tegen de bron"), "kreeg:\n{uit}");
+}
+
+/// Een onvoorwaardelijke eis kan niet worden afgeweken, dus het aandeel meet
+/// over de maatregelen waar dat wél mag. Meet het over de hele set, dan kan
+/// ZRP-13 met dit kader nooit aanslaan.
+#[test]
+fn het_aandeel_afwijkingen_meet_over_wat_afwijkbaar_is() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet(
+        "zorgplicht niet-toepassen ZRP-2026 --maatregel CBB-13-E \
+         --motivering 'de gegevens verlaten het eigen netwerk niet'",
+    );
+    p.moet(
+        "zorgplicht niet-toepassen ZRP-2026 --maatregel CBB-15-MFA \
+         --motivering 'er is geen toegang van buiten het eigen netwerk'",
+    );
+
+    let uit = p.moet("controle --vanaf rapporterend");
+    assert!(uit.contains("ZRP-13"), "kreeg:\n{uit}");
+    assert!(uit.contains("100 procent"), "kreeg:\n{uit}");
+}

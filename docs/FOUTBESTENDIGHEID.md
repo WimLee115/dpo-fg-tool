@@ -1404,7 +1404,7 @@ De maatregelen van artikel 21 lid 3 van de Cyberbeveiligingswet. Eén blokkerend
 | ZRP-10 | Bestuursvaststelling verouderd | ouder dan de zelf vastgestelde termijn | S | directie |
 | ZRP-11 | Risicobeoordeling ontbreekt of is verlopen | geen geldige beoordeling onder de controlset | S | directie |
 | ZRP-12 | Zelfgerapporteerd bewijs waar toetsing wordt verwacht | kader verwacht toetsing, bewijs berust op de eigen verklaring | S | FG |
-| ZRP-13 | Niet-toepassing is gewoonte geworden | aandeel gemotiveerd niet toegepaste maatregelen boven de drempel | R | directie |
+| ZRP-13 | Niet-toepassing is gewoonte geworden | aandeel niet toegepaste maatregelen, gemeten over de maatregelen waar het kader afwijken toestaat, boven de drempel | R | directie |
 
 > **Toegevoegd na de eerste opsomming.** Deze groep stond niet in de oorspronkelijke catalogus van 124 regels. Zij is er gekomen toen de controlset werd gebouwd en er bleek dat de zorgplicht met de bestaande NIS-regels wel op incidentniveau werd bewaakt, maar nergens op maatregelniveau.
 

@@ -482,10 +482,12 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
         serde_json::json!({
             "toelichting": "Getallen die de wet niet noemt. De frequentiedrempel zegt vanaf \
                             hoeveel maanden een zelf vastgestelde uitvoeringsfrequentie wordt \
-                            gemeld; het aandeel zegt vanaf welk percentage niet-toepassing van \
-                            uitzondering naar gewoonte gaat.",
+                            gemeld. Het aandeel wordt gemeten over de maatregelen waarvan het \
+                            kader zegt dat afwijken mag, en niet over de hele set: bij een \
+                            kader waarin bijna alles onvoorwaardelijk is, zou een aandeel over \
+                            de hele set nooit boven de drempel kunnen komen.",
             "frequentiedrempel_maanden": 12,
-            "afwijkingsaandeel_procent": 20,
+            "afwijkingsaandeel_procent": 50,
             "bron": "interne norm; geen van beide getallen is aan een wettekst ontleend"
         }),
     );

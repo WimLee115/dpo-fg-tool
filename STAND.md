@@ -119,7 +119,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 655 testfuncties, 659 uitgevoerde tests; ~5.700 regels in `tests` |
+| Tests | 666 testfuncties, 670 uitgevoerde tests; ~5.900 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

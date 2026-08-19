@@ -194,7 +194,7 @@ pub enum Zorgplichtopdracht {
         /// Kenmerk van het dossier.
         kenmerk: String,
         /// De horizon in dagen.
-        #[arg(long, default_value = "90")]
+        #[arg(long, default_value = "90", value_parser = clap::value_parser!(i64).range(1..=3650))]
         dagen: i64,
     },
     /// Stel het dossier vast.
@@ -369,14 +369,25 @@ fn lees_tijdstip(tekst: &str) -> Result<DateTime<Utc>> {
     })
 }
 
-fn kaders(nu: DateTime<Utc>) -> Vec<Kaderdefinitie> {
+/// De kaders uit het kennispakket, met de kaders die niet te lezen zijn.
+///
+/// Een onleesbaar kader stilzwijgend overslaan zou de melding "het pakket
+/// bevat geen kader X" opleveren terwijl het er wél in staat, alleen met een
+/// fout erin. Dat is een bewering over andermans inhoud die niet klopt, en de
+/// beheerder van het pakket komt er dan nooit achter.
+fn kaders(nu: DateTime<Utc>) -> (Vec<Kaderdefinitie>, Vec<(String, String)>) {
     let pakket = dpofg_content::startpakket(nu.date_naive());
-    pakket
-        .aanvullend
-        .iter()
-        .filter(|(sleutel, _)| sleutel.starts_with("zorgplicht_kader_"))
-        .filter_map(|(_, waarde)| serde_json::from_value(waarde.clone()).ok())
-        .collect()
+    let mut goed = Vec::new();
+    let mut stuk = Vec::new();
+    for (sleutel, waarde) in
+        pakket.aanvullend.iter().filter(|(sleutel, _)| sleutel.starts_with("zorgplicht_kader_"))
+    {
+        match serde_json::from_value::<Kaderdefinitie>(waarde.clone()) {
+            Ok(k) => goed.push(k),
+            Err(e) => stuk.push((sleutel.clone(), e.to_string())),
+        }
+    }
+    (goed, stuk)
 }
 
 fn vaste_tekst(nu: DateTime<Utc>, sleutel: &str) -> Option<String> {
@@ -462,8 +473,8 @@ fn toon_onderdelen() -> Result<()> {
 
 fn toon_kaders(nu: DateTime<Utc>) -> Result<()> {
     kop("Normenkaders in het kennispakket");
-    let gevonden = kaders(nu);
-    if gevonden.is_empty() {
+    let (gevonden, stuk) = kaders(nu);
+    if gevonden.is_empty() && stuk.is_empty() {
         terzijde("het kennispakket bevat geen normenkader voor de zorgplicht");
         return Ok(());
     }
@@ -486,6 +497,9 @@ fn toon_kaders(nu: DateTime<Utc>) -> Result<()> {
             }
         }
     }
+    for (sleutel, fout) in &stuk {
+        blokkade(&format!("'{sleutel}' staat in het pakket maar is niet te lezen: {fout}"));
+    }
     terzijde(
         "Wat er niet staat, is niet te kiezen. Een variant aanklikken waarvoor geen inhoud \
          bestaat, zou een leeg dossier opleveren dat er compleet uitziet.",
@@ -506,10 +520,15 @@ fn afleiden(
     if kluis.lijst(SOORT)?.iter().any(|r| r.kenmerk.as_deref() == Some(kenmerk)) {
         anyhow::bail!("er bestaat al een zorgplichtdossier met kenmerk '{kenmerk}'");
     }
-    let beschikbaar = kaders(nu);
+    let (beschikbaar, stuk) = kaders(nu);
+    if !stuk.is_empty() {
+        for (sleutel, fout) in &stuk {
+            let_op(&format!("'{sleutel}' staat in het pakket maar is niet te lezen: {fout}"));
+        }
+    }
     let kader = beschikbaar.iter().find(|k| k.kenmerk == kaderkenmerk).ok_or_else(|| {
         anyhow::anyhow!(
-            "het kennispakket bevat geen kader '{kaderkenmerk}'. Bekijk wat er is met \
+            "het kennispakket bevat geen leesbaar kader '{kaderkenmerk}'. Bekijk wat er is met \
              'dpofg zorgplicht kaders'"
         )
     })?;
@@ -657,6 +676,11 @@ fn bewijs(
     };
     let tot = lees_tijdstip(geldig_tot)?;
     let id = d.id.to_string();
+    // Eerst keuren, dan pas opslaan. Het bestand gaat versleuteld de kluis in
+    // en die handeling hangt in de keten; die is niet terug te draaien. Een
+    // typefout in de maatregelcode zou anders een bijlage achterlaten die aan
+    // geen enkele maatregel hangt en die niemand meer weg kan halen.
+    d.keur_bewijs(code, rol, omschrijving, van, tot, nu)?;
     let aanwijzing =
         neem_bewijs_op(kluis, &id, bestand, rol, omschrijving, van, tot, geverifieerd, nu)?;
     let hash = aanwijzing.bijlagehash.clone();
@@ -915,7 +939,15 @@ fn toon(kluis: &Kluis, kenmerk: &str, onder: Option<&str>, nu: DateTime<Utc>) ->
     println!("{t}");
 
     kop("Maatregelen");
-    let mut t = tabel(&["", "maatregel", "stand", "toepassing", "eigenaar", "bewijs geldig tot"]);
+    let mut t = tabel(&[
+        "",
+        "maatregel",
+        "vindplaats",
+        "stand",
+        "toepassing",
+        "eigenaar",
+        "bewijs geldig tot",
+    ]);
     for m in d.maatregelen.iter().filter(|m| filter.is_none_or(|o| m.onderdeel == o)) {
         let bewijs = m
             .geldig_uitvoeringsbewijs(nu)
@@ -924,6 +956,7 @@ fn toon(kluis: &Kluis, kenmerk: &str, onder: Option<&str>, nu: DateTime<Utc>) ->
         t.add_row(vec![
             m.onderdeel.letter().to_string(),
             m.code.clone(),
+            m.normvindplaats.clone(),
             m.stand(nu).omschrijving().to_string(),
             m.toepassing.omschrijving(),
             m.eigenaar.as_ref().map(|e| e.rol.clone()).unwrap_or_else(|| "geen".into()),
@@ -981,10 +1014,9 @@ fn toon_standen(d: &Zorgplichtdossier, nu: DateTime<Utc>) {
         .count();
     if niet_toegepast > 0 {
         terzijde(&format!(
-            "{niet_toegepast} van de {} maatregelen worden gemotiveerd niet toegepast \
-             ({} procent)",
-            d.maatregelen.len(),
-            d.aandeel_niet_toegepast()
+            "{niet_toegepast} van de {} maatregelen waar het kader afwijken toestaat, worden \
+             gemotiveerd niet toegepast",
+            d.aantal_afwijkbaar()
         ));
     }
     terzijde(
