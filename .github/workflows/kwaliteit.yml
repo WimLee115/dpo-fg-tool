@@ -25,6 +25,7 @@ jobs:
   opmaak-en-analyse:
     name: opmaak en statische analyse
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -48,6 +49,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -66,6 +68,7 @@ jobs:
     name: afhankelijkheden en licenties
     needs: opmaak-en-analyse
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -80,6 +83,7 @@ jobs:
     name: softwarestuklijst
     needs: opmaak-en-analyse
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -102,6 +106,7 @@ jobs:
     name: geen uitgaand netwerkverkeer
     needs: opmaak-en-analyse
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -111,7 +116,23 @@ jobs:
         run: cargo build --workspace
 
       - name: netwerkgereedschap installeren
-        run: sudo apt-get update && sudo apt-get install -y libcap2-bin strace
+        # De enige stap in deze bouwstraat die zelf het netwerk op moet, en
+        # daarmee de enige die op een trage spiegelserver kan blijven staan.
+        # Een eigen tijdslimiet plus twee nieuwe pogingen: hangen is hier een
+        # storing van buiten, en die hoort luid te falen in plaats van de baan
+        # een halve dag open te houden.
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          for poging in 1 2 3; do
+            if sudo apt-get update -qq && sudo apt-get install -y -qq libcap2-bin strace; then
+              exit 0
+            fi
+            echo "poging $poging mislukt; opnieuw over 15 seconden"
+            sleep 15
+          done
+          echo "::error::het netwerkgereedschap kon niet worden geïnstalleerd"
+          exit 1
 
       - name: controleren dat het programma geen verbinding opent
         # De belofte "geen egress" is een van de drie kernbeloften uit het plan.
