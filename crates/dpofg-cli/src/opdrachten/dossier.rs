@@ -80,6 +80,7 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
             "leverancier".into(),
             "mapping".into(),
             "redactie".into(),
+            "zorgplicht".into(),
         ]
     } else {
         o.soort.clone()

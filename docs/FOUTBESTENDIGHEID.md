@@ -1386,6 +1386,28 @@ De kennisbank is zelf een latente conditie en wordt dienovereenkomstig behandeld
 | ORG-11 | Externe FG overbelast | meer klanten of minder uren per klant dan de ondergrens | R | directie |
 | ORG-12 | Toezegging zonder eigenaar of datum | toezegging aan de toezichthouder zonder eigenaar of einddatum | B | FG |
 
+#### Zorgplichtcontrolset (ZRP)
+
+De maatregelen van artikel 21 lid 3 van de Cyberbeveiligingswet. Eén blokkerende regel op dertien: het inrichten van een controlset duurt maanden, en een blokkerende bevinding die al die tijd in ieder overzicht staat, leert de gebruiker wegklikken. Wat blokkeert, blokkeert bij het vaststellen van het dossier zelf.
+
+| ID | Naam | Wat het controleert | Niveau | Naar |
+|---|---|---|---|---|
+| ZRP-01 | Maatregel zonder eigenaar | maatregel zonder rol met bezetting | S | directie |
+| ZRP-02 | Eigenaar is de aangemelde functionaris | de functionaris bezit een maatregel waarop hij toezicht houdt | B | directie |
+| ZRP-03 | Maatregel niet beoordeeld | na de beoordelingstermijn nog op nog niet beoordeeld | S | security officer |
+| ZRP-04 | Ingericht maar niet aantoonbaar | ingericht zonder uitvoeringsbewijs dat nu geldt | S | security officer |
+| ZRP-05 | Bewijs verloopt binnen de horizon | geldigheidsvenster sluit binnenkort | S | security officer |
+| ZRP-06 | Periodieke maatregel zonder frequentie | kader noemt hem periodiek, geen zelf vastgestelde termijn | S | security officer |
+| ZRP-07 | Frequentie langer dan de norm | zelf vastgestelde termijn boven de drempel uit het pakket | S | security officer |
+| ZRP-08 | Uitvoering achter op de eigen frequentie | laatste uitvoering ouder dan de eigen termijn | S | security officer |
+| ZRP-09 | Geen bestuursvaststelling | pakket niet door het bestuur vastgesteld | S | directie |
+| ZRP-10 | Bestuursvaststelling verouderd | ouder dan de zelf vastgestelde termijn | S | directie |
+| ZRP-11 | Risicobeoordeling ontbreekt of is verlopen | geen geldige beoordeling onder de controlset | S | directie |
+| ZRP-12 | Zelfgerapporteerd bewijs waar toetsing wordt verwacht | kader verwacht toetsing, bewijs berust op de eigen verklaring | S | FG |
+| ZRP-13 | Niet-toepassing is gewoonte geworden | aandeel gemotiveerd niet toegepaste maatregelen boven de drempel | R | directie |
+
+> **Toegevoegd na de eerste opsomming.** Deze groep stond niet in de oorspronkelijke catalogus van 124 regels. Zij is er gekomen toen de controlset werd gebouwd en er bleek dat de zorgplicht met de bestaande NIS-regels wel op incidentniveau werd bewaakt, maar nergens op maatregelniveau.
+
 #### Integriteit van de applicatie zelf (SYS)
 
 | ID | Naam | Wat het controleert | Niveau | Naar |
@@ -1401,7 +1423,9 @@ De kennisbank is zelf een latente conditie en wordt dienovereenkomstig behandeld
 | SYS-09 | Termijnmodule niet geverifieerd | testgevallen van de termijnmodule niet groen na een update | B op alle termijnberekeningen | beheerder |
 | SYS-10 | Klokafwijking | systeemklok wijkt af van de monotone referentie | S | beheerder |
 
-**Totaal: 123 controleregels** — 17 REG, 12 GRO, 8 BEW, 9 DPIA, 13 VWO, 8 EER, 16 LEK, 12 BTR, 7 NIS, 12 ORG, 10 SYS.
+**Totaal: 137 controleregels** — 17 REG, 12 GRO, 8 BEW, 9 DPIA, 13 VWO, 8 EER, 16 LEK, 12 BTR, 7 NIS, 13 ZRP, 12 ORG, 10 SYS.
+
+> De eerdere opgave van 123 klopte niet met de opsomming eronder: die telde 124 regels. Met de dertien regels van de zorgplichtcontrolset erbij zijn het er 137.
 
 ---
 

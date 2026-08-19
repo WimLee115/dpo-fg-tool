@@ -4,7 +4,9 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::Args;
 use dpofg_audit::Handeling;
-use dpofg_domain::{doorgifte::Doorgifte, Dpia, Incident, Leverancier, Verwerking};
+use dpofg_domain::{
+    doorgifte::Doorgifte, zorgplicht::Zorgplichtdossier, Dpia, Incident, Leverancier, Verwerking,
+};
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
@@ -12,7 +14,7 @@ use dpofg_rules::{
         beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
         beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
         beoordeel_raadplegingstermijn, beoordeel_verwerkersmelding, beoordeel_verwerking,
-        standaardmotor,
+        beoordeel_zorgplicht, standaardmotor, Zorgplichtdrempels,
     },
 };
 use std::path::PathBuf;
@@ -120,6 +122,13 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
     for k in kluis.lijst("doorgifte")? {
         let d: Doorgifte = kluis.laad("doorgifte", &k.id)?;
         bevindingen.extend(beoordeel_doorgifte(&motor, &d, drempel, nu));
+        beoordeeld += 1;
+    }
+
+    let zorgplichtdrempels = zorgplichtdrempels(&pakket);
+    for k in kluis.lijst("zorgplicht")? {
+        let d: Zorgplichtdossier = kluis.laad("zorgplicht", &k.id)?;
+        bevindingen.extend(beoordeel_zorgplicht(&motor, &d, zorgplichtdrempels, nu));
         beoordeeld += 1;
     }
 
@@ -372,6 +381,43 @@ fn meldtermijndrempel(pakket: &dpofg_content::Pakketinhoud) -> u32 {
         .and_then(|v| v.as_u64())
         .and_then(|v| u32::try_from(v).ok())
         .unwrap_or(48)
+}
+
+/// De vijf drempels waartegen de zorgplichtcontrolset wordt gemeten.
+///
+/// Geen ervan staat in de wet. De termijnen komen uit de termijnencatalogus,
+/// de twee kale getallen uit de aanvullende inhoud; de terugvalwaarden staan
+/// hier zodat een uitgekleed pakket de controle niet stilzwijgend uitzet.
+fn zorgplichtdrempels(pakket: &dpofg_content::Pakketinhoud) -> Zorgplichtdrempels {
+    let dagen = |code: &str, terugval: i64| {
+        pakket
+            .termijn(code)
+            .ok()
+            .filter(|t| t.eenheid == dpofg_terms::Eenheid::Kalenderdagen)
+            .map(|t| i64::from(t.duur))
+            .unwrap_or(terugval)
+    };
+    let getal = |sleutel: &str, terugval: u32| {
+        pakket
+            .aanvullend
+            .get("zorgplicht_drempels")
+            .and_then(|v| v.get(sleutel))
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok())
+            .unwrap_or(terugval)
+    };
+    Zorgplichtdrempels {
+        beoordelingstermijn_dagen: dagen("INTERN-ZORGPLICHT-BEOORDELINGSTERMIJN", 30),
+        bewijshorizon_dagen: dagen("INTERN-ZORGPLICHT-BEWIJSHORIZON", 60),
+        frequentiedrempel_maanden: getal("frequentiedrempel_maanden", 12),
+        bestuursvaststelling_maanden: pakket
+            .termijn("INTERN-ZORGPLICHT-BESTUURSVASTSTELLING")
+            .ok()
+            .filter(|t| t.eenheid == dpofg_terms::Eenheid::Maanden)
+            .map(|t| i64::from(t.duur))
+            .unwrap_or(12),
+        afwijkingsaandeel_procent: getal("afwijkingsaandeel_procent", 20),
+    }
 }
 
 /// Na hoeveel maanden de subverwerkerslijst opnieuw moet worden nagelopen.

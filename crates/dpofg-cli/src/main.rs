@@ -91,6 +91,10 @@ enum Opdracht {
     #[command(subcommand)]
     Leverancier(opdrachten::leverancier::Leveranciersopdracht),
 
+    /// De zorgplichtcontrolset van artikel 21 lid 3 Cyberbeveiligingswet.
+    #[command(subcommand)]
+    Zorgplicht(opdrachten::zorgplicht::Zorgplichtopdracht),
+
     /// De controleregels over de hele verzameling draaien.
     Controle(opdrachten::controle::Controleopties),
 
@@ -150,6 +154,7 @@ fn draai() -> Result<()> {
         Opdracht::Lia(o) => opdrachten::lia::draai(o, args.kluis, nu),
         Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
         Opdracht::Leverancier(o) => opdrachten::leverancier::draai(o, args.kluis, nu),
+        Opdracht::Zorgplicht(o) => opdrachten::zorgplicht::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),

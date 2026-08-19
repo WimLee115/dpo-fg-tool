@@ -1,11 +1,16 @@
 //! De controleregels die over de samenhang waken.
 
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use dpofg_domain::{
     avg::{BijzondereCategorie, Grondslag, Rol},
     doorgifte::{Beoordelingsuitkomst, Doorgifte, Doorgiftebeoordeling, Doorgifteinstrumentsoort},
     incident::Herkomstkanaal,
     leverancier::{Contracteis, Leverancier},
+    zorgplicht::{
+        Bestuursvaststelling, Bewijsaanwijzing, Bewijskracht, Bewijsrol, Kaderdefinitie,
+        Kadermaatregel, Niettoepassing, Niettoepassingsvorm, Raamwerkvariant, Risicobeoordeling,
+        Zorgplichtdossier, Zorgplichtonderdeel,
+    },
     Aantasting, Bewaartermijn, Dpia, Id, Incident, Motivering, Ontvanger, Overgenomen,
     Restrisiconiveau, Risiconiveau, Status, Termijneenheid, Verwerking, Volledig, Voortoets,
 };
@@ -16,7 +21,7 @@ use dpofg_rules::{
         beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
         beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
         beoordeel_raadplegingstermijn, beoordeel_verwerkersmelding, beoordeel_verwerking,
-        catalogus, geimplementeerd, standaardmotor,
+        beoordeel_zorgplicht, catalogus, geimplementeerd, standaardmotor, Zorgplichtdrempels,
     },
 };
 
@@ -1361,4 +1366,469 @@ fn lek_16_zwijgt_zonder_afgesproken_termijn() {
     i.melding_verwerker_ontvangen_op = Some(nu());
 
     assert!(beoordeel_verwerkersmelding(&motor, &i, &l, nu()).is_empty());
+}
+
+// --- de zorgplichtcontrolset -------------------------------------------------
+
+fn drempels() -> Zorgplichtdrempels {
+    Zorgplichtdrempels {
+        beoordelingstermijn_dagen: 30,
+        bewijshorizon_dagen: 60,
+        frequentiedrempel_maanden: 12,
+        bestuursvaststelling_maanden: 12,
+        afwijkingsaandeel_procent: 20,
+    }
+}
+
+fn kadermaatregel(onderdeel: Zorgplichtonderdeel) -> Kadermaatregel {
+    Kadermaatregel {
+        code: format!("CBB-{}", onderdeel.letter()),
+        onderdeel,
+        normvindplaats: "art. 6 Cbb".into(),
+        omschrijving: format!("maatregelen voor {}", onderdeel.omschrijving()),
+        periodiek: false,
+        niettoepassingsvorm: Niettoepassingsvorm::EigenMotivering,
+        externe_toetsing_verwacht: false,
+    }
+}
+
+fn kader() -> Kaderdefinitie {
+    Kaderdefinitie {
+        kenmerk: "CBB-ZORGPLICHT-A".into(),
+        variant: Raamwerkvariant::A,
+        versie: "2026-08-01".into(),
+        bron: "Cyberbeveiligingsbesluit art. 6 tot en met 18".into(),
+        geverifieerd_op: NaiveDate::from_ymd_opt(2026, 8, 1),
+        toelichting: None,
+        maatregelen: Zorgplichtonderdeel::alle().into_iter().map(kadermaatregel).collect(),
+    }
+}
+
+fn zorgplichtbewijs(rol: Bewijsrol, van: DateTime<Utc>, tot: DateTime<Utc>) -> Bewijsaanwijzing {
+    Bewijsaanwijzing {
+        rol,
+        omschrijving: "uitdraai uit het beheersysteem".into(),
+        bijlagehash: "a".repeat(64),
+        bestandsnaam: "uitdraai.pdf".into(),
+        geldig_van: van,
+        geldig_tot: tot,
+        bewijskracht: Bewijskracht::Zelfgerapporteerd,
+        aangewezen_door: "u1".into(),
+        aangewezen_op: nu(),
+    }
+}
+
+/// Een dossier waarin alles op orde is: elke maatregel belegd en ingericht,
+/// met geldig uitvoeringsbewijs, en beide artefacten eronder.
+fn zorgplichtdossier() -> Zorgplichtdossier {
+    let mut d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &kader(),
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    for code in d.maatregelen.iter().map(|m| m.code.clone()).collect::<Vec<_>>() {
+        d.wijs_eigenaar_toe(&code, "beleidsadviseur", "J. Jansen", nu()).unwrap();
+        d.richt_in(&code, nu()).unwrap();
+        d.wijs_bewijs_aan(
+            &code,
+            zorgplichtbewijs(
+                Bewijsrol::Uitvoering,
+                nu() - Duration::days(30),
+                nu() + Duration::days(300),
+            ),
+            nu(),
+        )
+        .unwrap();
+    }
+    d.leg_risicobeoordeling_vast(
+        Risicobeoordeling {
+            omschrijving: "jaarlijkse beoordeling".into(),
+            methode: "scenarioanalyse".into(),
+            scope: "de hele organisatie".into(),
+            uitgevoerd_door: "de security officer".into(),
+            uitgevoerd_op: nu() - Duration::days(30),
+            geldig_tot: nu() + Duration::days(300),
+            bewijs: zorgplichtbewijs(
+                Bewijsrol::Toetsing,
+                nu() - Duration::days(30),
+                nu() + Duration::days(300),
+            ),
+        },
+        nu(),
+    )
+    .unwrap();
+    d.leg_bestuursvaststelling_vast(
+        Bestuursvaststelling {
+            datum: nu() - Duration::days(30),
+            besluittekst: "het maatregelenpakket is vastgesteld".into(),
+            goedgekeurde_kaderversie: "2026-08-01".into(),
+            aanwezigen: vec!["de directie".into()],
+            bewijs: zorgplichtbewijs(
+                Bewijsrol::Vaststelling,
+                nu() - Duration::days(30),
+                nu() + Duration::days(300),
+            ),
+        },
+        nu(),
+    )
+    .unwrap();
+    d
+}
+
+#[test]
+fn een_dossier_dat_op_orde_is_levert_geen_enkele_bevinding() {
+    let motor = standaardmotor();
+    let b = beoordeel_zorgplicht(&motor, &zorgplichtdossier(), drempels(), nu());
+    assert!(b.is_empty(), "onverwachte bevindingen: {:?}", codes(&b));
+}
+
+/// Vijftien bevindingen die alle vijftien hetzelfde zeggen, zijn de manier
+/// waarop een gebruiker leert wegklikken. Elke regel telt per dossier.
+#[test]
+fn elke_regel_geeft_hoogstens_een_bevinding_per_dossier() {
+    let motor = standaardmotor();
+    let d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &kader(),
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(60));
+
+    let mut gezien: Vec<&str> = codes(&b);
+    gezien.sort_unstable();
+    let aantal = gezien.len();
+    gezien.dedup();
+    assert_eq!(aantal, gezien.len(), "een regel sloeg meer dan eens aan: {gezien:?}");
+}
+
+#[test]
+fn zrp_01_noemt_de_maatregelen_zonder_eigenaar() {
+    let motor = standaardmotor();
+    let d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &kader(),
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-01").expect("ZRP-01 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Signalerend);
+    assert!(bev.toelichting.contains("10 van de 10"));
+}
+
+/// De enige blokkerende regel van de groep, en de reden daarvoor: dit conflict
+/// ontstaat buiten het dossier om, bij een rolwissel.
+#[test]
+fn zrp_02_slaat_aan_na_een_rolwissel_en_blokkeert() {
+    let motor = standaardmotor();
+    let mut d = zorgplichtdossier();
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-02"));
+
+    d.wijzig_aangemelde_functionaris("J. Jansen", nu()).unwrap();
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-02").expect("ZRP-02 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Blokkerend);
+    assert_eq!(bev.ontvanger, Ontvangerrol::Directie);
+    assert!(bev.toelichting.contains("toezicht op het eigen werk"));
+}
+
+/// Vlak na het afleiden staat alles op nog niet beoordeeld; dat is dan geen
+/// tekortkoming maar werk dat nog moet beginnen.
+#[test]
+fn zrp_03_wacht_de_beoordelingstermijn_af() {
+    let motor = standaardmotor();
+    let d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &kader(),
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-03"));
+    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(31));
+    let bev = laat.iter().find(|x| x.regelcode == "ZRP-03").expect("ZRP-03 hoort aan te slaan");
+    assert!(bev.toelichting.contains("31 dagen"));
+}
+
+/// Ingericht is niet aantoonbaar. Dat verschil is de kern van deze module en
+/// het hoort in de controleronde te staan.
+#[test]
+fn zrp_04_scheidt_ingericht_van_aantoonbaar() {
+    let motor = standaardmotor();
+    let mut d = zorgplichtdossier();
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-04"));
+
+    d.maatregelen[0].bewijs.clear();
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-04").expect("ZRP-04 hoort aan te slaan");
+    assert!(bev.toelichting.contains("CBB-a"));
+}
+
+/// De stand valt vanzelf terug; de regel meldt het vooraf zodat er nog iets
+/// aan te doen valt.
+#[test]
+fn zrp_05_meldt_verlopend_bewijs_binnen_de_horizon() {
+    let motor = standaardmotor();
+    let mut d = zorgplichtdossier();
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-05"));
+
+    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(250));
+    assert!(codes(&laat).contains(&"ZRP-05"));
+
+    // En met een ruimere horizon slaat hij eerder aan; de drempel komt van
+    // buiten de regel.
+    let mut ruim = drempels();
+    ruim.bewijshorizon_dagen = 365;
+    d.maatregelen[0].bewijs.clear();
+    assert!(codes(&beoordeel_zorgplicht(&motor, &d, ruim, nu())).contains(&"ZRP-05"));
+}
+
+#[test]
+fn zrp_06_slaat_aan_bij_een_periodieke_maatregel_zonder_termijn() {
+    let motor = standaardmotor();
+    let mut k = kader();
+    k.maatregelen[0].periodiek = true;
+    let mut d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &k,
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-06").expect("ZRP-06 hoort aan te slaan");
+    assert!(bev.toelichting.contains("CBB-a"));
+
+    d.stel_frequentie_vast("CBB-a", 6, "de directie", motivering("halfjaarlijks is passend"), nu())
+        .unwrap();
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-06"));
+}
+
+/// Hoeveel maanden te lang is, staat niet in de regel maar in het pakket.
+#[test]
+fn zrp_07_meet_tegen_de_meegegeven_drempel() {
+    let motor = standaardmotor();
+    let mut k = kader();
+    k.maatregelen[0].periodiek = true;
+    let mut d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &k,
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    d.stel_frequentie_vast(
+        "CBB-a",
+        24,
+        "de directie",
+        motivering("tweejaarlijks is voor ons haalbaar"),
+        nu(),
+    )
+    .unwrap();
+
+    assert!(codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-07"));
+    let mut ruim = drempels();
+    ruim.frequentiedrempel_maanden = 36;
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, ruim, nu())).contains(&"ZRP-07"));
+}
+
+/// Een eigen termijn die nooit wordt gehaald, is geen termijn maar een
+/// voornemen.
+#[test]
+fn zrp_08_slaat_aan_wanneer_de_uitvoering_achterloopt() {
+    let motor = standaardmotor();
+    let mut k = kader();
+    k.maatregelen[0].periodiek = true;
+    let mut d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &k,
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    d.wijs_eigenaar_toe("CBB-a", "beleidsadviseur", "J. Jansen", nu()).unwrap();
+    d.richt_in("CBB-a", nu()).unwrap();
+    d.stel_frequentie_vast("CBB-a", 6, "de directie", motivering("halfjaarlijks is passend"), nu())
+        .unwrap();
+    d.wijs_bewijs_aan(
+        "CBB-a",
+        zorgplichtbewijs(
+            Bewijsrol::Uitvoering,
+            nu() - Duration::days(300),
+            nu() + Duration::days(300),
+        ),
+        nu(),
+    )
+    .unwrap();
+
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-08").expect("ZRP-08 hoort aan te slaan");
+    assert!(bev.toelichting.contains("termijn 6"));
+}
+
+#[test]
+fn zrp_09_en_zrp_10_bewaken_de_bestuursvaststelling() {
+    let motor = standaardmotor();
+    let mut d = zorgplichtdossier();
+    let zonder = std::mem::take(&mut d.bestuursvaststelling);
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-09").expect("ZRP-09 hoort aan te slaan");
+    assert!(bev.toelichting.contains("2026-08-01"));
+
+    d.bestuursvaststelling = zonder;
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-10"));
+    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(400));
+    assert!(codes(&laat).contains(&"ZRP-10"));
+}
+
+#[test]
+fn zrp_11_slaat_aan_bij_een_ontbrekende_en_bij_een_verlopen_beoordeling() {
+    let motor = standaardmotor();
+    let mut d = zorgplichtdossier();
+    let bewaard = std::mem::take(&mut d.risicobeoordeling);
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
+    assert!(bev.toelichting.contains("geen risicobeoordeling"));
+
+    d.risicobeoordeling = bewaard;
+    let laat = beoordeel_zorgplicht(&motor, &d, drempels(), nu() + Duration::days(400));
+    let bev = laat.iter().find(|x| x.regelcode == "ZRP-11").expect("ZRP-11 hoort aan te slaan");
+    assert!(bev.toelichting.contains("verlopen"));
+}
+
+/// Een certificaat is geen wettelijke conformiteitsverklaring, en de eigen
+/// verklaring is geen toetsing door een ander.
+#[test]
+fn zrp_12_scheidt_zelfgerapporteerd_van_geverifieerd() {
+    let motor = standaardmotor();
+    let mut k = kader();
+    k.maatregelen[0].externe_toetsing_verwacht = true;
+    let mut d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &k,
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    d.wijs_eigenaar_toe("CBB-a", "beleidsadviseur", "J. Jansen", nu()).unwrap();
+    d.richt_in("CBB-a", nu()).unwrap();
+    d.wijs_bewijs_aan(
+        "CBB-a",
+        zorgplichtbewijs(Bewijsrol::Uitvoering, nu(), nu() + Duration::days(300)),
+        nu(),
+    )
+    .unwrap();
+    assert!(codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-12"));
+
+    let mut getoetst = zorgplichtbewijs(Bewijsrol::Toetsing, nu(), nu() + Duration::days(300));
+    getoetst.bewijskracht = Bewijskracht::Geverifieerd;
+    getoetst.bijlagehash = "b".repeat(64);
+    d.wijs_bewijs_aan("CBB-a", getoetst, nu()).unwrap();
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-12"));
+}
+
+/// Niet-toepassing mag een uitzondering zijn. Zodra het gewoonte wordt, is dat
+/// een bestuurlijk feit en gaat het naar de directie.
+#[test]
+fn zrp_13_telt_hoe_vaak_er_wordt_afgeweken() {
+    let motor = standaardmotor();
+    let mut d = zorgplichtdossier();
+    assert!(!codes(&beoordeel_zorgplicht(&motor, &d, drempels(), nu())).contains(&"ZRP-13"));
+
+    for code in ["CBB-a", "CBB-b", "CBB-c"] {
+        d.pas_niet_toe(
+            code,
+            Niettoepassing::EigenMotivering(motivering(
+                "deze maatregel past niet bij onze omvang en middelen",
+            )),
+            nu(),
+        )
+        .unwrap();
+    }
+    let b = beoordeel_zorgplicht(&motor, &d, drempels(), nu());
+    let bev = b.iter().find(|x| x.regelcode == "ZRP-13").expect("ZRP-13 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Rapporterend);
+    assert_eq!(bev.ontvanger, Ontvangerrol::Directie);
+    assert!(bev.toelichting.contains("30 procent"));
+}
+
+#[test]
+fn tijdelijk_zrp12_verlopen_audit() {
+    let motor = standaardmotor();
+    let mut k = kader();
+    k.maatregelen[0].externe_toetsing_verwacht = true;
+    let mut d = Zorgplichtdossier::leid_af(
+        "ZRP-2026",
+        "Gemeente Voorbeeld",
+        "A. de Vries",
+        &k,
+        None,
+        "u1",
+        nu(),
+    )
+    .unwrap();
+    d.wijs_eigenaar_toe("CBB-a", "beleidsadviseur", "J. Jansen", nu()).unwrap();
+    d.richt_in("CBB-a", nu()).unwrap();
+
+    // t0: echte, door een ander geverifieerde audit, 365 dagen geldig.
+    let mut audit = zorgplichtbewijs(Bewijsrol::Toetsing, nu(), nu() + Duration::days(365));
+    audit.bewijskracht = Bewijskracht::Geverifieerd;
+    audit.bijlagehash = "b".repeat(64);
+    d.wijs_bewijs_aan("CBB-a", audit, nu()).unwrap();
+
+    // t0+400: audit is 35 dagen verlopen; enkel nog een eigen uitdraai.
+    let later = nu() + Duration::days(400);
+    d.wijs_bewijs_aan(
+        "CBB-a",
+        zorgplichtbewijs(Bewijsrol::Uitvoering, later, later + Duration::days(300)),
+        later,
+    )
+    .unwrap();
+
+    let m = d.maatregel("CBB-a").unwrap();
+    println!("stukken: {}", m.bewijs.len());
+    for b in &m.bewijs {
+        println!("  rol={:?} kracht={:?} geldt_nu={}", b.rol, b.bewijskracht, b.geldt_op(later));
+    }
+    println!(
+        "MET verlopen audit: {:?}",
+        codes(&beoordeel_zorgplicht(&motor, &d, drempels(), later))
+    );
+
+    let mut zonder = d.clone();
+    zonder.maatregelen.iter_mut().for_each(|m| m.bewijs.retain(|b| b.rol != Bewijsrol::Toetsing));
+    println!(
+        "ZONDER audit:       {:?}",
+        codes(&beoordeel_zorgplicht(&motor, &zonder, drempels(), later))
+    );
 }

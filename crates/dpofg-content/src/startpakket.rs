@@ -34,8 +34,8 @@ pub fn startpakket(consolidatiedatum: NaiveDate) -> Pakketinhoud {
     Pakketinhoud {
         code: "nl-start".into(),
         naam: "Startpakket Nederland — te verifiëren vóór gebruik".into(),
-        versie: 2,
-        versienaam: "0.2-start".into(),
+        versie: 3,
+        versienaam: "0.3-start".into(),
         consolidatiedatum,
         jurisdictie: "NL".into(),
         minimaal_aanbevolen_programmaversie: "0.1.0".into(),
@@ -236,6 +236,33 @@ fn termijnen() -> Vec<Termijnsoort> {
             Aanvang::VanafGebeurtenis,
             "interne norm",
         ),
+        Termijnsoort::kalender(
+            "INTERN-ZORGPLICHT-BESTUURSVASTSTELLING",
+            "actualiteit van de bestuursvaststelling van het maatregelenpakket",
+            12,
+            Eenheid::Maanden,
+            Rechtsstelsel::ZelfGesteld,
+            Aanvang::VanafGebeurtenis,
+            "interne norm; art. 24 lid 1 Cyberbeveiligingswet noemt geen frequentie",
+        ),
+        Termijnsoort::kalender(
+            "INTERN-ZORGPLICHT-BEWIJSHORIZON",
+            "horizon waarbinnen verlopend bewijs vooraf wordt gemeld",
+            60,
+            Eenheid::Kalenderdagen,
+            Rechtsstelsel::ZelfGesteld,
+            Aanvang::VanafGebeurtenis,
+            "interne norm; geen wettelijke grondslag",
+        ),
+        Termijnsoort::kalender(
+            "INTERN-ZORGPLICHT-BEOORDELINGSTERMIJN",
+            "termijn waarbinnen een afgeleide maatregel beoordeeld hoort te zijn",
+            30,
+            Eenheid::Kalenderdagen,
+            Rechtsstelsel::ZelfGesteld,
+            Aanvang::VanafGebeurtenis,
+            "interne norm; geen wettelijke grondslag",
+        ),
     ]
 }
 
@@ -387,7 +414,13 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                 "de opsomming van weigeringsgronden en of die volledig is",
                 "de frequentie van de audit en de interne controle onder de Wet politiegegevens",
                 "de drempel waarboven een uitzondering van artikel 49 niet meer incidenteel is",
-                "de drempel waarboven de meldtermijn van een verwerker te lang is"
+                "de drempel waarboven de meldtermijn van een verwerker te lang is",
+                "de indeling van de maatregelen uit het Cyberbeveiligingsbesluit over de tien \
+                 onderdelen van artikel 21 lid 3",
+                "welke van die maatregelen een voorbehoud kennen waardoor afwijken met een \
+                 motivering is toegestaan",
+                "de termijn waarbinnen het bestuur het maatregelenpakket opnieuw vaststelt",
+                "de drempel waarboven een zelf vastgestelde uitvoeringsfrequentie te lang is"
             ]
         }),
     );
@@ -445,6 +478,32 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
         ]),
     );
     uit.insert(
+        "zorgplicht_drempels".into(),
+        serde_json::json!({
+            "toelichting": "Getallen die de wet niet noemt. De frequentiedrempel zegt vanaf \
+                            hoeveel maanden een zelf vastgestelde uitvoeringsfrequentie wordt \
+                            gemeld; het aandeel zegt vanaf welk percentage niet-toepassing van \
+                            uitzondering naar gewoonte gaat.",
+            "frequentiedrempel_maanden": 12,
+            "afwijkingsaandeel_procent": 20,
+            "bron": "interne norm; geen van beide getallen is aan een wettekst ontleend"
+        }),
+    );
+    uit.insert("zorgplicht_kader_cbb_a".into(), zorgplichtkader_cbb_a());
+    uit.insert(
+        "zorgplicht_teksten".into(),
+        serde_json::json!({
+            "bij_elke_uitvoer": "Een certificaat op grond van een informatiebeveiligingsnorm is \
+                                 geen wettelijke conformiteitsverklaring. Een managementsysteem \
+                                 vervangt de meld-, registratie-, informatie- en \
+                                 bestuurdersverplichtingen niet.",
+            "bij_ongeverifieerd_kader": "Dit kader is niet tegen de bron geverifieerd. De \
+                                         indeling van de maatregelen over de tien onderdelen is \
+                                         een vertrekpunt en geen vastgestelde controlset.",
+            "bron": "art. 6 lid 4 Cyberbeveiligingsbesluit"
+        }),
+    );
+    uit.insert(
         "verwerker_meldtermijndrempel".into(),
         serde_json::json!({
             "toelichting": "Boven hoeveel uur de contractuele meldtermijn van een verwerker te \
@@ -483,4 +542,178 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
         ]),
     );
     uit
+}
+
+/// De controlset van variant A: de uitwerking van de zorgplicht in het
+/// Cyberbeveiligingsbesluit, ingedeeld over de tien onderdelen van artikel 21
+/// lid 3 van de Cyberbeveiligingswet.
+///
+/// Twee dingen die hier nadrukkelijk niet vaststaan. Ten eerste de indeling
+/// zelf: welke maatregel uit het besluit onder welke letter valt, is hier een
+/// vertrekpunt en geen vastgestelde controlset. Ten tweede het voorbehoud per
+/// maatregel: waar de norm zelf "waar passend" zegt, mag met een motivering
+/// worden afgeweken, en waar dat er niet staat niet. Die indeling bepaalt of
+/// een gebruiker een maatregel gemotiveerd naast zich neer mag leggen en hoort
+/// dus door een jurist te worden nagelopen.
+fn zorgplichtkader_cbb_a() -> serde_json::Value {
+    serde_json::json!({
+        "kenmerk": "CBB-ZORGPLICHT-A",
+        "variant": "a",
+        "versie": "2026-08-01",
+        "bron": "Cyberbeveiligingsbesluit, artikel 6 tot en met 18",
+        "geverifieerd_op": null,
+        "toelichting": "Een eerste indeling van de maatregelen uit het Cyberbeveiligingsbesluit \
+                        over de tien onderdelen van artikel 21 lid 3 van de \
+                        Cyberbeveiligingswet. Niet door een jurist vastgesteld.",
+        "maatregelen": [
+            {
+                "code": "CBB-06",
+                "onderdeel": "beleid",
+                "normvindplaats": "art. 6 Cyberbeveiligingsbesluit",
+                "omschrijving": "beleid voor informatiebeveiliging, vastgesteld door de leiding \
+                                 en periodiek herzien",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-07",
+                "onderdeel": "beleid",
+                "normvindplaats": "art. 7 Cyberbeveiligingsbesluit",
+                "omschrijving": "een methodische risicoanalyse van de netwerk- en \
+                                 informatiesystemen",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-08",
+                "onderdeel": "incidenten",
+                "normvindplaats": "art. 8 Cyberbeveiligingsbesluit",
+                "omschrijving": "een procedure voor het behandelen van incidenten, met \
+                                 detectie, registratie en afhandeling",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-09",
+                "onderdeel": "continuiteit",
+                "normvindplaats": "art. 9 Cyberbeveiligingsbesluit",
+                "omschrijving": "back-upbeheer, herstelplannen en crisisbeheer, met een \
+                                 beproeving van het herstel",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-10",
+                "onderdeel": "toeleveringsketen",
+                "normvindplaats": "art. 10 Cyberbeveiligingsbesluit",
+                "omschrijving": "beveiligingseisen aan leveranciers en het toezicht op de \
+                                 naleving daarvan",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-11",
+                "onderdeel": "ontwikkeling",
+                "normvindplaats": "art. 11 Cyberbeveiligingsbesluit",
+                "omschrijving": "beveiliging bij verwerving, ontwikkeling en onderhoud, met \
+                                 wijzigings- en patchbeheer",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-17",
+                "onderdeel": "ontwikkeling",
+                "normvindplaats": "art. 17 Cyberbeveiligingsbesluit",
+                "omschrijving": "het beoordelen en afhandelen van ontvangen attenderingen over \
+                                 kwetsbaarheden, schriftelijk per attendering",
+                "periodiek": false,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-18",
+                "onderdeel": "effectiviteit",
+                "normvindplaats": "art. 18 Cyberbeveiligingsbesluit",
+                "omschrijving": "een procedure om de doeltreffendheid van de maatregelen te \
+                                 beoordelen",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": true
+            },
+            {
+                "code": "CBB-12",
+                "onderdeel": "cyberhygiene",
+                "normvindplaats": "art. 12 Cyberbeveiligingsbesluit",
+                "omschrijving": "basismaatregelen voor cyberhygiëne en opleiding van het \
+                                 personeel",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-13",
+                "onderdeel": "cryptografie",
+                "normvindplaats": "art. 13 Cyberbeveiligingsbesluit",
+                "omschrijving": "beleid en procedures voor het gebruik van cryptografie",
+                "periodiek": false,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-13-E",
+                "onderdeel": "cryptografie",
+                "normvindplaats": "art. 13 Cyberbeveiligingsbesluit",
+                "omschrijving": "versleuteling waar dat passend is, met sleutelbeheer",
+                "periodiek": false,
+                "niettoepassingsvorm": "eigen_motivering",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-14",
+                "onderdeel": "personeel",
+                "normvindplaats": "art. 14 Cyberbeveiligingsbesluit",
+                "omschrijving": "beveiligingsaspecten bij indiensttreding, functiewijziging en \
+                                 vertrek van personeel",
+                "periodiek": false,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-15",
+                "onderdeel": "personeel",
+                "normvindplaats": "art. 15 Cyberbeveiligingsbesluit",
+                "omschrijving": "toegangsbeleid met periodieke herbeoordeling van de verleende \
+                                 rechten",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-16",
+                "onderdeel": "personeel",
+                "normvindplaats": "art. 16 Cyberbeveiligingsbesluit",
+                "omschrijving": "beheer van bedrijfsmiddelen, met een actueel overzicht van \
+                                 systemen en gegevens",
+                "periodiek": true,
+                "niettoepassingsvorm": "verboden",
+                "externe_toetsing_verwacht": false
+            },
+            {
+                "code": "CBB-15-MFA",
+                "onderdeel": "authenticatie",
+                "normvindplaats": "art. 15 Cyberbeveiligingsbesluit",
+                "omschrijving": "meerfactorauthenticatie waar dat passend is, en beveiligde \
+                                 spraak-, video-, tekst- en noodcommunicatie",
+                "periodiek": false,
+                "niettoepassingsvorm": "eigen_motivering",
+                "externe_toetsing_verwacht": false
+            }
+        ]
+    })
 }

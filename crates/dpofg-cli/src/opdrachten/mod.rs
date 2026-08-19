@@ -17,6 +17,7 @@ pub mod termijn;
 pub mod verzoek;
 pub mod woo;
 pub mod wpg;
+pub mod zorgplicht;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};

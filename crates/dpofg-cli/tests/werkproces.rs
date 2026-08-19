@@ -47,6 +47,16 @@ impl Proef {
         tekst
     }
 
+    /// Zet een bestand naast de kluis en levert het pad.
+    ///
+    /// Nodig voor bewijsstukken: de tool neemt een bestand op en rekent de
+    /// inhoudshash zelf uit, zodat de gebruiker er nooit een overtypt.
+    fn bestand(&self, naam: &str, inhoud: &str) -> String {
+        let pad = self.kluis.parent().unwrap().join(naam);
+        std::fs::write(&pad, inhoud).unwrap();
+        pad.display().to_string()
+    }
+
     /// Draait een opdracht die moet falen en levert de uitvoer.
     fn moet_falen(&self, opdracht: &str) -> String {
         let uit = self.draai(opdracht);
@@ -1983,8 +1993,8 @@ fn een_leeg_verplicht_veld_wordt_geweigerd() {
 fn de_dekking_meldt_wat_er_werkelijk_draait() {
     let p = Proef::nieuw();
     let uit = p.moet("controle --dekking");
-    assert!(uit.contains("van de 55 regels"));
-    assert!(uit.contains("41 van de 55"), "kreeg:\n{uit}");
+    assert!(uit.contains("van de 68 regels"));
+    assert!(uit.contains("54 van de 68"), "kreeg:\n{uit}");
     // En wat er níet draait, staat er met naam bij.
     assert!(uit.contains("Nog zonder evaluatie"));
     assert!(uit.contains("SYS-09"), "kreeg:\n{uit}");
@@ -2190,4 +2200,204 @@ fn een_onbekende_leverancier_levert_een_bruikbare_fout() {
     p.moet("incident nieuw 2026-0043 'melding van de verwerker' --kanaal verwerker");
     let uit = p.moet_falen("incident verwerker 2026-0043 --leverancier LEV-999");
     assert!(uit.contains("dpofg leverancier lijst"), "kreeg:\n{uit}");
+}
+
+// --------------------------------------------------------------------------
+// De zorgplichtcontrolset
+// --------------------------------------------------------------------------
+
+fn controlset_opzetten(p: &Proef) {
+    p.moet(
+        "zorgplicht afleiden ZRP-2026 --naam 'Gemeente Voorbeeld' \
+         --functionaris 'A. de Vries'",
+    );
+}
+
+/// De tien onderdelen staan in het product, met de juiste lidverwijzing. De
+/// richtlijn nummert ze als lid 2, de Nederlandse wet als lid 3.
+#[test]
+fn de_tien_onderdelen_verwijzen_naar_het_derde_lid() {
+    let p = Proef::nieuw();
+    let uit = p.moet("zorgplicht onderdelen");
+    for letter in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"] {
+        assert!(
+            uit.contains(&format!("art. 21 lid 3 onder {letter} Cyberbeveiligingswet")),
+            "kreeg:\n{uit}"
+        );
+    }
+    assert!(!uit.contains("lid 2 onder"), "de verwijzing van de richtlijn hoort er niet te staan");
+}
+
+/// De controlset wordt afgeleid en niet samengesteld: er is geen opdracht om
+/// er een maatregel bij te zetten of uit te halen.
+#[test]
+fn de_controlset_wordt_in_een_keer_afgeleid() {
+    let p = Proef::nieuw();
+    let uit = p.moet(
+        "zorgplicht afleiden ZRP-2026 --naam 'Gemeente Voorbeeld' \
+         --functionaris 'A. de Vries'",
+    );
+    assert!(uit.contains("afgeleid en niet samengesteld"), "kreeg:\n{uit}");
+    assert!(uit.contains("niet tegen de bron geverifieerd"), "kreeg:\n{uit}");
+
+    let uit = p.moet("zorgplicht toon ZRP-2026");
+    for letter in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"] {
+        assert!(uit.contains(&format!("│ {letter} ")), "onderdeel {letter} ontbreekt:\n{uit}");
+    }
+}
+
+/// Een kader dat niet in het pakket zit, is niet te kiezen. Anders ontstaat een
+/// leeg dossier dat er compleet uitziet omdat het nul maatregelen heeft.
+#[test]
+fn een_kader_dat_er_niet_is_wordt_niet_afgeleid() {
+    let p = Proef::nieuw();
+    let uit = p.moet_falen(
+        "zorgplicht afleiden ZRP-2026 --naam Gemeente --kader UV-VARIANT-B \
+         --functionaris 'A. de Vries'",
+    );
+    assert!(uit.contains("dpofg zorgplicht kaders"), "kreeg:\n{uit}");
+}
+
+/// Inrichten maakt niets aantoonbaar. Dat verschil is de kern van deze module.
+#[test]
+fn inrichten_is_geen_bewijs() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol 'de systeembeheerder' --persoon 'J. Jansen'");
+
+    let uit = p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
+    assert!(uit.contains("Ingericht is nog niet aantoonbaar"), "kreeg:\n{uit}");
+
+    let uit = p.moet("controle");
+    assert!(uit.contains("ZRP-04"), "kreeg:\n{uit}");
+    assert!(uit.contains("zonder bewijs van de uitvoering"), "kreeg:\n{uit}");
+
+    let bewijs = p.bestand("uitdraai.txt", "sleutelbeheer, uitdraai van 1 juli 2026");
+    let uit = p.moet(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2027-06-01T00:00:00Z"
+    ));
+    assert!(uit.contains("stand van CBB-13: aantoonbaar"), "kreeg:\n{uit}");
+    assert!(!p.moet("controle").contains("ZRP-04"));
+}
+
+/// De gebruiker typt nooit een hash over: hij wijst een bestand aan en de tool
+/// rekent de inhoudshash zelf uit.
+#[test]
+fn bewijs_is_een_bestand_en_geen_verwijzing() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let leeg = p.bestand("leeg.txt", "");
+    let uit = p.moet_falen(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {leeg} \
+         --omschrijving 'niets' --geldig-tot 2027-06-01T00:00:00Z"
+    ));
+    assert!(uit.contains("leeg bestand als bewijs"), "kreeg:\n{uit}");
+
+    let uit = p.moet_falen(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering \
+         --bestand /bestaat/niet.pdf --omschrijving 'iets' --geldig-tot 2027-06-01T00:00:00Z",
+    );
+    assert!(uit.contains("niet lezen"), "kreeg:\n{uit}");
+}
+
+/// Bewijs zonder einddatum houdt een dossier voor altijd groen. Dat kan niet:
+/// de einddatum is verplicht en verlopen bewijs aanwijzen wordt geweigerd.
+#[test]
+fn verlopen_bewijs_aanwijzen_kan_niet() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let bewijs = p.bestand("oud.txt", "uitdraai van 2020");
+    let uit = p.moet_falen(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
+         --omschrijving 'oude uitdraai' --geldig-van 2020-01-01T00:00:00Z \
+         --geldig-tot 2021-01-01T00:00:00Z"
+    ));
+    assert!(uit.contains("nu al verlopen"), "kreeg:\n{uit}");
+}
+
+/// De aangemelde functionaris houdt geen toezicht op zijn eigen werk. Bij
+/// toewijzing wordt dat geweigerd; bij een rolwissel is dat niet mogelijk en
+/// wordt het een blokkerende bevinding.
+#[test]
+fn de_functionaris_kan_geen_maatregel_bezitten() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let uit = p.moet_falen(
+        "zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol 'de beheerder' \
+         --persoon 'A. de Vries'",
+    );
+    assert!(uit.contains("art. 38 lid 6 AVG"), "kreeg:\n{uit}");
+
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol 'de beheerder' --persoon 'J. Jansen'");
+    let uit = p.moet("zorgplicht functionaris ZRP-2026 --naam 'J. Jansen'");
+    assert!(uit.contains("toezicht op het eigen werk"), "kreeg:\n{uit}");
+
+    let uit = p.moet("controle");
+    assert!(uit.contains("ZRP-02"), "kreeg:\n{uit}");
+}
+
+/// Een onvoorwaardelijke eis is geen keuze die met een motivering te maken is.
+/// Het kader bepaalt dat, niet de gebruiker.
+#[test]
+fn het_kader_bepaalt_of_afwijken_mag() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+
+    let uit = p.moet_falen(
+        "zorgplicht niet-toepassen ZRP-2026 --maatregel CBB-06 \
+         --motivering 'dit past niet bij onze omvang en middelen'",
+    );
+    assert!(uit.contains("onvoorwaardelijk geformuleerd"), "kreeg:\n{uit}");
+
+    // CBB-13-E draagt in het pakket wél een voorbehoud.
+    let uit = p.moet(
+        "zorgplicht niet-toepassen ZRP-2026 --maatregel CBB-13-E \
+         --motivering 'de gegevens verlaten het eigen netwerk niet'",
+    );
+    assert!(uit.contains("besluit dat blijft staan"), "kreeg:\n{uit}");
+}
+
+/// Zonder risicobeoordeling en zonder bestuursbesluit is de zorgplicht niet
+/// aantoonbaar, hoeveel maatregelen er ook zijn ingericht.
+#[test]
+fn vaststellen_vergt_de_beoordeling_en_het_bestuursbesluit() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let uit = p.moet_falen("zorgplicht vaststellen ZRP-2026");
+    assert!(uit.contains("zorgplicht.risicobeoordeling"), "kreeg:\n{uit}");
+    assert!(uit.contains("zorgplicht.bestuursvaststelling"), "kreeg:\n{uit}");
+}
+
+/// De vervallijst noemt wat er omvalt en wanneer. Geen score, geen kleur.
+#[test]
+fn de_vervallijst_toont_datums_en_geen_cijfer() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol 'de beheerder' --persoon 'J. Jansen'");
+    p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
+    let bewijs = p.bestand("sleutelbeheer.txt", "uitdraai van het sleutelbeheer");
+    p.moet(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2026-10-01T00:00:00Z"
+    ));
+
+    let uit = p.moet("zorgplicht vervalt ZRP-2026 --dagen 7");
+    assert!(uit.contains("vervalt er geen uitvoeringsbewijs"), "kreeg:\n{uit}");
+
+    let uit = p.moet("zorgplicht vervalt ZRP-2026 --dagen 365");
+    assert!(uit.contains("CBB-13"), "kreeg:\n{uit}");
+    assert!(uit.contains("01-10-2026"), "kreeg:\n{uit}");
+    assert!(uit.contains("lijst met datums en geen prognose"), "kreeg:\n{uit}");
+}
+
+/// Vijftien maatregelen mogen niet vijftien bevindingen opleveren die alle
+/// vijftien hetzelfde zeggen; dat is hoe een gebruiker leert wegklikken.
+#[test]
+fn een_verse_controlset_levert_een_leesbare_controleronde() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    let uit = p.moet("controle --vanaf rapporterend");
+    let aantal = uit.matches("[ZRP-").count();
+    assert!(aantal <= 6, "{aantal} bevindingen voor één vers dossier:\n{uit}");
 }

@@ -92,7 +92,7 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Termijnenmotor met getypeerde termijnen | werkt |
 | Verwerkingsregister (art. 30 AVG) met afgeleide verplichtingen | werkt |
 | Incidentdossier met de vijf klokken en het meldbesluit | werkt |
-| Controleregels over de samenhang | 41 van de 55 regels draaien |
+| Controleregels over de samenhang | 54 van de 68 regels draaien |
 | Kennispakketten met handtekening en terugrolbescherming | werkt |
 | Dossiers samenstellen en ondertekenen | werkt |
 | Effectbeoordeling (DPIA) met de raadplegingsklok van art. 36 | werkt |
@@ -104,10 +104,12 @@ De kern staat en is te gebruiken via de opdrachtregel. De grafische schil komt l
 | Belangenafweging (art. 6 lid 1 onder f) | werkt |
 | Doorgiften buiten de EER met doorgiftebeoordeling | werkt |
 | Leveranciersregister met de acht onderdelen van art. 28 lid 3 | werkt |
+| Zorgplichtcontrolset (art. 21 lid 3 Cbw) met bewijs dat vervalt | werkt |
 | Losse verificatiebinary voor toezichthouders | werkt |
 | Vaste installatiesleutel onder ankers en dossiers | werkt |
 | Rotatie en intrekking van die sleutel | nog niet |
 | Toestemming als eigen record | nog niet |
+| Raamwerkvariant B en C, en de crosswalk naar normen | nog niet |
 | Grafische schil | nog niet |
 
 Vraag de werkelijke dekking op met `dpofg controle --dekking`. Het aantal regels in de catalogus zegt niets over wat er wordt bewaakt; die opdracht wel.

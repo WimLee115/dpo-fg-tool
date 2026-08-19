@@ -27,8 +27,10 @@
 use chrono::{DateTime, Duration, Utc};
 use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
-    avg::Grondslag, Bewaartermijn, Doorgifte, Dpia, Incident, Leverancier, Meldbesluit,
-    Risiconiveau, Status, Verwerking, Volledig, Voortoets,
+    avg::Grondslag,
+    zorgplicht::{Maatregelstand, Toepassing, Zorgplichtdossier},
+    Bewaartermijn, Doorgifte, Dpia, Incident, Leverancier, Meldbesluit, Risiconiveau, Status,
+    Verwerking, Volledig, Voortoets,
 };
 use dpofg_terms::Deadline;
 
@@ -47,6 +49,7 @@ pub fn catalogus() -> Vec<Regel> {
     uit.extend(datalekken());
     uit.extend(effectbeoordeling());
     uit.extend(organisatie());
+    uit.extend(zorgplicht());
     uit.extend(systeem());
     uit
 }
@@ -76,7 +79,9 @@ pub fn geimplementeerd() -> &'static [&'static str] {
         "GRO-05", "BEW-01", "BEW-02", "BEW-04", "VWO-01", "EER-01", "DPIA-01", "LEK-01", "LEK-02",
         "LEK-03", "LEK-04", "LEK-06", "LEK-07", "LEK-08", "LEK-09", "LEK-12", "LEK-13", "LEK-15",
         "DPIA-03", "DPIA-06", "DPIA-07", "EER-03", "EER-06", "EER-07", "VWO-02", "VWO-04",
-        "VWO-09", "VWO-13", "LEK-16", "SYS-04", "SYS-06", "SYS-10",
+        "VWO-09", "VWO-13", "LEK-16", "ZRP-01", "ZRP-02", "ZRP-03", "ZRP-04", "ZRP-05", "ZRP-06",
+        "ZRP-07", "ZRP-08", "ZRP-09", "ZRP-10", "ZRP-11", "ZRP-12", "ZRP-13", "SYS-04", "SYS-06",
+        "SYS-10",
     ]
 }
 
@@ -596,6 +601,154 @@ fn organisatie() -> Vec<Regel> {
             Functionaris,
             "art. 31 AVG",
             false,
+        ),
+    ]
+}
+
+/// De zorgplichtcontrolset van artikel 21 lid 3 van de Cyberbeveiligingswet.
+///
+/// Eén blokkerende regel op dertien. Dat is met opzet: het inrichten van een
+/// controlset is werk dat maanden duurt, en een blokkerende bevinding die al
+/// die tijd in ieder overzicht staat, leert de gebruiker wegklikken. Wat
+/// blokkeert, blokkeert op de plaats waar het thuishoort — bij het vaststellen
+/// van het dossier zelf.
+///
+/// De uitzondering is ZRP-02. Een functionaris die eigenaar is van een
+/// maatregel waarop hij toezicht houdt, is geen werk in uitvoering maar een
+/// rolconflict, en dat conflict ontstaat buiten het dossier om: bij een
+/// rolwissel. Zolang de tool die wissel niet mag weigeren, moet zij hem
+/// zichtbaar maken.
+fn zorgplicht() -> Vec<Regel> {
+    vec![
+        Regel::nieuw(
+            "ZRP-01",
+            "zorgplicht",
+            "Maatregel zonder eigenaar",
+            "een maatregel uit de controlset zonder rol met bezetting",
+            Signalerend,
+            Directie,
+            "art. 21 lid 3 Cyberbeveiligingswet",
+            false,
+        ),
+        Regel::nieuw(
+            "ZRP-02",
+            "zorgplicht",
+            "Eigenaar is de aangemelde functionaris",
+            "de functionaris is eigenaar van een maatregel waarop hij toezicht houdt",
+            Blokkerend,
+            Directie,
+            "art. 38 lid 6 AVG",
+            false,
+        ),
+        Regel::nieuw(
+            "ZRP-03",
+            "zorgplicht",
+            "Maatregel niet beoordeeld",
+            "een maatregel staat na de beoordelingstermijn nog op nog niet beoordeeld",
+            Signalerend,
+            SecurityOfficer,
+            "art. 21 lid 3 Cyberbeveiligingswet",
+            true,
+        ),
+        Regel::nieuw(
+            "ZRP-04",
+            "zorgplicht",
+            "Ingericht maar niet aantoonbaar",
+            "een ingerichte maatregel zonder bewijs van de uitvoering dat nu geldt",
+            Signalerend,
+            SecurityOfficer,
+            "art. 6 lid 4 Cyberbeveiligingsbesluit",
+            true,
+        ),
+        Regel::nieuw(
+            "ZRP-05",
+            "zorgplicht",
+            "Bewijs verloopt binnen de horizon",
+            "een bewijsstuk waarvan het geldigheidsvenster binnenkort sluit",
+            Signalerend,
+            SecurityOfficer,
+            "art. 6 lid 4 Cyberbeveiligingsbesluit",
+            true,
+        ),
+        Regel::nieuw(
+            "ZRP-06",
+            "zorgplicht",
+            "Periodieke maatregel zonder frequentie",
+            "een maatregel die het kader periodiek noemt zonder zelf vastgestelde termijn",
+            Signalerend,
+            SecurityOfficer,
+            "art. 18 Cyberbeveiligingsbesluit",
+            false,
+        ),
+        Regel::nieuw(
+            "ZRP-07",
+            "zorgplicht",
+            "Frequentie langer dan de norm",
+            "een zelf vastgestelde uitvoeringsfrequentie boven de drempel uit het pakket",
+            Signalerend,
+            SecurityOfficer,
+            "art. 18 Cyberbeveiligingsbesluit",
+            true,
+        ),
+        Regel::nieuw(
+            "ZRP-08",
+            "zorgplicht",
+            "Uitvoering achter op de eigen frequentie",
+            "de laatste uitvoering ligt langer geleden dan de zelf vastgestelde termijn",
+            Signalerend,
+            SecurityOfficer,
+            "zelf vastgestelde termijn",
+            true,
+        ),
+        Regel::nieuw(
+            "ZRP-09",
+            "zorgplicht",
+            "Geen bestuursvaststelling",
+            "het maatregelenpakket is niet door het bestuur vastgesteld",
+            Signalerend,
+            Directie,
+            "art. 24 lid 1 Cyberbeveiligingswet",
+            false,
+        ),
+        Regel::nieuw(
+            "ZRP-10",
+            "zorgplicht",
+            "Bestuursvaststelling verouderd",
+            "de bestuursvaststelling is ouder dan de zelf vastgestelde termijn",
+            Signalerend,
+            Directie,
+            "art. 24 lid 1 Cyberbeveiligingswet",
+            true,
+        ),
+        Regel::nieuw(
+            "ZRP-11",
+            "zorgplicht",
+            "Risicobeoordeling ontbreekt of is verlopen",
+            "geen geldige risicobeoordeling onder de controlset",
+            Signalerend,
+            Directie,
+            "art. 21 lid 1 en 2 Cyberbeveiligingswet",
+            false,
+        ),
+        Regel::nieuw(
+            "ZRP-12",
+            "zorgplicht",
+            "Zelfgerapporteerd bewijs waar toetsing wordt verwacht",
+            "het kader verwacht externe toetsing en het bewijs berust op de eigen verklaring",
+            Signalerend,
+            Functionaris,
+            "art. 6 lid 4 Cyberbeveiligingsbesluit",
+            true,
+        ),
+        Regel::nieuw(
+            "ZRP-13",
+            "zorgplicht",
+            "Niet-toepassing is gewoonte geworden",
+            "het aandeel gemotiveerd niet toegepaste maatregelen ligt boven de drempel",
+            Rapporterend,
+            Directie,
+            "interne norm; geen wettelijke drempel",
+            true,
         ),
     ]
 }
@@ -1173,6 +1326,277 @@ pub fn beoordeel_leverancier(
                 "de verwerking begon op {start} en de overeenkomst is getekend op {}; die \
                  {dagen} dagen zijn niet gedekt",
                 overeenkomst.ondertekend_op.format("%d-%m-%Y")
+            ),
+        );
+    }
+
+    uit
+}
+
+/// Drempels waartegen de zorgplichtcontrolset wordt gemeten.
+///
+/// Vijf getallen die de wet geen van alle noemt. Ze komen daarom uit het
+/// kennispakket en worden hier meegegeven; een regel die zijn eigen norm
+/// verzint, gaat een tweede waarheid voeren naast het pakket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Zorgplichtdrempels {
+    /// Na hoeveel dagen een nog niet beoordeelde maatregel wordt gemeld.
+    pub beoordelingstermijn_dagen: i64,
+    /// Hoeveel dagen vooruit verlopend bewijs wordt gemeld.
+    pub bewijshorizon_dagen: i64,
+    /// Boven hoeveel maanden een zelf vastgestelde frequentie wordt gemeld.
+    pub frequentiedrempel_maanden: u32,
+    /// Na hoeveel maanden de bestuursvaststelling als verouderd geldt.
+    pub bestuursvaststelling_maanden: i64,
+    /// Boven welk percentage niet-toepassing van uitzondering gewoonte wordt.
+    pub afwijkingsaandeel_procent: u32,
+}
+
+/// Beoordeelt één zorgplichtdossier (ZRP-01 tot en met ZRP-13).
+///
+/// De stand per maatregel wordt hier niet opnieuw uitgerekend maar opgevraagd:
+/// `Maatregelstand` is een berekening in het domein en er hoort maar één plaats
+/// te zijn waar wordt bepaald wanneer iets aantoonbaar is.
+pub fn beoordeel_zorgplicht(
+    motor: &Regelmotor,
+    d: &Zorgplichtdossier,
+    drempels: Zorgplichtdrempels,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+    let kenmerk = Some(d.kenmerk.as_str());
+    let id = d.id.to_string();
+
+    let mut voeg = |code: &str, toelichting: String| {
+        if let Some(b) = motor.bevind(code, "zorgplicht", &id, kenmerk, toelichting, nu) {
+            uit.push(b);
+        }
+    };
+
+    // ZRP-02 eerst: een rolconflict weegt zwaarder dan een open eind.
+    let conflicten = d.eigenaarsconflicten();
+    if !conflicten.is_empty() {
+        let codes: Vec<_> = conflicten.iter().map(|m| m.code.as_str()).collect();
+        voeg(
+            "ZRP-02",
+            format!(
+                "{} is aangemeld als functionaris en tegelijk eigenaar van {}; toezicht op het \
+                 eigen werk is geen toezicht",
+                d.aangemelde_functionaris,
+                codes.join(", ")
+            ),
+        );
+    }
+
+    let zonder_eigenaar: Vec<_> =
+        d.maatregelen.iter().filter(|m| m.eigenaar.is_none()).map(|m| m.code.as_str()).collect();
+    if !zonder_eigenaar.is_empty() {
+        voeg(
+            "ZRP-01",
+            format!(
+                "{} van de {} maatregelen hebben geen eigenaar: {}",
+                zonder_eigenaar.len(),
+                d.maatregelen.len(),
+                zonder_eigenaar.join(", ")
+            ),
+        );
+    }
+
+    let dagen_sinds_afleiden = (nu - d.herkomst.aangemaakt_op).num_days();
+    if dagen_sinds_afleiden >= drempels.beoordelingstermijn_dagen {
+        let onbeoordeeld: Vec<_> = d
+            .maatregelen
+            .iter()
+            .filter(|m| matches!(m.toepassing, Toepassing::NogNietBeoordeeld))
+            .map(|m| m.code.as_str())
+            .collect();
+        if !onbeoordeeld.is_empty() {
+            voeg(
+                "ZRP-03",
+                format!(
+                    "{} maatregelen staan na {dagen_sinds_afleiden} dagen nog op nog niet \
+                     beoordeeld: {}",
+                    onbeoordeeld.len(),
+                    onbeoordeeld.join(", ")
+                ),
+            );
+        }
+    }
+
+    // Alles hieronder telt per dossier en niet per maatregel. Vijftien
+    // bevindingen die alle vijftien hetzelfde zeggen, zijn geen vijftien keer
+    // zoveel informatie; ze zijn de manier waarop een gebruiker leert
+    // wegklikken. Regel SYS-06 rekent dat elders af als ontwerpdefect, dus het
+    // hoort hier niet te ontstaan.
+    let codes = |v: &[&str]| v.join(", ");
+
+    let niet_aantoonbaar: Vec<&str> = d
+        .maatregelen
+        .iter()
+        .filter(|m| m.stand(nu) == Maatregelstand::VastgesteldNietAantoonbaar)
+        .map(|m| m.code.as_str())
+        .collect();
+    if !niet_aantoonbaar.is_empty() {
+        voeg(
+            "ZRP-04",
+            format!(
+                "{} maatregelen zijn ingericht zonder bewijs van de uitvoering dat nu geldt: {}",
+                niet_aantoonbaar.len(),
+                codes(&niet_aantoonbaar)
+            ),
+        );
+    }
+
+    let zonder_frequentie: Vec<&str> = d
+        .maatregelen
+        .iter()
+        .filter(|m| m.periodiek && m.frequentie.is_none())
+        .map(|m| m.code.as_str())
+        .collect();
+    if !zonder_frequentie.is_empty() {
+        voeg(
+            "ZRP-06",
+            format!(
+                "{} maatregelen worden door het kader periodiek genoemd zonder dat er een \
+                 uitvoeringstermijn is vastgesteld: {}",
+                zonder_frequentie.len(),
+                codes(&zonder_frequentie)
+            ),
+        );
+    }
+
+    let te_ruim: Vec<String> = d
+        .maatregelen
+        .iter()
+        .filter_map(|m| {
+            let f = m.frequentie.as_ref()?;
+            (f.maanden > drempels.frequentiedrempel_maanden)
+                .then(|| format!("{} ({} maanden)", m.code, f.maanden))
+        })
+        .collect();
+    if !te_ruim.is_empty() {
+        voeg(
+            "ZRP-07",
+            format!(
+                "een uitvoeringstermijn boven {} maanden laat een maatregel daartussen te lang \
+                 onbeproefd: {}",
+                drempels.frequentiedrempel_maanden,
+                te_ruim.join(", ")
+            ),
+        );
+    }
+
+    let achterstallig: Vec<String> = d
+        .maatregelen
+        .iter()
+        .filter_map(|m| {
+            let f = m.frequentie.as_ref()?;
+            let maanden = m.maanden_sinds_uitvoering(nu)?;
+            (maanden > i64::from(f.maanden))
+                .then(|| format!("{} ({maanden} maanden geleden, termijn {})", m.code, f.maanden))
+        })
+        .collect();
+    if !achterstallig.is_empty() {
+        voeg(
+            "ZRP-08",
+            format!(
+                "de laatste uitvoering ligt langer geleden dan de eigen termijn bij: {}",
+                achterstallig.join(", ")
+            ),
+        );
+    }
+
+    let vervallend: Vec<&dpofg_domain::zorgplicht::Zorgplichtmaatregel> = d
+        .maatregelen
+        .iter()
+        .filter(|m| {
+            m.eerst_vervallend(nu)
+                .is_some_and(|b| b.dagen_tot_verval(nu) <= drempels.bewijshorizon_dagen)
+        })
+        .collect();
+    if let Some(eerste) =
+        vervallend.iter().filter_map(|m| m.eerst_vervallend(nu)).min_by_key(|b| b.geldig_tot)
+    {
+        voeg(
+            "ZRP-05",
+            format!(
+                "bij {} maatregel(en) verloopt het bewijs binnen {} dagen; het eerste op {}. \
+                 Bekijk de lijst met 'dpofg zorgplicht vervalt'",
+                vervallend.len(),
+                drempels.bewijshorizon_dagen,
+                eerste.geldig_tot.format("%d-%m-%Y")
+            ),
+        );
+    }
+
+    let alleen_zelfgerapporteerd: Vec<&str> = d
+        .maatregelen
+        .iter()
+        .filter(|m| m.externe_toetsing_verwacht && !m.bewijs.is_empty())
+        .filter(|m| {
+            m.bewijs.iter().all(|b| {
+                b.bewijskracht == dpofg_domain::zorgplicht::Bewijskracht::Zelfgerapporteerd
+            })
+        })
+        .map(|m| m.code.as_str())
+        .collect();
+    if !alleen_zelfgerapporteerd.is_empty() {
+        voeg(
+            "ZRP-12",
+            format!(
+                "het kader verwacht toetsing door een ander bij {}; al het bewijs berust daar \
+                 op de eigen verklaring",
+                codes(&alleen_zelfgerapporteerd)
+            ),
+        );
+    }
+
+    match &d.bestuursvaststelling {
+        None => voeg(
+            "ZRP-09",
+            format!("kaderversie {} is niet door het bestuur vastgesteld", d.kaderversie),
+        ),
+        Some(b) => {
+            let maanden = b.maanden_oud(nu);
+            if maanden >= drempels.bestuursvaststelling_maanden {
+                voeg(
+                    "ZRP-10",
+                    format!(
+                        "het bestuur stelde het maatregelenpakket {maanden} maanden geleden \
+                         vast, op {}",
+                        b.datum.format("%d-%m-%Y")
+                    ),
+                );
+            }
+        }
+    }
+
+    match &d.risicobeoordeling {
+        None => voeg(
+            "ZRP-11",
+            "er ligt geen risicobeoordeling onder deze controlset; zonder beoordeling is niet \
+             te zeggen of dit de passende maatregelen zijn"
+                .to_string(),
+        ),
+        Some(r) if r.is_verlopen(nu) => voeg(
+            "ZRP-11",
+            format!(
+                "de risicobeoordeling van {} is op {} verlopen",
+                r.uitgevoerd_op.format("%d-%m-%Y"),
+                r.geldig_tot.format("%d-%m-%Y")
+            ),
+        ),
+        Some(_) => {}
+    }
+
+    let aandeel = d.aandeel_niet_toegepast();
+    if aandeel > drempels.afwijkingsaandeel_procent {
+        voeg(
+            "ZRP-13",
+            format!(
+                "{aandeel} procent van de maatregelen wordt gemotiveerd niet toegepast; boven \
+                 {} procent is niet-toepassing geen uitzondering meer",
+                drempels.afwijkingsaandeel_procent
             ),
         );
     }

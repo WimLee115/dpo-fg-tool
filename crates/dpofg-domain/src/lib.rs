@@ -76,6 +76,7 @@ pub mod verzoek;
 pub mod volledigheid;
 pub mod woo;
 pub mod wpg;
+pub mod zorgplicht;
 
 pub use basis::{Compartiment, Herkomst, Id, Motivering, Overgenomen, Status};
 pub use belangenafweging::{Afwegingsuitkomst, Belangenafweging};
