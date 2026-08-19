@@ -1,10 +1,12 @@
 //! De opdrachten van de bedieningsschil.
 
 pub mod controle;
+pub mod doorgifte;
 pub mod dossier;
 pub mod dpia;
 pub mod incident;
 pub mod kluis;
+pub mod lia;
 pub mod logboek;
 pub mod mapping;
 pub mod pakket;

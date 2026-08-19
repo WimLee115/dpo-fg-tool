@@ -62,6 +62,8 @@
 
 pub mod avg;
 pub mod basis;
+pub mod belangenafweging;
+pub mod doorgifte;
 pub mod dpia;
 mod error;
 pub mod incident;
@@ -75,6 +77,10 @@ pub mod woo;
 pub mod wpg;
 
 pub use basis::{Compartiment, Herkomst, Id, Motivering, Overgenomen, Status};
+pub use belangenafweging::{Afwegingsuitkomst, Belangenafweging};
+pub use doorgifte::{
+    Beoordelingsuitkomst, Doorgifte, Doorgiftebeoordeling, Doorgifteinstrumentsoort,
+};
 pub use dpia::{Dpia, Restrisico, Restrisiconiveau, Voortoets};
 pub use error::{DomeinFout, Resultaat};
 pub use incident::{Aantasting, Herkomstkanaal, Incident, Meldbesluit, Risiconiveau};

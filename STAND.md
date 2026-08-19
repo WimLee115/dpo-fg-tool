@@ -30,7 +30,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Volledigheidsmechanisme | werkt | Teller met grondslag; blokkerend onderscheiden van signalerend |
 | Incidentdossier | werkt | Vijf klokken op eigen ankers, meldbesluit met drie lagen |
 | Klokkenmotor | werkt | Leidt verplichtingen af; ankers vallen niet samen |
-| Controleregels | **deels** | 33 van de 55 regels in de catalogus hebben een evaluatiefunctie |
+| Controleregels | **deels** | 36 van de 55 regels in de catalogus hebben een evaluatiefunctie |
 | Kennispakketten | werkt | Ondertekend, met terugrolbescherming en consolidatiedatum |
 | Dossiers | werkt | Ondertekend manifest, weglatingen zichtbaar, voorbehoud meegetekend |
 | Verificatiebinary | werkt | Leest uitsluitend, geen wachtwoord, geen kluis nodig |
@@ -42,6 +42,8 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Redactieregie | werkt | Profiel, uitlevering aan extern hulpmiddel, terugleescontrole; verstrekking geblokkeerd tot die slaagt |
 | Wpg-spoor | werkt | Toepasselijkheid met motivering, jaarlijkse controle en vierjaarlijkse audit, verbeterplan met eigenaar per maatregel |
 | Veldmapping | werkt | Eén profiel per bronsysteem, verschilrapport in twee richtingen, genegeerde velden met reden |
+| Belangenafweging | werkt | Vier onderdelen vóór de uitkomst; waarborgen kantelen de uitslag maar vervangen de afweging niet |
+| Doorgiften buiten de EER | werkt | Instrument, doorgiftebeoordeling, artikel 49 met telling, controle tegen het kennispakket |
 
 ---
 
@@ -49,7 +51,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 | Onderdeel | Uit fase | Waarom het er nog niet is |
 |---|---|---|
-| Belangenafweging, toestemming, doorgifte als eigen records | 2 | De verwijzingen bestaan in het model; de records nog niet |
+| Toestemming als eigen record | 2 | De verwijzing bestaat in het model; het record nog niet |
 | Leveranciers- en ketenregister | 3 | |
 | Zorgplichtcontrolset | 3 | Vereist de normenkaders in het kennispakket |
 | Toezichtdossier en bestuursrechtelijk spoor | 4 | |
@@ -74,9 +76,9 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 
 **Compartimenten hangen aan één wachtwoord.** De scheiding is cryptografisch echt — elk compartiment heeft een eigen sleutel — maar alle sleutels hangen aan dezelfde kluissleutel. Het persoonlijke dossier van de functionaris, dat de organisatie níet moet kunnen openen, vereist een tweede wachtwoord.
 
-**De regelcatalogus is groter dan wat er draait.** 55 regels gedefinieerd, 33 met een evaluatiefunctie. `dpofg controle --dekking` toont welke nog niet draaien. Het aantal regels zegt niets over wat er wordt bewaakt; die opdracht wel.
+**De regelcatalogus is groter dan wat er draait.** 55 regels gedefinieerd, 36 met een evaluatiefunctie. `dpofg controle --dekking` toont welke nog niet draaien. Het aantal regels zegt niets over wat er wordt bewaakt; die opdracht wel.
 
-De 22 regels die nog niet draaien wachten bijna allemaal op een recordsoort die er niet is, en niet op programmeerwerk. Het verwerkersregister met de leveranciersgegevens levert het meeste op: dat ontsluit vijf regels in één keer. Daarnaast wachten er regels op een systeemregister, een doorgifterecord, een schoningsopdracht, een rollen- en aanstellingsregister, een rapportagespoor en een toezichtdossier.
+De 19 regels die nog niet draaien wachten bijna allemaal op een recordsoort die er niet is, en niet op programmeerwerk. Het verwerkersregister met de leveranciersgegevens levert het meeste op: dat ontsluit vijf regels in één keer. Daarnaast wachten er regels op een systeemregister, een doorgifterecord, een schoningsopdracht, een rollen- en aanstellingsregister, een rapportagespoor en een toezichtdossier.
 
 Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt ook in te vullen zijn. Bewaking certificeren die op producteigen gegevens nooit kan aanslaan, is erger dan een lege plek: het lege vakje vraagt om werk, het gevulde vakje sust.
 
@@ -98,6 +100,10 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 **De veldmapping leest geen systemen uit.** Zij vergelijkt een lijst veldnamen met de categorieën in de registerregel. Die lijst komt van de beheerder van het bronsysteem; de tool legt geen verbinding en ontleedt geen bestandsformaat. Dat is bewust: een importeur per bron is drie keer hetzelfde onderhoud voor hetzelfde probleem, en het openen van een verbinding botst met het uitgangspunt dat het programma nooit een netwerkverbinding opent.
 
+**De drempel voor structureel gebruik van artikel 49 is niet aan de wettekst ontleend.** De verordening noemt geen getal bij het woord "incidenteel". Het kennispakket hanteert twee toepassingen per jaar als werkbare grens en zegt daar met zoveel woorden bij dat dit getal niet uit de wet komt. Wie een andere grens verdedigbaar acht, stelt hem daar bij zonder de programmacode te raken.
+
+**De instrumentcontrole leest alleen wat er in het kennispakket staat.** `dpofg doorgifte controleer` houdt elke doorgifte tegen de status van haar instrument aan. Die status komt uit het meegeleverde pakket en wordt niet ergens opgehaald — het programma opent geen verbinding. Blijft het pakket achter bij de werkelijkheid, dan meldt de controle een geldigheid die er niet meer is.
+
 **Geen hardwaretoken.** Het platformhoofdstuk beschrijft hoe FIDO2 en PIV per besturingssysteem werken; de implementatie ontbreekt.
 
 **De netwerkstiltetest draait alleen op Linux.** De bouwstraat controleert met `strace` dat het programma geen verbinding opent. Voor macOS en Windows is een gelijkwaardige controle nodig.
@@ -108,8 +114,8 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 | | |
 |---|---|
-| Rust-code | ~18.200 regels, zonder commentaar en lege regels |
-| Tests | 532 testfuncties, 536 uitgevoerde tests |
+| Rust-code | ~19.900 regels, zonder commentaar en lege regels |
+| Tests | 565 testfuncties, 569 uitgevoerde tests |
 | Documentatie | ~4.700 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

@@ -3,6 +3,7 @@
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use dpofg_domain::{
     avg::{BijzondereCategorie, Grondslag, Rol},
+    doorgifte::{Beoordelingsuitkomst, Doorgifte, Doorgiftebeoordeling, Doorgifteinstrumentsoort},
     incident::Herkomstkanaal,
     Aantasting, Bewaartermijn, Dpia, Id, Incident, Motivering, Ontvanger, Overgenomen,
     Restrisiconiveau, Risiconiveau, Status, Termijneenheid, Verwerking, Voortoets,
@@ -11,9 +12,10 @@ use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
-        beoordeel_budget, beoordeel_dpia, beoordeel_incident, beoordeel_logboek,
-        beoordeel_meldtermijn, beoordeel_oorzaakpatroon, beoordeel_raadplegingstermijn,
-        beoordeel_verwerking, catalogus, geimplementeerd, standaardmotor,
+        beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
+        beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
+        beoordeel_raadplegingstermijn, beoordeel_verwerking, catalogus, geimplementeerd,
+        standaardmotor,
     },
 };
 
@@ -992,4 +994,131 @@ fn raadplegingstermijn(verstrijkt: DateTime<Utc>) -> dpofg_terms::Deadline {
         verlengingsbepaling: "art. 36 lid 2, tweede en derde volzin, AVG".into(),
         verantwoording: "8 weken na ontvangst van het verzoek".into(),
     }
+}
+
+// --------------------------------------------------------------------------
+// Doorgiften buiten de EER
+// --------------------------------------------------------------------------
+
+const UITZONDERINGSDREMPEL: u32 = 2;
+
+fn doorgifte() -> Doorgifte {
+    Doorgifte::nieuw(
+        "EER-0412",
+        "hosting bij een aanbieder in de Verenigde Staten",
+        Id::nieuw(),
+        "0412-K",
+        "de hostingaanbieder",
+        "Verenigde Staten",
+        "u1",
+        nu(),
+    )
+}
+
+/// Modelbepalingen zonder beoordeling zijn een handtekening onder een aanname.
+#[test]
+fn eer_03_slaat_aan_bij_modelbepalingen_zonder_beoordeling() {
+    let motor = standaardmotor();
+    let mut d = doorgifte();
+    d.kies_instrument(Doorgifteinstrumentsoort::Modelbepalingen, Some("SCC-2021".into()), nu())
+        .unwrap();
+
+    let b = beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu());
+    let bev = b.iter().find(|x| x.regelcode == "EER-03").expect("EER-03 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Signalerend);
+    assert!(bev.toelichting.contains("Verenigde Staten"));
+}
+
+#[test]
+fn eer_03_zwijgt_bij_een_adequaatheidsbesluit() {
+    let motor = standaardmotor();
+    let mut d = doorgifte();
+    d.kies_instrument(Doorgifteinstrumentsoort::Adequaatheidsbesluit, None, nu()).unwrap();
+    assert!(
+        !codes(&beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu())).contains(&"EER-03")
+    );
+}
+
+#[test]
+fn eer_03_zwijgt_zodra_er_is_beoordeeld() {
+    let motor = standaardmotor();
+    let mut d = doorgifte();
+    d.kies_instrument(Doorgifteinstrumentsoort::Modelbepalingen, None, nu()).unwrap();
+    d.leg_beoordeling_vast(
+        Doorgiftebeoordeling {
+            datum: nu(),
+            uitvoerder: "A. de Vries".into(),
+            rechtsontwikkelingen_geraadpleegd_op: nu(),
+            uitkomst: Beoordelingsuitkomst::Gelijkwaardig,
+            restrisico: motivering("beperkt restrisico"),
+            besluit_door: "de directie".into(),
+        },
+        nu(),
+    )
+    .unwrap();
+    assert!(
+        !codes(&beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu())).contains(&"EER-03")
+    );
+}
+
+/// Structureel gebruik is geen uitzondering meer.
+#[test]
+fn eer_06_telt_het_gebruik_van_een_uitzondering() {
+    let motor = standaardmotor();
+    let mut d = doorgifte();
+    d.artikel49_grond = Some("uitdrukkelijke toestemming".into());
+    d.kies_instrument(Doorgifteinstrumentsoort::Artikel49Uitzondering, None, nu()).unwrap();
+
+    d.artikel49_toepassingen_dit_jaar = 2;
+    assert!(
+        !codes(&beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu())).contains(&"EER-06")
+    );
+
+    d.artikel49_toepassingen_dit_jaar = 5;
+    let b = beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu());
+    let bev = b.iter().find(|x| x.regelcode == "EER-06").expect("EER-06 hoort aan te slaan");
+    assert!(bev.toelichting.contains("geen uitzondering meer"));
+}
+
+/// De drempel komt uit het kennispakket; met een andere norm verschuift de
+/// regel mee zonder dat er code verandert.
+#[test]
+fn de_uitzonderingsdrempel_komt_van_buiten_de_regel() {
+    let motor = standaardmotor();
+    let mut d = doorgifte();
+    d.artikel49_grond = Some("uitdrukkelijke toestemming".into());
+    d.kies_instrument(Doorgifteinstrumentsoort::Artikel49Uitzondering, None, nu()).unwrap();
+    d.artikel49_toepassingen_dit_jaar = 4;
+
+    assert!(!codes(&beoordeel_doorgifte(&motor, &d, 10, nu())).contains(&"EER-06"));
+    assert!(codes(&beoordeel_doorgifte(&motor, &d, 2, nu())).contains(&"EER-06"));
+}
+
+/// Een instrument kan verlopen zonder dat er in de organisatie iets gebeurt.
+#[test]
+fn eer_07_slaat_aan_wanneer_het_instrument_is_ingetrokken() {
+    let motor = standaardmotor();
+    let mut d = doorgifte();
+    d.kies_instrument(Doorgifteinstrumentsoort::Modelbepalingen, Some("SCC-2021".into()), nu())
+        .unwrap();
+    d.status = Status::Vastgesteld;
+    d.controleer_instrument("ingetrokken", true, nu());
+
+    let b = beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu());
+    let bev = b.iter().find(|x| x.regelcode == "EER-07").expect("EER-07 hoort aan te slaan");
+    assert!(bev.toelichting.contains("SCC-2021"));
+    assert!(bev.toelichting.contains("ingetrokken"));
+}
+
+#[test]
+fn eer_07_zwijgt_bij_een_geldig_instrument() {
+    let motor = standaardmotor();
+    let mut d = doorgifte();
+    d.kies_instrument(Doorgifteinstrumentsoort::Modelbepalingen, Some("SCC-2021".into()), nu())
+        .unwrap();
+    d.status = Status::Vastgesteld;
+    d.controleer_instrument("geldig", false, nu());
+    assert!(
+        !codes(&beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu())).contains(&"EER-07")
+    );
 }

@@ -4,14 +4,14 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::Args;
 use dpofg_audit::Handeling;
-use dpofg_domain::{Dpia, Incident, Verwerking};
+use dpofg_domain::{doorgifte::Doorgifte, Dpia, Incident, Verwerking};
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
-        beoordeel_budget, beoordeel_dpia, beoordeel_incident, beoordeel_logboek,
-        beoordeel_meldtermijn, beoordeel_oorzaakpatroon, beoordeel_raadplegingstermijn,
-        beoordeel_verwerking, standaardmotor,
+        beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
+        beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
+        beoordeel_raadplegingstermijn, beoordeel_verwerking, standaardmotor,
     },
 };
 use std::path::PathBuf;
@@ -113,6 +113,13 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
             // dan ook niet als beoordeeld.
             Err(fout) => onberekenbaar.push(format!("{}: {fout}", d.kenmerk)),
         }
+    }
+
+    let drempel = uitzonderingsdrempel(&pakket);
+    for k in kluis.lijst("doorgifte")? {
+        let d: Doorgifte = kluis.laad("doorgifte", &k.id)?;
+        bevindingen.extend(beoordeel_doorgifte(&motor, &d, drempel, nu));
+        beoordeeld += 1;
     }
 
     let mut incidenten = Vec::new();
@@ -314,4 +321,19 @@ fn herbeoordelingsdrempel(pakket: &dpofg_content::Pakketinhoud) -> i64 {
         .filter(|t| t.eenheid == dpofg_terms::Eenheid::Maanden)
         .map(|t| i64::from(t.duur))
         .unwrap_or(36)
+}
+
+/// Boven hoeveel toepassingen per jaar een uitzondering van artikel 49 niet
+/// meer incidenteel is.
+///
+/// Uit het kennispakket: de verordening noemt geen getal, dus het hoort op een
+/// plaats te staan waar een jurist het kan bijstellen.
+fn uitzonderingsdrempel(pakket: &dpofg_content::Pakketinhoud) -> u32 {
+    pakket
+        .aanvullend
+        .get("doorgifte_uitzonderingsdrempel")
+        .and_then(|v| v.get("drempel"))
+        .and_then(|v| v.as_u64())
+        .and_then(|v| u32::try_from(v).ok())
+        .unwrap_or(2)
 }

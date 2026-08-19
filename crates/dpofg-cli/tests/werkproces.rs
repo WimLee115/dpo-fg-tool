@@ -1001,6 +1001,132 @@ fn een_pad_met_een_accent_laat_het_logboek_heel() {
 }
 
 // --------------------------------------------------------------------------
+// De belangenafweging
+// --------------------------------------------------------------------------
+
+/// Een conclusie die aan de redenering voorafgaat, is geen conclusie.
+#[test]
+fn een_uitkomst_zonder_redenering_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Cameratoezicht --eigenaar 'de facilitaire dienst'");
+    p.moet("lia nieuw LIA-0412 'cameratoezicht bij de ingang' --verwerking 0412-K");
+
+    let uit = p.moet_falen("lia uitkomst LIA-0412 --uitkomst weegt-op --door 'A. de Vries'");
+    assert!(uit.contains("noodzakelijkheidstoets"), "kreeg:\n{uit}");
+    assert!(uit.contains("redelijke verwachtingen"));
+}
+
+#[test]
+fn een_complete_redenering_draagt_een_uitkomst() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Cameratoezicht --eigenaar 'de facilitaire dienst'");
+    p.moet("lia nieuw LIA-0412 'cameratoezicht bij de ingang' --verwerking 0412-K");
+    p.moet("lia vul LIA-0412 --veld belang --waarde 'het voorkomen van diefstal uit het magazijn'");
+    p.moet("lia vul LIA-0412 --veld noodzaak --waarde 'een sluitsysteem alleen bleek onvoldoende bij herhaalde inbraak'");
+    p.moet("lia vul LIA-0412 --veld afweging --waarde 'de camera richt zich op de ingang en niet op werkplekken'");
+    p.moet("lia vul LIA-0412 --veld verwachtingen --waarde 'bij een bedrijfsingang mag cameratoezicht worden verwacht'");
+
+    let uit = p.moet("lia uitkomst LIA-0412 --uitkomst weegt-op --door 'A. de Vries'");
+    assert!(uit.contains("het belang weegt op"));
+    assert!(uit.contains("alle verplichte onderdelen"), "kreeg:\n{uit}");
+}
+
+/// Een uitkomst die op waarborgen berust, vergt waarborgen.
+#[test]
+fn met_waarborgen_zonder_waarborgen_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    p.moet("register nieuw 0412-K Cameratoezicht --eigenaar 'de facilitaire dienst'");
+    p.moet("lia nieuw LIA-0412 cameratoezicht --verwerking 0412-K");
+    for (veld, waarde) in [
+        ("belang", "het voorkomen van diefstal"),
+        ("noodzaak", "een sluitsysteem bleek onvoldoende bij herhaalde inbraak"),
+        ("afweging", "de camera richt zich op de ingang en niet op werkplekken"),
+        ("verwachtingen", "bij een bedrijfsingang mag cameratoezicht worden verwacht"),
+    ] {
+        p.moet(&format!("lia vul LIA-0412 --veld {veld} --waarde '{waarde}'"));
+    }
+
+    let uit = p.moet_falen(
+        "lia uitkomst LIA-0412 --uitkomst weegt-op-met-waarborgen --door 'A. de Vries'",
+    );
+    assert!(uit.contains("berust zij nergens op"), "kreeg:\n{uit}");
+
+    p.moet("lia vul LIA-0412 --veld waarborg --waarde 'beelden worden na zeven dagen automatisch gewist'");
+    p.moet("lia uitkomst LIA-0412 --uitkomst weegt-op-met-waarborgen --door 'A. de Vries'");
+}
+
+// --------------------------------------------------------------------------
+// Doorgiften buiten de EER
+// --------------------------------------------------------------------------
+
+fn doorgifte_opzetten(p: &Proef) {
+    p.moet("register nieuw 0412-K Verzuim --eigenaar P&O");
+    p.moet("doorgifte nieuw EER-0412 'hosting bij een aanbieder' --verwerking 0412-K --ontvanger 'de hostingaanbieder' --land 'Verenigde Staten'");
+}
+
+/// Modelbepalingen zonder beoordeling zijn een handtekening onder een aanname.
+#[test]
+fn modelbepalingen_vragen_een_doorgiftebeoordeling() {
+    let p = Proef::nieuw();
+    doorgifte_opzetten(&p);
+
+    let uit = p.moet("doorgifte instrument EER-0412 --soort modelbepalingen --code SCC-2021");
+    assert!(uit.contains("handtekening onder een aanname"), "kreeg:\n{uit}");
+    assert!(p.moet_falen("doorgifte vaststellen EER-0412").contains("ontvangstland"));
+
+    p.moet("doorgifte beoordeling EER-0412 --uitkomst gelijkwaardig --door 'A. de Vries' --besluit-door 'de directie' --restrisico 'toegang door overheidsdiensten blijft theoretisch mogelijk'");
+    p.moet("doorgifte vaststellen EER-0412");
+}
+
+/// Geen instrument is geen keuze maar een constatering.
+#[test]
+fn zonder_instrument_mag_de_doorgifte_niet() {
+    let p = Proef::nieuw();
+    doorgifte_opzetten(&p);
+    p.moet("doorgifte instrument EER-0412 --soort geen");
+    let uit = p.moet_falen("doorgifte vaststellen EER-0412");
+    assert!(uit.contains("mag deze doorgifte niet plaatsvinden"), "kreeg:\n{uit}");
+}
+
+/// De uitzondering van artikel 49 vergt eerst een grond uit de limitatieve
+/// opsomming.
+#[test]
+fn artikel_49_vergt_eerst_een_grond() {
+    let p = Proef::nieuw();
+    doorgifte_opzetten(&p);
+    let uit = p.moet_falen("doorgifte instrument EER-0412 --soort artikel49");
+    assert!(uit.contains("limitatief"), "kreeg:\n{uit}");
+
+    let grond = p.moet("doorgifte artikel49 EER-0412 --grond 'uitdrukkelijke toestemming van de betrokkene' --toepassingen 5");
+    assert!(grond.contains("geen uitzondering meer"));
+    p.moet("doorgifte instrument EER-0412 --soort artikel49");
+}
+
+/// Een instrument kan verlopen zonder dat er in de organisatie iets gebeurt.
+#[test]
+fn de_instrumentcontrole_leest_het_kennispakket() {
+    let p = Proef::nieuw();
+    doorgifte_opzetten(&p);
+    p.moet("doorgifte instrument EER-0412 --soort modelbepalingen --code SCC-2021");
+
+    let instrumenten = p.moet("doorgifte instrumenten");
+    assert!(instrumenten.contains("SCC-2021"));
+    assert!(instrumenten.contains("geldig"));
+
+    let uit = p.moet("doorgifte controleer EER-0412");
+    assert!(uit.contains("SCC-2021 is geldig"), "kreeg:\n{uit}");
+}
+
+#[test]
+fn een_onbekend_instrument_wordt_gemeld_en_niet_stil_overgeslagen() {
+    let p = Proef::nieuw();
+    doorgifte_opzetten(&p);
+    p.moet("doorgifte instrument EER-0412 --soort modelbepalingen --code BESTAAT-NIET");
+    let uit = p.moet("doorgifte controleer EER-0412");
+    assert!(uit.contains("staat niet in het kennispakket"), "kreeg:\n{uit}");
+}
+
+// --------------------------------------------------------------------------
 // Het Wpg-spoor
 // --------------------------------------------------------------------------
 
@@ -1858,7 +1984,7 @@ fn de_dekking_meldt_wat_er_werkelijk_draait() {
     let p = Proef::nieuw();
     let uit = p.moet("controle --dekking");
     assert!(uit.contains("van de 55 regels"));
-    assert!(uit.contains("33 van de 55"), "kreeg:\n{uit}");
+    assert!(uit.contains("36 van de 55"), "kreeg:\n{uit}");
     // En wat er níet draait, staat er met naam bij.
     assert!(uit.contains("Nog zonder evaluatie"));
     assert!(uit.contains("VWO-02"));

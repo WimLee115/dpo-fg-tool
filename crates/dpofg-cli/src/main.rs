@@ -79,6 +79,14 @@ enum Opdracht {
     #[command(subcommand)]
     Mapping(opdrachten::mapping::Mappingopdracht),
 
+    /// Belangenafwegingen bij een gerechtvaardigd belang.
+    #[command(subcommand)]
+    Lia(opdrachten::lia::Liaopdracht),
+
+    /// Doorgiften buiten de Europese Economische Ruimte.
+    #[command(subcommand)]
+    Doorgifte(opdrachten::doorgifte::Doorgifteopdracht),
+
     /// De controleregels over de hele verzameling draaien.
     Controle(opdrachten::controle::Controleopties),
 
@@ -135,6 +143,8 @@ fn draai() -> Result<()> {
         Opdracht::Redactie(o) => opdrachten::redactie::draai(o, args.kluis, nu),
         Opdracht::Wpg(o) => opdrachten::wpg::draai(o, args.kluis, nu),
         Opdracht::Mapping(o) => opdrachten::mapping::draai(o, args.kluis, nu),
+        Opdracht::Lia(o) => opdrachten::lia::draai(o, args.kluis, nu),
+        Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),

@@ -385,7 +385,8 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                 "de zesendertig maanden voor de herbeoordeling van een effectbeoordeling",
                 "de beslistermijn en de verdagingstermijn van de Wet open overheid",
                 "de opsomming van weigeringsgronden en of die volledig is",
-                "de frequentie van de audit en de interne controle onder de Wet politiegegevens"
+                "de frequentie van de audit en de interne controle onder de Wet politiegegevens",
+                "de drempel waarboven een uitzondering van artikel 49 niet meer incidenteel is"
             ]
         }),
     );
@@ -441,6 +442,17 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                       persoonsgegevens te verzekeren en aan te tonen dat aan deze verordening is \
                       voldaan" }
         ]),
+    );
+    uit.insert(
+        "doorgifte_uitzonderingsdrempel".into(),
+        serde_json::json!({
+            "toelichting": "Boven hoeveel toepassingen per jaar een uitzondering van artikel 49 \
+                            niet meer incidenteel is. De verordening noemt geen getal; dit is een \
+                            werkbare grens die past bij het woord 'incidenteel' en die per \
+                            organisatie kan worden bijgesteld.",
+            "drempel": 2,
+            "bron": "art. 49 lid 1 AVG; het getal is niet aan de wettekst ontleend"
+        }),
     );
     uit.insert(
         "oorzaakcategorieen".into(),

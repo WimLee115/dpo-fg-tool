@@ -27,8 +27,8 @@
 use chrono::{DateTime, Duration, Utc};
 use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
-    avg::Grondslag, Bewaartermijn, Dpia, Incident, Meldbesluit, Risiconiveau, Status, Verwerking,
-    Volledig, Voortoets,
+    avg::Grondslag, Bewaartermijn, Doorgifte, Dpia, Incident, Meldbesluit, Risiconiveau, Status,
+    Verwerking, Volledig, Voortoets,
 };
 use dpofg_terms::Deadline;
 
@@ -75,7 +75,8 @@ pub fn geimplementeerd() -> &'static [&'static str] {
         "REG-01", "REG-02", "REG-03", "REG-04", "REG-05", "GRO-01", "GRO-02", "GRO-03", "GRO-04",
         "GRO-05", "BEW-01", "BEW-02", "BEW-04", "VWO-01", "EER-01", "DPIA-01", "LEK-01", "LEK-02",
         "LEK-03", "LEK-04", "LEK-06", "LEK-07", "LEK-08", "LEK-09", "LEK-12", "LEK-13", "LEK-15",
-        "DPIA-03", "DPIA-06", "DPIA-07", "SYS-04", "SYS-06", "SYS-10",
+        "DPIA-03", "DPIA-06", "DPIA-07", "EER-03", "EER-06", "EER-07", "SYS-04", "SYS-06",
+        "SYS-10",
     ]
 }
 
@@ -1013,6 +1014,68 @@ pub fn beoordeel_raadplegingstermijn(
         )
         .into_iter()
         .collect()
+}
+
+/// Beoordeelt één doorgifte (EER-03, EER-06 en EER-07).
+///
+/// De drempel voor structureel gebruik komt uit het kennispakket: hoeveel
+/// "incidenteel" is, hoort een jurist te bepalen en niet deze code.
+pub fn beoordeel_doorgifte(
+    motor: &Regelmotor,
+    d: &Doorgifte,
+    uitzonderingsdrempel: u32,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+    let kenmerk = Some(d.kenmerk.as_str());
+    let id = d.id.to_string();
+
+    let mut voeg = |code: &str, toelichting: String| {
+        if let Some(b) = motor.bevind(code, "doorgifte", &id, kenmerk, toelichting, nu) {
+            uit.push(b);
+        }
+    };
+
+    // EER-03: een instrument van artikel 46 zonder afgeronde beoordeling.
+    if d.mist_beoordeling() {
+        voeg(
+            "EER-03",
+            format!(
+                "{} naar {} zonder beoordeling van het recht en de praktijk in het ontvangstland",
+                d.instrument.map(|i| i.omschrijving()).unwrap_or("het instrument"),
+                d.ontvangerland
+            ),
+        );
+    }
+
+    // EER-06: een uitzondering die structureel wordt gebruikt.
+    if d.gebruikt_uitzondering_structureel(uitzonderingsdrempel) {
+        voeg(
+            "EER-06",
+            format!(
+                "de uitzondering is dit jaar {} keer toegepast; boven {} is het geen uitzondering meer maar een instrument dat ontbreekt",
+                d.artikel49_toepassingen_dit_jaar, uitzonderingsdrempel
+            ),
+        );
+    }
+
+    // EER-07: het instrument waarop de doorgifte berust is niet meer geldig.
+    //
+    // De status komt uit het kennispakket en wordt bij de controle op de
+    // doorgifte vastgelegd; hier wordt alleen gelezen wat daar staat.
+    if d.status == Status::HerzieningNodig {
+        let status = d.instrument_status_bij_controle.as_deref().unwrap_or("onbekend");
+        voeg(
+            "EER-07",
+            format!(
+                "het instrument {} staat op '{status}'; de waarborg waarop deze doorgifte rust \
+                 is er niet meer of staat ter discussie",
+                d.instrument_code.as_deref().unwrap_or("waarop deze doorgifte berust")
+            ),
+        );
+    }
+
+    uit
 }
 
 /// Beoordeelt de meldtermijn van één incident (LEK-02).
