@@ -4,7 +4,7 @@
 //! uit de kluis en geeft terug wat er in beeld komt; er wordt hier niets
 //! bewaard tussen twee aanroepen door.
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use dpofg_domain::{
     correctie::Correctie, verzoek::Betrokkenenverzoek, woo::Wooverzoek, Incident, Volledig,
 };
@@ -189,6 +189,108 @@ pub fn buitenbeeld() -> Vec<vorm::Buitenbeeld> {
 /// De velden komen uit de JSON-vorm van het record. Dat is met opzet generiek:
 /// een schil die per dossiersoort een eigen omzetting kent, loopt achter zodra
 /// er een veld bijkomt, en dan toont zij minder dan er staat.
+/// Of een tekst een code is en geen zin.
+///
+/// Codes komen uit de opsommingstypen en zien er in de opslag uit als
+/// `intern_vastgesteld`. Een omschrijving die de gebruiker zelf heeft
+/// ingetypt, blijft staan zoals hij is ingetypt — ook als daar een
+/// liggend streepje in voorkomt.
+fn is_code(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        && s.contains('_')
+}
+
+fn leesbaar(s: &str) -> String {
+    if is_code(s) {
+        s.replace('_', " ")
+    } else {
+        s.to_string()
+    }
+}
+
+/// Eén waarde op één regel, voor gebruik binnen een lijst of een samenstel.
+fn plat(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Null => "—".into(),
+        serde_json::Value::Bool(b) => if *b { "ja" } else { "nee" }.into(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::String(s) => leesbaar(s),
+        serde_json::Value::Array(a) => aantal(a.len()),
+        serde_json::Value::Object(o) => aantal(o.len()),
+    }
+}
+
+fn aantal(n: usize) -> String {
+    if n == 1 {
+        "1 onderdeel".into()
+    } else {
+        format!("{n} onderdelen")
+    }
+}
+
+/// De weergave van één opgeslagen waarde, en of het een tijdstip is.
+///
+/// Wat hier gebeurt is niet opsmuk. De opslag is JSON, en die ongewijzigd op
+/// het scherm zetten levert regels op als
+/// `{"beschikbaarheid":false,"integriteit":false,"vertrouwelijkheid":false}`.
+/// Dat is voor de functionaris geen dossier maar een geheugendump, en het
+/// nodigt uit tot verkeerd lezen: `false` naast een veldnaam leest als een
+/// fout in plaats van als een antwoord.
+fn weergave(v: &serde_json::Value) -> (String, bool) {
+    match v {
+        serde_json::Value::Null => ("—".into(), false),
+        serde_json::Value::Bool(b) => (if *b { "ja" } else { "nee" }.into(), false),
+        serde_json::Value::Number(n) => (n.to_string(), false),
+        serde_json::Value::String(s) => {
+            if DateTime::parse_from_rfc3339(s).is_ok() {
+                (s.clone(), true)
+            } else {
+                (leesbaar(s), false)
+            }
+        }
+        serde_json::Value::Array(a) if a.is_empty() => ("niets vastgelegd".into(), false),
+        serde_json::Value::Array(a) => {
+            // Een lijst met alleen tekst wordt uitgeschreven; een lijst met
+            // samenstellen wordt geteld, want die past niet op een regel en
+            // hoort in het dossier zelf te worden geopend.
+            if a.iter().all(|e| e.is_string()) {
+                (a.iter().map(plat).collect::<Vec<_>>().join(", "), false)
+            } else {
+                (aantal(a.len()), false)
+            }
+        }
+        serde_json::Value::Object(o) if o.is_empty() => ("niets vastgelegd".into(), false),
+        serde_json::Value::Object(o) => {
+            // Een samenstel van louter ja-of-nee — zoals de aantasting van
+            // beschikbaarheid, integriteit en vertrouwelijkheid — leest het
+            // best als de opsomming van wat wél geraakt is. Drie keer "nee"
+            // achter elkaar zegt hetzelfde, maar vraagt om het na te rekenen.
+            if o.values().all(|v| v.is_boolean()) {
+                let geraakt: Vec<String> = o
+                    .iter()
+                    .filter(|(_, v)| v.as_bool() == Some(true))
+                    .map(|(k, _)| leesbaar(k))
+                    .collect();
+                return if geraakt.is_empty() {
+                    ("geen van deze".into(), false)
+                } else {
+                    (geraakt.join(", "), false)
+                };
+            }
+            // Een ondiep samenstel wordt uitgeschreven; alles daaronder wordt
+            // geteld.
+            if o.values().all(|v| !v.is_array() && !v.is_object()) {
+                let delen: Vec<String> =
+                    o.iter().map(|(k, v)| format!("{}: {}", leesbaar(k), plat(v))).collect();
+                (delen.join(" · "), false)
+            } else {
+                (aantal(o.len()), false)
+            }
+        }
+    }
+}
+
 fn velden_uit(waarde: &serde_json::Value) -> Vec<vorm::Veld> {
     let Some(object) = waarde.as_object() else {
         return Vec::new();
@@ -196,14 +298,9 @@ fn velden_uit(waarde: &serde_json::Value) -> Vec<vorm::Veld> {
     object
         .iter()
         .filter(|(naam, _)| !matches!(naam.as_str(), "id" | "compartiment" | "herkomst"))
-        .map(|(naam, v)| vorm::Veld {
-            naam: naam.replace('_', " "),
-            waarde: match v {
-                serde_json::Value::String(s) => s.clone(),
-                serde_json::Value::Null => "—".into(),
-                andere => andere.to_string(),
-            },
-            herkomst: None,
+        .map(|(naam, v)| {
+            let (waarde, is_tijdstip) = weergave(v);
+            vorm::Veld { naam: naam.replace('_', " "), waarde, is_tijdstip, herkomst: None }
         })
         .collect()
 }
@@ -389,4 +486,88 @@ pub fn prognose(dagen: i64, sessie: State<'_, Sessie>) -> Result<Vec<vorm::Verva
             })
             .collect())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn t(v: serde_json::Value) -> String {
+        weergave(&v).0
+    }
+
+    #[test]
+    fn een_ja_of_nee_staat_er_als_ja_of_nee() {
+        assert_eq!(t(json!(true)), "ja");
+        assert_eq!(t(json!(false)), "nee");
+    }
+
+    #[test]
+    fn wat_niet_is_vastgelegd_krijgt_een_streepje_en_geen_nul() {
+        // "0" of "false" zou een antwoord suggereren waar er geen is.
+        assert_eq!(t(json!(null)), "—");
+        assert_eq!(t(json!([])), "niets vastgelegd");
+        assert_eq!(t(json!({})), "niets vastgelegd");
+    }
+
+    #[test]
+    fn een_tijdstip_gaat_ongewijzigd_door_en_wordt_gemerkt() {
+        let (waarde, is_tijdstip) = weergave(&json!("2026-08-19T21:19:39.319233242Z"));
+        assert!(is_tijdstip, "de schil moet dit als tijdstip herkennen");
+        assert_eq!(waarde, "2026-08-19T21:19:39.319233242Z");
+    }
+
+    #[test]
+    fn een_code_wordt_leesbaar_en_een_zin_blijft_zoals_hij_is() {
+        assert_eq!(t(json!("intern_vastgesteld")), "intern vastgesteld");
+        // Een omschrijving die de gebruiker zelf heeft ingetypt blijft staan,
+        // ook met een liggend streepje erin.
+        assert_eq!(t(json!("inzage in het dossier_verzuim")), "inzage in het dossier_verzuim");
+    }
+
+    #[test]
+    fn een_lijst_met_tekst_wordt_uitgeschreven() {
+        assert_eq!(t(json!(["naam", "adres"])), "naam, adres");
+    }
+
+    #[test]
+    fn een_lijst_met_samenstellen_wordt_geteld() {
+        assert_eq!(t(json!([{"a": 1}])), "1 onderdeel");
+        assert_eq!(t(json!([{"a": 1}, {"b": 2}])), "2 onderdelen");
+    }
+
+    #[test]
+    fn een_samenstel_van_ja_of_nee_noemt_alleen_wat_geraakt_is() {
+        let aantasting =
+            json!({"beschikbaarheid": false, "integriteit": true, "vertrouwelijkheid": true});
+        assert_eq!(t(aantasting), "integriteit, vertrouwelijkheid");
+        assert_eq!(t(json!({"beschikbaarheid": false, "integriteit": false})), "geen van deze");
+    }
+
+    #[test]
+    fn een_ondiep_samenstel_wordt_uitgeschreven() {
+        assert_eq!(
+            t(json!({"door": "wimlee", "tekst": "te weinig"})),
+            "door: wimlee · tekst: te weinig"
+        );
+    }
+
+    #[test]
+    fn de_sleutelvelden_van_de_opslag_staan_niet_in_de_tabel() {
+        // id, compartiment en herkomst zijn administratie van de kluis en
+        // zeggen niets over het dossier.
+        let velden = velden_uit(&json!({
+            "id": "abc", "compartiment": "algemeen", "herkomst": "x", "kenmerk": "2026-0041"
+        }));
+        let namen: Vec<&str> = velden.iter().map(|v| v.naam.as_str()).collect();
+        assert_eq!(namen, vec!["kenmerk"]);
+    }
+
+    #[test]
+    fn een_veldnaam_verliest_zijn_liggende_streepjes() {
+        let velden = velden_uit(&json!({"aantal_betrokkenen_geschat": true}));
+        assert_eq!(velden[0].naam, "aantal betrokkenen geschat");
+        assert_eq!(velden[0].waarde, "ja");
+    }
 }

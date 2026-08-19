@@ -122,11 +122,29 @@ export function nabootsing(nu = new Date('2026-08-19T09:00:00Z')): Nabootsing {
         ],
       },
       velden: [
-        { naam: 'kenmerk', waarde: '2026-0041', herkomst: null },
-        { naam: 'omschrijving', waarde: 'verkeerd geadresseerde brief', herkomst: null },
+        { naam: 'kenmerk', waarde: '2026-0041', is_tijdstip: false, herkomst: null },
+        {
+          naam: 'omschrijving',
+          waarde: 'verkeerd geadresseerde brief',
+          is_tijdstip: false,
+          herkomst: null,
+        },
+        {
+          naam: 'kennisname op',
+          waarde: '2026-08-19T07:00:00Z',
+          is_tijdstip: true,
+          herkomst: null,
+        },
+        {
+          naam: 'aantasting',
+          waarde: 'vertrouwelijkheid',
+          is_tijdstip: false,
+          herkomst: null,
+        },
         {
           naam: 'meldreferentie',
           waarde: '—',
+          is_tijdstip: false,
           herkomst: 'verschijnt zodra de melding is verzonden',
         },
       ],

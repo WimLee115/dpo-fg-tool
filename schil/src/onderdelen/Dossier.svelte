@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import type { Dossier } from '../soorten';
+  import { tijdstip } from '../opmaak';
   import Teller from './Teller.svelte';
 
   const { dossier, sluit }: { dossier: Dossier; sluit: () => void } = $props();
@@ -19,6 +20,11 @@
 
 <p class="terzijde">status: {dossier.kop.status}</p>
 
+<!-- De teller staat boven de tabel en niet eronder. Een dossier heeft tientallen
+     velden; onderaan valt hij buiten beeld, en juist wat er nog ontbreekt is
+     waarvoor dit scherm wordt geopend. -->
+<Teller volledigheid={dossier.volledigheid} />
+
 <table class="tabel">
   <caption class="terzijde">De vastgelegde inhoud van dit dossier</caption>
   <thead>
@@ -28,7 +34,7 @@
     {#each dossier.velden as veld (veld.naam)}
       <tr>
         <th scope="row">{veld.naam}</th>
-        <td>{veld.waarde}</td>
+        <td>{veld.is_tijdstip ? tijdstip(veld.waarde) : veld.waarde}</td>
         <!-- Waar een veld uit een eerdere keuze volgt, staat die keuze erbij.
              Zonder die vermelding is een verdwenen verplichting niet te
              onderscheiden van een vergeten verplichting. -->
@@ -37,5 +43,3 @@
     {/each}
   </tbody>
 </table>
-
-<Teller volledigheid={dossier.volledigheid} />

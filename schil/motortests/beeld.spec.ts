@@ -83,12 +83,13 @@ async function metNabootsing(page: Page, pad = '/') {
                   grondslag: 'art. 33 lid 3 onder a AVG', blokkeert_vaststelling: false },
               ] },
               velden: [
-                { naam: 'kenmerk', waarde: '2026-0041', herkomst: null },
-                { naam: 'omschrijving', waarde: 'verkeerd geadresseerde brief met loongegevens', herkomst: null },
-                { naam: 'kanaal', waarde: 'intern vastgesteld', herkomst: null },
-                { naam: 'kennisname op', waarde: '19-08-2026 00:00', herkomst: null },
-                { naam: 'meldreferentie', waarde: '—', herkomst: 'verschijnt zodra de melding is verzonden' },
-                { naam: 'betrokkenen geinformeerd op', waarde: '—', herkomst: 'alleen bij een hoog risico' },
+                { naam: 'kenmerk', waarde: '2026-0041', is_tijdstip: false, herkomst: null },
+                { naam: 'omschrijving', waarde: 'verkeerd geadresseerde brief met loongegevens', is_tijdstip: false, herkomst: null },
+                { naam: 'kanaal', waarde: 'intern vastgesteld', is_tijdstip: false, herkomst: null },
+                { naam: 'kennisname op', waarde: '2026-08-19T07:00:00Z', is_tijdstip: true, herkomst: null },
+                { naam: 'aantasting', waarde: 'vertrouwelijkheid', is_tijdstip: false, herkomst: null },
+                { naam: 'meldreferentie', waarde: '—', is_tijdstip: false, herkomst: 'verschijnt zodra de melding is verzonden' },
+                { naam: 'betrokkenen geinformeerd op', waarde: '—', is_tijdstip: false, herkomst: 'alleen bij een hoog risico' },
               ],
             };
           case 'controle':

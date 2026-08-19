@@ -53,6 +53,13 @@ pub struct Recordkop {
 pub struct Veld {
     pub naam: String,
     pub waarde: String,
+    /// Of `waarde` een tijdstip in ISO-vorm is.
+    ///
+    /// De schil zet die om naar de plaatselijke tijd, net als in de werkbak.
+    /// Dat gebeurt daar en niet hier, zodat er één plaats is waar een tijdstip
+    /// in tekst verandert en de dossiertabel niet een andere notatie krijgt
+    /// dan de rest van het scherm.
+    pub is_tijdstip: bool,
     pub herkomst: Option<String>,
 }
 

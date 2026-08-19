@@ -119,6 +119,32 @@ describe('het dossier', () => {
     await gebruiker.click(await screen.findByRole('button', { name: /open incident 2026-0041/i }));
     expect(await screen.findByText(/verschijnt zodra de melding is verzonden/)).toBeTruthy();
   });
+
+  // Een tijdstip hoort er hetzelfde uit te zien als in de werkbak. Zonder deze
+  // omzetting stond er een ruwe ISO-tekst met nanoseconden in de tabel, en die
+  // leest niemand als een datum.
+  it('zet een tijdstip om en laat de rest van de waarden ongemoeid', async () => {
+    const gebruiker = await ontgrendel();
+    await gebruiker.click(await screen.findByRole('button', { name: /open incident 2026-0041/i }));
+    const rij = async (naam: string) =>
+      (await screen.findByRole('rowheader', { name: naam })).closest('tr')?.textContent ?? '';
+
+    expect(await rij('kennisname op')).toContain('19-08-2026');
+    expect(await rij('kennisname op')).not.toContain('T07:00:00Z');
+    expect(await rij('kenmerk')).toContain('2026-0041');
+  });
+
+  // Een dossier heeft tientallen velden; onderaan valt de teller buiten beeld,
+  // en juist wat er nog ontbreekt is waarvoor dit scherm wordt geopend.
+  it('zet de volledigheidsteller boven de veldentabel', async () => {
+    const gebruiker = await ontgrendel();
+    await gebruiker.click(await screen.findByRole('button', { name: /open incident 2026-0041/i }));
+    const teller = await screen.findByText('11 van de 14 verplichte onderdelen');
+    const tabel = document.querySelector('table');
+    expect(tabel).not.toBeNull();
+    const volgorde = teller.compareDocumentPosition(tabel as Node);
+    expect(volgorde & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe('de teller', () => {
@@ -193,3 +219,4 @@ describe('de sessie', () => {
     expect(screen.queryByText(/melding van een inbreuk/)).toBeNull();
   });
 });
+

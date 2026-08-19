@@ -78,6 +78,8 @@ export interface Dossier {
 export interface Veld {
   naam: string;
   waarde: string;
+  /** Of `waarde` een tijdstip in ISO-vorm is, dat hier plaatselijk wordt gezet. */
+  is_tijdstip: boolean;
   /** Waarom dit veld er is, wanneer het uit een eerdere keuze volgt. */
   herkomst: string | null;
 }
