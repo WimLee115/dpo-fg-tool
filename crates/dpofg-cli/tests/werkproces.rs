@@ -2884,3 +2884,58 @@ fn verlengen_en_afronden_zijn_besluiten_met_een_motivering() {
     assert!(p.moet("correctie lijst").contains("geen correctie open"));
     assert!(p.moet("correctie lijst --alles").contains("COR-001"));
 }
+
+/// Het bestuursstuk gaat door dezelfde verificatiebinary als een dossier. Een
+/// tweede bundelformaat zou een tweede verifier vragen, en een verifier van de
+/// leverancier die het formaat van de leverancier controleert, is geen
+/// onafhankelijke verificatie.
+#[test]
+fn het_bestuursstuk_is_met_de_losse_binary_te_controleren() {
+    let p = Proef::nieuw();
+    controlset_opzetten(&p);
+    p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
+    p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
+    let bewijs = p.bestand("uitdraai.txt", "uitdraai van het sleutelbeheer");
+    p.moet(&format!(
+        "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2026-10-15T00:00:00Z"
+    ));
+
+    let map = p.kluis.parent().unwrap().join("bestuursstuk");
+    let uit = p.moet(&format!(
+        "prognose --export {} --bestemd-voor 'de directie' --aanleiding 'de septembervergadering'",
+        map.display()
+    ));
+    assert!(uit.contains("ondertekend met de installatiesleutel"), "kreeg:\n{uit}");
+    assert!(uit.contains("dpofg-verify"), "kreeg:\n{uit}");
+
+    // Het leesbare stuk staat er, met de datum en de eigenaar erin.
+    let tekst = std::fs::read_to_string(map.join("vervalprognose.md")).unwrap();
+    assert!(tekst.contains("CBB-13"), "kreeg:\n{tekst}");
+    assert!(tekst.contains("15-10-2026"), "kreeg:\n{tekst}");
+    assert!(tekst.contains("beheerder (J. Jansen)"), "kreeg:\n{tekst}");
+    assert!(tekst.contains("Wat deze prognose niet overziet"), "kreeg:\n{tekst}");
+
+    // En de machinaal leesbare kant, plus het logboek om de keten na te rekenen.
+    for naam in ["vervalprognose.json", "factoren.json", "correcties.json", "logboek.json"] {
+        assert!(map.join(naam).exists(), "{naam} hoort in de bundel te zitten");
+    }
+
+    let controle = std::process::Command::new(verify_binary())
+        .args(["dossier", map.join("manifest.json").to_str().unwrap()])
+        .output()
+        .expect("de verificatiebinary moet te starten zijn");
+    let melding = String::from_utf8_lossy(&controle.stdout).to_string();
+    assert!(controle.status.success(), "de controle faalde:\n{melding}");
+    assert!(melding.contains("de controle is geslaagd"), "kreeg:\n{melding}");
+}
+
+/// Een bestuursstuk zonder geadresseerde is later niet te herleiden tot de
+/// vergadering waarin het lag.
+#[test]
+fn een_export_zonder_geadresseerde_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    let map = p.kluis.parent().unwrap().join("naamloos");
+    let uit = p.moet_falen(&format!("prognose --export {}", map.display()));
+    assert!(uit.contains("bestemd-voor"), "kreeg:\n{uit}");
+}

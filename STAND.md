@@ -48,6 +48,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Zorgplichtcontrolset | werkt | De tien onderdelen van art. 21 lid 3 Cbw, afgeleid uit het kennispakket; bewijs met een geldigheidsvenster maakt een maatregel aantoonbaar, of niet, en is in te trekken zonder te verdwijnen |
 | Risicobeoordeling | werkt | Eigen dossier met methode, reikwijdte, bronnen en onderkende risico's; het restrisico daalt alleen met een maatregel erbij, en een hoog restrisico aanvaardt het bestuur |
 | Vervalprognose | werkt | Welke eisen op 30, 90 en 365 dagen niet meer aantoonbaar zijn, met oorzaak, eigenaar en datum; over vijf dossiersoorten heen |
+| Bestuursstuk | werkt | De prognose als ondertekende bundel met leesbaar stuk, machineleesbare kant en logboek; te controleren met dezelfde losse verificatiebinary |
 | De drie factoren van aantoonbaarheid | **deels** | Vastgesteld, uitgevoerd en actueel als drie tellingen; geen gewogen score, want het plan geeft daarvoor geen schaal |
 | Correctieplicht | werkt | Per bevinding een besluit met eigenaar en einddatum: herstel of gemotiveerde afwijking; alleen een lopende afwijking onderdrukt de bevinding |
 
@@ -124,7 +125,7 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 | | |
 |---|---|
 | Rust-code | ~24.200 regels in `src`, zonder commentaar en lege regels |
-| Tests | 739 testfuncties, 743 uitgevoerde tests; ~6.900 regels in `tests` |
+| Tests | 747 testfuncties, 751 uitgevoerde tests; ~7.100 regels in `tests` |
 | Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |

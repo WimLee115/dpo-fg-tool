@@ -368,6 +368,186 @@ fn verzamel_wpg(
     }
 }
 
+/// Wat er in het bestuursstuk hoort te staan naast de prognose zelf.
+///
+/// Een prognose zonder deze context is een lijst datums zonder herkomst. Het
+/// bestuur moet kunnen zien waarop zij berust: welke peildatum, welke versie
+/// van de juridische inhoud, of het ketenlogboek klopt, en hoeveel van de
+/// dossiers eronder nog concept zijn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rapportcontext {
+    pub peilmoment: DateTime<Utc>,
+    pub samengesteld_door: String,
+    pub bestemd_voor: String,
+    pub kennispakket: String,
+    pub consolidatiedatum: String,
+    /// De reikwijdte van de ketenverificatie, letterlijk uit het rapport.
+    pub ketenreikwijdte: String,
+    /// Of de ketencontrole zonder bevindingen is doorlopen.
+    pub keten_in_orde: bool,
+    /// Hoeveel bronrecords nog de status concept dragen.
+    pub concepten: usize,
+    /// Hoeveel correcties er op dit moment lopen.
+    pub lopende_correcties: usize,
+}
+
+/// Wat deze prognose niet overziet.
+///
+/// Staat in het bestuursstuk zelf en niet alleen in het manifest: wie het
+/// stuk leest, hoort de grens te zien zonder een tweede bestand te openen.
+pub const BUITEN_BEELD: [(&str, &str); 4] = [
+    (
+        "doorgifte-instrumenten",
+        "die kennen in dit model geen einddatum maar een status die tegen het kennispakket \
+         wordt gehouden; daar valt geen datum uit af te leiden",
+    ),
+    ("certificaten van leveranciers", "die bestaan nog niet als eigen record"),
+    ("mandaten en volmachten", "die bestaan nog niet als eigen record"),
+    ("reviews van de crosswalk naar normenkaders", "de crosswalk zelf bestaat nog niet"),
+];
+
+/// Stelt het bestuursstuk samen als leesbare tekst.
+///
+/// Geen kleur en geen cijfer. Wat een bestuur nodig heeft om te besluiten is
+/// welke eis wanneer onbewijsbaar wordt en wie eraan werkt; de rest is
+/// decoratie die de aandacht wegneemt van de datum.
+pub fn bestuursstuk(
+    context: &Rapportcontext,
+    horizonnen: &[(i64, Vec<Vervalpunt>)],
+    verstreken: &[Vervalpunt],
+    factoren: &[Aantoonbaarheid],
+) -> String {
+    let mut uit = String::new();
+    uit.push_str("# Vervalprognose\n\n");
+    uit.push_str(&format!(
+        "Peilmoment: {}\nSamengesteld door: {}\nBestemd voor: {}\n\n",
+        context.peilmoment.format("%d-%m-%Y %H:%M UTC"),
+        context.samengesteld_door,
+        context.bestemd_voor
+    ));
+    uit.push_str(
+        "Dit stuk noemt geen cijfer en geen kleur. Het noemt welke eisen op welke datum niet \
+         meer met bewijs zijn te onderbouwen, en wie daarvoor is aangewezen.\n\n",
+    );
+
+    uit.push_str("## Waarop dit stuk berust\n\n");
+    uit.push_str(&format!(
+        "- Juridische inhoud: {} (bijgewerkt tot {})\n",
+        context.kennispakket, context.consolidatiedatum
+    ));
+    uit.push_str(&format!("- Ketencontrole: {}\n", context.ketenreikwijdte));
+    if !context.keten_in_orde {
+        uit.push_str(
+            "- **De ketencontrole is niet zonder bevindingen doorlopen.** Zolang dat zo is, \
+             staat niet vast dat de gegevens onder deze prognose ongewijzigd zijn.\n",
+        );
+    }
+    if context.concepten > 0 {
+        uit.push_str(&format!(
+            "- {} {} nog de status concept; wat daarin staat is niet vastgesteld en de \
+             prognose erover zegt navenant minder\n",
+            context.concepten,
+            if context.concepten == 1 { "bronrecord draagt" } else { "bronrecords dragen" }
+        ));
+    }
+    uit.push_str(&format!(
+        "- {} {} vastgelegde correctie(s); wat daarvan is afgesproken staat in de bundel\n\n",
+        if context.lopende_correcties == 1 { "Er loopt" } else { "Er lopen" },
+        context.lopende_correcties
+    ));
+
+    if verstreken.is_empty() {
+        uit.push_str("## Vandaag\n\nEr is op dit moment geen eis die niet te bewijzen is.\n\n");
+    } else {
+        uit.push_str(&format!("## Vandaag al niet aantoonbaar — {} eis(en)\n\n", verstreken.len()));
+        uit.push_str(
+            "Dit is geen prognose maar een stand van zaken. Deze eisen zijn nu niet te \
+             bewijzen.\n\n",
+        );
+        uit.push_str(&tabel_van(verstreken, context.peilmoment, true));
+    }
+
+    for (dagen, punten) in horizonnen {
+        let peildatum = context.peilmoment + chrono::Duration::days(*dagen);
+        uit.push_str(&format!("## Over {dagen} dagen — {}\n\n", peildatum.format("%d-%m-%Y")));
+        let nieuw: Vec<&Vervalpunt> =
+            punten.iter().filter(|v| !v.is_verstreken(context.peilmoment)).collect();
+        if nieuw.is_empty() {
+            uit.push_str("Er verloopt niets binnen deze horizon.\n\n");
+            continue;
+        }
+        uit.push_str(&format!(
+            "{} eis(en) worden binnen deze horizon onbewijsbaar.\n\n",
+            nieuw.len()
+        ));
+        let losse: Vec<Vervalpunt> = nieuw.into_iter().cloned().collect();
+        uit.push_str(&tabel_van(&losse, context.peilmoment, false));
+    }
+
+    uit.push_str("## De drie factoren\n\n");
+    if factoren.is_empty() {
+        uit.push_str("Er is nog geen ingerichte maatregel om te wegen.\n\n");
+    } else {
+        let telling = Factortelling::van(factoren);
+        uit.push_str(&format!(
+            "| factor | wat de vraag is | aantal |\n|---|---|---|\n\
+             | vastgesteld | ligt er een besluit of beleidsstuk dat de eis vastlegt | {} van de {} |\n\
+             | uitgevoerd | ligt er bewijs van de uitvoering dat nu geldt | {} van de {} |\n\
+             | actueel | is die uitvoering recent genoeg voor de eigen termijn | {} van de {} |\n\n",
+            telling.vastgesteld,
+            telling.totaal,
+            telling.uitgevoerd,
+            telling.totaal,
+            telling.actueel,
+            telling.totaal
+        ));
+        uit.push_str(
+            "Drie tellingen en geen score. Een gewogen getal zou een schaal en een weging \
+             veronderstellen die nergens is vastgesteld.\n\n",
+        );
+    }
+
+    uit.push_str("## Wat deze prognose niet overziet\n\n");
+    for (wat, waarom) in BUITEN_BEELD {
+        uit.push_str(&format!("- **{wat}**: {waarom}\n"));
+    }
+    uit.push_str(
+        "\nWat hier niet staat, is daarmee niet in orde bevonden. Het is buiten beeld.\n\n",
+    );
+
+    uit.push_str("## Voorbehoud\n\n");
+    uit.push_str(
+        "De juridische inhoud waarop dit stuk steunt is een vertrekpunt en geen bron van recht. \
+         De termijnen en grondslagen zijn niet door een jurist vastgesteld en niet gecontroleerd \
+         tegen de geconsolideerde wettekst. De handtekening onder het manifest zegt dat deze \
+         bundel niet is gewijzigd sinds zij is samengesteld; zij zegt niets over de juistheid \
+         van de inhoud.\n",
+    );
+    uit
+}
+
+fn tabel_van(punten: &[Vervalpunt], nu: DateTime<Utc>, verstreken: bool) -> String {
+    let mut uit =
+        String::from("| eis | grondslag | oorzaak | eigenaar | datum |\n|---|---|---|---|---|\n");
+    for v in punten {
+        uit.push_str(&format!(
+            "| {} | {} | {} | {} | {}{} |\n",
+            v.eis,
+            v.grondslag,
+            v.oorzaak.omschrijving(),
+            v.eigenaar.as_deref().unwrap_or("geen"),
+            v.vervalt_op.format("%d-%m-%Y"),
+            if verstreken {
+                String::new()
+            } else {
+                format!(" (over {} dagen)", v.dagen_tot_verval(nu))
+            }
+        ));
+    }
+    uit.push('\n');
+    uit
+}
+
 /// De drie factoren per eis, elk met ja of nee.
 ///
 /// Dit is wat er van de driefactorscore overblijft wanneer de schaal en de
@@ -674,6 +854,107 @@ mod tests {
         assert_eq!(punten[0].oorzaak, Vervaloorzaak::Risicobeoordeling);
     }
 
+    fn context() -> Rapportcontext {
+        Rapportcontext {
+            peilmoment: nu(),
+            samengesteld_door: "a.devries".into(),
+            bestemd_voor: "de directie".into(),
+            kennispakket: "nl-start 0.3-start".into(),
+            consolidatiedatum: "2026-08-19".into(),
+            ketenreikwijdte: "De keten van 12 regels is intern samenhangend.".into(),
+            keten_in_orde: true,
+            concepten: 0,
+            lopende_correcties: 0,
+        }
+    }
+
+    /// Het stuk noemt geen cijfer en geen kleur, en zegt dat ook.
+    #[test]
+    fn het_bestuursstuk_noemt_geen_score() {
+        let tekst = bestuursstuk(&context(), &[], &[], &[]);
+        assert!(tekst.contains("geen cijfer en geen kleur"));
+        assert!(tekst.contains("Peilmoment"));
+        assert!(tekst.contains("nl-start 0.3-start"));
+    }
+
+    /// Wat buiten beeld blijft, staat in het stuk zelf en niet alleen in het
+    /// manifest: wie het stuk leest, hoort de grens te zien zonder een tweede
+    /// bestand te openen.
+    #[test]
+    fn het_bestuursstuk_noemt_wat_buiten_beeld_blijft() {
+        let tekst = bestuursstuk(&context(), &[], &[], &[]);
+        for (wat, _) in BUITEN_BEELD {
+            assert!(tekst.contains(wat), "'{wat}' hoort in het stuk te staan");
+        }
+        assert!(tekst.contains("niet in orde bevonden"));
+        assert!(tekst.contains("Voorbehoud"));
+    }
+
+    /// Een bestuursstuk dat op een gebroken keten rust, hoort dat te zeggen.
+    #[test]
+    fn een_gebroken_keten_staat_vetgedrukt_in_het_stuk() {
+        let mut c = context();
+        c.keten_in_orde = false;
+        let tekst = bestuursstuk(&c, &[], &[], &[]);
+        assert!(tekst.contains("niet zonder bevindingen doorlopen"), "kreeg:\n{tekst}");
+        assert!(tekst.contains("staat niet vast dat de gegevens"));
+    }
+
+    /// Wat vandaag al omvalt, staat als stand van zaken en niet als prognose.
+    #[test]
+    fn het_stuk_scheidt_de_stand_van_zaken_van_de_prognose() {
+        let mut d = dossier();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Uitvoering, nu() - Duration::days(10), nu() + Duration::days(45)),
+            nu(),
+        )
+        .unwrap();
+        let dossiers = [d];
+        let bronnen = Bronnen { zorgplicht: &dossiers, ..Default::default() };
+        let over90 = prognose(&bronnen, termijnen(), nu() + Duration::days(90));
+
+        let tekst = bestuursstuk(&context(), &[(90, over90)], &[], &[]);
+        assert!(tekst.contains("Er is op dit moment geen eis die niet te bewijzen is"));
+        assert!(tekst.contains("Over 90 dagen"));
+        assert!(tekst.contains("CBB-a"));
+        assert!(tekst.contains("de beheerder (J. Jansen)"));
+        assert!(tekst.contains("over 45 dagen"), "de doorlooptijd hoort erbij:\n{tekst}");
+    }
+
+    #[test]
+    fn de_drie_factoren_staan_als_telling_in_het_stuk() {
+        let mut d = dossier();
+        d.wijs_bewijs_aan(
+            "CBB-a",
+            bewijs(Bewijsrol::Vaststelling, nu(), nu() + Duration::days(300)),
+            nu(),
+        )
+        .unwrap();
+        let dossiers = [d];
+        let tekst = bestuursstuk(&context(), &[], &[], &aantoonbaarheid(&dossiers, nu()));
+        assert!(tekst.contains("1 van de 1"), "kreeg:\n{tekst}");
+        assert!(tekst.contains("0 van de 1"));
+        assert!(tekst.contains("geen score"));
+    }
+
+    /// Enkelvoud en meervoud: een stuk dat "1 bronrecords dragen" schrijft,
+    /// leest als machinetaal en dat ondermijnt het vertrouwen erin.
+    #[test]
+    fn het_stuk_telt_in_goed_nederlands() {
+        let mut c = context();
+        c.concepten = 1;
+        c.lopende_correcties = 1;
+        let tekst = bestuursstuk(&c, &[], &[], &[]);
+        assert!(tekst.contains("1 bronrecord draagt"), "kreeg:\n{tekst}");
+        assert!(tekst.contains("Er loopt 1"), "kreeg:\n{tekst}");
+
+        c.concepten = 3;
+        c.lopende_correcties = 2;
+        let tekst = bestuursstuk(&c, &[], &[], &[]);
+        assert!(tekst.contains("3 bronrecords dragen"));
+        assert!(tekst.contains("Er lopen 2"));
+    }
     /// De drie factoren zijn drie vragen met ja of nee, en geen score.
     #[test]
     fn de_drie_factoren_worden_apart_geteld() {

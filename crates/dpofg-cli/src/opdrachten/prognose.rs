@@ -3,12 +3,17 @@
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use clap::Args;
+use dpofg_audit::Handeling;
 use dpofg_domain::{
-    dpia::Dpia, leverancier::Leverancier, risico::Risicobeoordeling, wpg::Wpgspoor,
-    zorgplicht::Zorgplichtdossier,
+    correctie::Correctie, dpia::Dpia, leverancier::Leverancier, risico::Risicobeoordeling,
+    wpg::Wpgspoor, zorgplicht::Zorgplichtdossier,
 };
-use dpofg_report::prognose::{
-    aantoonbaarheid, prognose, Bronnen, Factortelling, Prognosetermijnen,
+use dpofg_report::{
+    prognose::{
+        aantoonbaarheid, bestuursstuk, prognose, Bronnen, Factortelling, Prognosetermijnen,
+        Rapportcontext, Vervalpunt, BUITEN_BEELD,
+    },
+    Manifest, OndertekendManifest,
 };
 use dpofg_store::Kluis;
 use std::path::PathBuf;
@@ -26,11 +31,20 @@ pub struct Prognoseargumenten {
     /// Toon in plaats daarvan de drie factoren per eis.
     #[arg(long)]
     pub factoren: bool,
+    /// Schrijf een ondertekend bestuursstuk naar deze map.
+    #[arg(long)]
+    pub export: Option<PathBuf>,
+    /// Voor wie het bestuursstuk bestemd is. Verplicht bij --export.
+    #[arg(long)]
+    pub bestemd_voor: Option<String>,
+    /// Waarvoor het stuk wordt samengesteld.
+    #[arg(long, default_value = "periodieke bestuursrapportage")]
+    pub aanleiding: String,
 }
 
 pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> Result<()> {
     let pad = super::kluispad(kluispad)?;
-    let kluis = super::open_kluis(&pad, nu)?;
+    let mut kluis = super::open_kluis(&pad, nu)?;
 
     let zorgplicht: Vec<Zorgplichtdossier> = laad(&kluis, "zorgplicht")?;
     if o.factoren {
@@ -51,6 +65,26 @@ pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>
     };
     let termijnen = termijnen(nu);
     let horizonnen = if o.dagen.is_empty() { vec![30, 90, 365] } else { o.dagen.clone() };
+
+    if let Some(map) = o.export.clone() {
+        let bestemd_voor = o.bestemd_voor.clone().ok_or_else(|| {
+            anyhow::anyhow!(
+                "noem met --bestemd-voor voor wie dit stuk is. Een bestuursstuk zonder \
+                 geadresseerde is later niet te herleiden tot de vergadering waarin het lag"
+            )
+        })?;
+        return exporteer(
+            &mut kluis,
+            &map,
+            &o.aanleiding,
+            &bestemd_voor,
+            &bronnen,
+            &zorgplicht,
+            termijnen,
+            &horizonnen,
+            nu,
+        );
+    }
 
     kop("Vervalprognose");
     terzijde(&format!(
@@ -133,6 +167,166 @@ pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>
          niet als eigen record. Wat hier niet staat, is daarmee niet in orde bevonden.",
     );
     Ok(())
+}
+
+/// Schrijft het bestuursstuk met een ondertekend manifest.
+///
+/// Gebruikt hetzelfde manifest als `dpofg dossier`, en daarmee dezelfde
+/// verificatiebinary. Een tweede bundelformaat zou een tweede verifier
+/// vragen, en een verifier van de leverancier die het formaat van de
+/// leverancier controleert, is geen onafhankelijke verificatie.
+#[allow(clippy::too_many_arguments)]
+fn exporteer(
+    kluis: &mut Kluis,
+    map: &std::path::Path,
+    aanleiding: &str,
+    bestemd_voor: &str,
+    bronnen: &Bronnen<'_>,
+    zorgplicht: &[Zorgplichtdossier],
+    termijnen: Prognosetermijnen,
+    horizonnen: &[i64],
+    nu: DateTime<Utc>,
+) -> Result<()> {
+    std::fs::create_dir_all(map)?;
+    let ketenrapport = kluis.verifieer_logboek()?;
+    let pakket = dpofg_content::startpakket(nu.date_naive());
+    let correcties: Vec<Correctie> = laad(kluis, "correctie")?;
+    let lopend: Vec<&Correctie> = correcties.iter().filter(|c| !c.is_afgerond()).collect();
+
+    let verstreken = prognose(bronnen, termijnen, nu);
+    let per_horizon: Vec<(i64, Vec<Vervalpunt>)> = horizonnen
+        .iter()
+        .map(|d| (*d, prognose(bronnen, termijnen, nu + Duration::days(*d))))
+        .collect();
+    let factoren = aantoonbaarheid(zorgplicht, nu);
+
+    let concepten = tel_concepten(kluis)?;
+    let context = Rapportcontext {
+        peilmoment: nu,
+        samengesteld_door: super::actor().naam.clone(),
+        bestemd_voor: bestemd_voor.to_string(),
+        kennispakket: format!("{} {}", pakket.code, pakket.versienaam),
+        consolidatiedatum: pakket.consolidatiedatum.to_string(),
+        ketenreikwijdte: ketenrapport.reikwijdte(),
+        keten_in_orde: ketenrapport.bevindingen.is_empty(),
+        concepten,
+        lopende_correcties: lopend.len(),
+    };
+
+    let mut manifest = Manifest::nieuw(
+        aanleiding,
+        bestemd_voor,
+        &super::actor().naam,
+        nu,
+        kluis.ketenstand().volgnummer,
+        &kluis.ketenstand().hash,
+        ketenrapport.reikwijdte(),
+        &pakket.code,
+        &pakket.versienaam,
+        pakket.consolidatiedatum,
+    );
+
+    let tekst = bestuursstuk(&context, &per_horizon, &verstreken, &factoren);
+    schrijf(map, &mut manifest, "vervalprognose.md", "bestuursstuk", tekst.as_bytes())?;
+
+    let punten = serde_json::to_vec_pretty(&serde_json::json!({
+        "peilmoment": nu,
+        "verstreken": verstreken,
+        "per_horizon": per_horizon
+            .iter()
+            .map(|(d, p)| serde_json::json!({ "dagen": d, "punten": p }))
+            .collect::<Vec<_>>(),
+    }))?;
+    schrijf(map, &mut manifest, "vervalprognose.json", "prognose", &punten)?;
+
+    let f = serde_json::to_vec_pretty(&factoren)?;
+    schrijf(map, &mut manifest, "factoren.json", "aantoonbaarheid", &f)?;
+
+    let c = serde_json::to_vec_pretty(&lopend)?;
+    schrijf(map, &mut manifest, "correcties.json", "correctie", &c)?;
+
+    // Het logboek gaat mee: zonder logboek is de ketenstand in het manifest
+    // niet na te rekenen.
+    let logboek = serde_json::to_vec_pretty(&kluis.logboek()?)?;
+    schrijf(map, &mut manifest, "logboek.json", "logboek", &logboek)?;
+    if let Some(anker) = kluis.laatste_anker()? {
+        let a = serde_json::to_vec_pretty(&anker)?;
+        schrijf(map, &mut manifest, "anker.json", "anker", &a)?;
+    }
+
+    // Wat buiten beeld blijft, staat in het manifest én in het stuk zelf.
+    for (wat, waarom) in BUITEN_BEELD {
+        manifest.laat_weg(format!("verval van {wat}"), waarom, 0);
+    }
+    if concepten > 0 {
+        manifest.laat_weg(
+            "records met de status concept",
+            "die zijn niet vastgesteld; zij tellen wel mee in de prognose, want een termijn \
+             loopt ook over een concept, maar wat erin staat is niet vastgelegd",
+            concepten,
+        );
+    }
+
+    let ondertekend = kluis.onderteken_met(|s| OndertekendManifest::onderteken(manifest, s))?;
+    std::fs::write(map.join("manifest.json"), serde_json::to_vec_pretty(&ondertekend)?)?;
+
+    kluis.log(
+        dpofg_audit::Gebeurtenis::nieuw(
+            Handeling::DossierSamengesteld,
+            super::actor(),
+            nu,
+            "prognose",
+            map.display().to_string(),
+            "algemeen",
+            format!("vervalprognose samengesteld voor {bestemd_voor}"),
+        ),
+        Some(aanleiding.to_string()),
+    )?;
+
+    kop("Bestuursstuk samengesteld");
+    let mut t = tabel(&["", ""]);
+    let m = map.display().to_string();
+    t.add_row(vec!["map", &m]);
+    t.add_row(vec!["bestemd voor", bestemd_voor]);
+    let aantal = verstreken.len().to_string();
+    t.add_row(vec!["nu al niet aantoonbaar", &aantal]);
+    let langste = per_horizon.last().map(|(_, p)| p.len()).unwrap_or(0).to_string();
+    t.add_row(vec!["binnen de langste horizon", &langste]);
+    println!("{t}");
+    gelukt("het manifest is ondertekend met de installatiesleutel van deze kluis");
+    terzijde("controleer de bundel met 'dpofg-verify dossier <map>'");
+    if !context.keten_in_orde {
+        blokkade(
+            "de ketencontrole is niet zonder bevindingen doorlopen; dat staat ook in het stuk \
+             zelf, want een bestuursstuk dat op een gebroken keten rust, hoort dat te zeggen",
+        );
+    }
+    let_op(
+        "De handtekening zegt dat deze bundel niet is gewijzigd sinds zij is samengesteld. Zij \
+         zegt niets over de juistheid van de juridische inhoud waarop de prognose steunt.",
+    );
+    Ok(())
+}
+
+fn schrijf(
+    map: &std::path::Path,
+    manifest: &mut Manifest,
+    naam: &str,
+    soort: &str,
+    inhoud: &[u8],
+) -> Result<()> {
+    std::fs::write(map.join(naam), inhoud)?;
+    manifest.voeg_toe(naam, soort, naam, 1, inhoud);
+    Ok(())
+}
+
+/// Hoeveel bronrecords er nog de status concept dragen.
+fn tel_concepten(kluis: &Kluis) -> Result<usize> {
+    let mut uit = 0;
+    for soort in ["zorgplicht", "risico", "leverancier", "dpia", "wpg"] {
+        uit += kluis.lijst(soort)?.iter().filter(|k| k.status == "concept").count();
+    }
+    Ok(uit)
 }
 
 fn laad<T: serde::de::DeserializeOwned>(kluis: &Kluis, soort: &str) -> Result<Vec<T>> {
