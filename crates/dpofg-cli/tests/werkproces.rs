@@ -1984,10 +1984,10 @@ fn de_dekking_meldt_wat_er_werkelijk_draait() {
     let p = Proef::nieuw();
     let uit = p.moet("controle --dekking");
     assert!(uit.contains("van de 55 regels"));
-    assert!(uit.contains("36 van de 55"), "kreeg:\n{uit}");
+    assert!(uit.contains("41 van de 55"), "kreeg:\n{uit}");
     // En wat er níet draait, staat er met naam bij.
     assert!(uit.contains("Nog zonder evaluatie"));
-    assert!(uit.contains("VWO-02"));
+    assert!(uit.contains("SYS-09"), "kreeg:\n{uit}");
 }
 
 /// Haalt de 64 hexadecimale tekens uit de uitvoer van `kluis sleutel`.
@@ -1997,4 +1997,197 @@ fn sleutel_uit(uitvoer: &str) -> String {
         .find(|w| w.len() == 64 && w.chars().all(|c| c.is_ascii_hexdigit()))
         .unwrap_or_else(|| panic!("geen sleutel gevonden in:\n{uitvoer}"))
         .to_string()
+}
+
+// --------------------------------------------------------------------------
+// Leveranciers en verwerkersovereenkomsten
+// --------------------------------------------------------------------------
+
+fn leverancier_opzetten(p: &Proef) {
+    p.moet("leverancier nieuw LEV-014 'Zorgdossier BV' --kritikaliteit hoog");
+    p.moet(
+        "leverancier overeenkomst LEV-014 --contract VWO-2026-014 \
+         --ondertekend 2026-01-15T09:00:00Z --meldtermijn-uren 24",
+    );
+}
+
+fn alle_vindplaatsen(p: &Proef) {
+    for eis in [
+        "instructies",
+        "geheimhouding",
+        "beveiliging",
+        "subverwerkers",
+        "bijstand-verzoeken",
+        "bijstand-verplichtingen",
+        "wissen-of-teruggeven",
+        "audits-en-informatie",
+    ] {
+        p.moet(&format!("leverancier vindplaats LEV-014 --eis {eis} --aanduiding 'artikel 7'"));
+    }
+}
+
+/// De acht onderdelen van artikel 28 lid 3 staan in het product, niet in een
+/// bijlage die de gebruiker zelf moet opzoeken.
+#[test]
+fn de_acht_onderdelen_staan_met_letter_en_grondslag_in_beeld() {
+    let p = Proef::nieuw();
+    let uit = p.moet("leverancier eisen");
+    for letter in ["a", "b", "c", "d", "e", "f", "g", "h"] {
+        assert!(uit.contains(&format!("art. 28 lid 3 onder {letter} AVG")), "kreeg:\n{uit}");
+    }
+}
+
+/// Een vinkje zegt alleen dat iemand ooit dacht dat het geregeld was. Bij een
+/// uitvraag moet worden aangewezen wáár het staat.
+#[test]
+fn een_onderdeel_afvinken_zonder_vindplaats_kan_niet() {
+    let p = Proef::nieuw();
+    leverancier_opzetten(&p);
+
+    let uit = p.moet_falen("leverancier vindplaats LEV-014 --eis beveiliging --aanduiding '   '");
+    assert!(uit.contains("een vinkje zegt alleen"), "kreeg:\n{uit}");
+
+    let uit = p.moet_falen("leverancier vaststellen LEV-014");
+    assert!(uit.contains("wijs aan waar in het contract staat"), "kreeg:\n{uit}");
+}
+
+#[test]
+fn met_acht_vindplaatsen_is_de_leverancier_vast_te_stellen() {
+    let p = Proef::nieuw();
+    leverancier_opzetten(&p);
+    alle_vindplaatsen(&p);
+    p.moet("leverancier subverwerkerscontrole LEV-014");
+
+    let uit = p.moet("leverancier vaststellen LEV-014");
+    assert!(uit.contains("vastgesteld"), "kreeg:\n{uit}");
+}
+
+/// Zonder afgesproken meldtermijn is er niets waaraan een melding valt te
+/// toetsen. Dat blokkeert, en niet met een signaaltje.
+#[test]
+fn zonder_meldtermijn_blokkeert_het_vaststellen() {
+    let p = Proef::nieuw();
+    p.moet("leverancier nieuw LEV-015 'Rekencentrum BV' --kritikaliteit gemiddeld");
+    p.moet(
+        "leverancier overeenkomst LEV-015 --contract VWO-2026-015 \
+         --ondertekend 2026-01-15T09:00:00Z",
+    );
+    for eis in [
+        "instructies",
+        "geheimhouding",
+        "beveiliging",
+        "subverwerkers",
+        "bijstand-verzoeken",
+        "bijstand-verplichtingen",
+        "wissen-of-teruggeven",
+        "audits-en-informatie",
+    ] {
+        p.moet(&format!("leverancier vindplaats LEV-015 --eis {eis} --aanduiding 'artikel 7'"));
+    }
+    let uit = p.moet_falen("leverancier vaststellen LEV-015");
+    assert!(uit.contains("binnen hoeveel uur"), "kreeg:\n{uit}");
+}
+
+/// Een contract dat na de aanvang is getekend, dekt de periode ervóór niet.
+/// Dat is een feit dat blijft staan; de tool maakt het zichtbaar en telt de
+/// ongedekte dagen.
+#[test]
+fn tekenen_na_aanvang_wordt_gemeld_met_het_aantal_ongedekte_dagen() {
+    let p = Proef::nieuw();
+    p.moet("leverancier nieuw LEV-016 'Laatkomer BV'");
+    let uit = p.moet(
+        "leverancier overeenkomst LEV-016 --contract VWO-2026-016 \
+         --ondertekend 2026-03-01T09:00:00Z --verwerking-begon 2026-01-01T09:00:00Z \
+         --meldtermijn-uren 24",
+    );
+    assert!(uit.contains("nadat de verwerking al liep"), "kreeg:\n{uit}");
+
+    // Rapporterend, dus buiten de standaarddrempel: het is een feit om te
+    // melden, geen gebrek dat vandaag nog te herstellen valt.
+    assert!(!p.moet("controle").contains("VWO-13"));
+    let uit = p.moet("controle --vanaf rapporterend");
+    assert!(uit.contains("VWO-13"), "kreeg:\n{uit}");
+    assert!(uit.contains("59 dagen"), "de ongedekte periode hoort geteld te worden:\n{uit}");
+}
+
+/// Toevoegen is niet nalopen. Wie dat door elkaar haalt, denkt jaren op orde
+/// te zijn omdat er ooit iemand een naam heeft ingetypt.
+#[test]
+fn een_subverwerker_toevoegen_geldt_niet_als_controle() {
+    let p = Proef::nieuw();
+    leverancier_opzetten(&p);
+    let uit = p.moet(
+        "leverancier subverwerker LEV-014 --naam 'het rekencentrum' --land Duitsland \
+         --dienst opslag",
+    );
+    assert!(uit.contains("Toevoegen is geen controle"), "kreeg:\n{uit}");
+
+    let uit = p.moet("controle");
+    assert!(uit.contains("VWO-09"), "kreeg:\n{uit}");
+    assert!(uit.contains("nooit nagelopen"), "kreeg:\n{uit}");
+
+    p.moet("leverancier subverwerkerscontrole LEV-014");
+    assert!(!p.moet("controle").contains("VWO-09"));
+}
+
+/// De drempel voor de meldtermijn komt uit het kennispakket en staat niet in
+/// de programmacode.
+#[test]
+fn een_te_lange_meldtermijn_wordt_gesignaleerd() {
+    let p = Proef::nieuw();
+    p.moet("leverancier nieuw LEV-017 'Trage Verwerker BV'");
+    let uit = p.moet(
+        "leverancier overeenkomst LEV-017 --contract VWO-2026-017 \
+         --ondertekend 2026-01-15T09:00:00Z --meldtermijn-uren 96",
+    );
+    assert!(uit.contains("tweeënzeventig uur"), "kreeg:\n{uit}");
+
+    let uit = p.moet("controle");
+    assert!(uit.contains("VWO-04"), "kreeg:\n{uit}");
+}
+
+/// LEK-16 rekent na wat er feitelijk gebeurde tegen wat er is afgesproken. De
+/// regel is alleen bereikbaar als de bedieningsschil beide tijdstippen kan
+/// vastleggen; anders is het een regel die nooit aanslaat.
+#[test]
+fn een_verwerker_die_te_laat_meldt_is_na_te_rekenen() {
+    let p = Proef::nieuw();
+    leverancier_opzetten(&p);
+    alle_vindplaatsen(&p);
+    p.moet("leverancier subverwerkerscontrole LEV-014");
+    p.moet("incident nieuw 2026-0041 'melding van de verwerker' --kanaal verwerker");
+
+    let uit = p.moet(
+        "incident verwerker 2026-0041 --leverancier LEV-014 \
+         --opgetreden 2026-06-01T09:00:00Z --gemeld 2026-06-03T09:00:00Z",
+    );
+    assert!(uit.contains("48 uur"), "de werkelijke duur hoort in beeld:\n{uit}");
+    assert!(uit.contains("24 uur"), "de afgesproken termijn hoort in beeld:\n{uit}");
+
+    let uit = p.moet("controle --vanaf rapporterend");
+    assert!(uit.contains("LEK-16"), "kreeg:\n{uit}");
+    assert!(uit.contains("Zorgdossier BV"), "de naam van de verwerker hoort erbij:\n{uit}");
+}
+
+/// Twee tijdstippen die zijn verwisseld, leveren een negatieve duur op. Dat is
+/// geen bevinding maar een invoerfout, en die hoort te worden geweigerd.
+#[test]
+fn een_melding_van_voor_het_incident_wordt_geweigerd() {
+    let p = Proef::nieuw();
+    leverancier_opzetten(&p);
+    p.moet("incident nieuw 2026-0042 'melding van de verwerker' --kanaal verwerker");
+
+    let uit = p.moet_falen(
+        "incident verwerker 2026-0042 --leverancier LEV-014 \
+         --opgetreden 2026-06-03T09:00:00Z --gemeld 2026-06-01T09:00:00Z",
+    );
+    assert!(uit.contains("verwisseld"), "kreeg:\n{uit}");
+}
+
+#[test]
+fn een_onbekende_leverancier_levert_een_bruikbare_fout() {
+    let p = Proef::nieuw();
+    p.moet("incident nieuw 2026-0043 'melding van de verwerker' --kanaal verwerker");
+    let uit = p.moet_falen("incident verwerker 2026-0043 --leverancier LEV-999");
+    assert!(uit.contains("dpofg leverancier lijst"), "kreeg:\n{uit}");
 }

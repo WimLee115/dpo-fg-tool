@@ -386,7 +386,8 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                 "de beslistermijn en de verdagingstermijn van de Wet open overheid",
                 "de opsomming van weigeringsgronden en of die volledig is",
                 "de frequentie van de audit en de interne controle onder de Wet politiegegevens",
-                "de drempel waarboven een uitzondering van artikel 49 niet meer incidenteel is"
+                "de drempel waarboven een uitzondering van artikel 49 niet meer incidenteel is",
+                "de drempel waarboven de meldtermijn van een verwerker te lang is"
             ]
         }),
     );
@@ -442,6 +443,18 @@ fn aanvullend() -> BTreeMap<String, serde_json::Value> {
                       persoonsgegevens te verzekeren en aan te tonen dat aan deze verordening is \
                       voldaan" }
         ]),
+    );
+    uit.insert(
+        "verwerker_meldtermijndrempel".into(),
+        serde_json::json!({
+            "toelichting": "Boven hoeveel uur de contractuele meldtermijn van een verwerker te \
+                            lang is. De verordening noemt geen getal: artikel 33 lid 2 zegt dat \
+                            de verwerker 'zonder onredelijke vertraging' meldt. Achtenveertig uur \
+                            laat van de eigen tweeënzeventig uur nog een dag over om te wegen en \
+                            te melden; wie meer weggeeft, geeft zijn eigen termijn weg.",
+            "drempel_uren": 48,
+            "bron": "art. 33 lid 2 AVG; het getal is niet aan de wettekst ontleend"
+        }),
     );
     uit.insert(
         "doorgifte_uitzonderingsdrempel".into(),

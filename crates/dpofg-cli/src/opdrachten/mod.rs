@@ -6,6 +6,7 @@ pub mod dossier;
 pub mod dpia;
 pub mod incident;
 pub mod kluis;
+pub mod leverancier;
 pub mod lia;
 pub mod logboek;
 pub mod mapping;

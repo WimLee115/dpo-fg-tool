@@ -87,6 +87,10 @@ enum Opdracht {
     #[command(subcommand)]
     Doorgifte(opdrachten::doorgifte::Doorgifteopdracht),
 
+    /// Leveranciers en verwerkersovereenkomsten.
+    #[command(subcommand)]
+    Leverancier(opdrachten::leverancier::Leveranciersopdracht),
+
     /// De controleregels over de hele verzameling draaien.
     Controle(opdrachten::controle::Controleopties),
 
@@ -145,6 +149,7 @@ fn draai() -> Result<()> {
         Opdracht::Mapping(o) => opdrachten::mapping::draai(o, args.kluis, nu),
         Opdracht::Lia(o) => opdrachten::lia::draai(o, args.kluis, nu),
         Opdracht::Doorgifte(o) => opdrachten::doorgifte::draai(o, args.kluis, nu),
+        Opdracht::Leverancier(o) => opdrachten::leverancier::draai(o, args.kluis, nu),
         Opdracht::Controle(o) => opdrachten::controle::draai(o, args.kluis, nu),
         Opdracht::Logboek(o) => opdrachten::logboek::draai(o, args.kluis, nu),
         Opdracht::Termijn(o) => opdrachten::termijn::draai(o, nu),

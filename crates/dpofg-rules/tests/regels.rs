@@ -5,17 +5,18 @@ use dpofg_domain::{
     avg::{BijzondereCategorie, Grondslag, Rol},
     doorgifte::{Beoordelingsuitkomst, Doorgifte, Doorgiftebeoordeling, Doorgifteinstrumentsoort},
     incident::Herkomstkanaal,
+    leverancier::{Contracteis, Leverancier},
     Aantasting, Bewaartermijn, Dpia, Id, Incident, Motivering, Ontvanger, Overgenomen,
-    Restrisiconiveau, Risiconiveau, Status, Termijneenheid, Verwerking, Voortoets,
+    Restrisiconiveau, Risiconiveau, Status, Termijneenheid, Verwerking, Volledig, Voortoets,
 };
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
         beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
-        beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
-        beoordeel_raadplegingstermijn, beoordeel_verwerking, catalogus, geimplementeerd,
-        standaardmotor,
+        beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
+        beoordeel_raadplegingstermijn, beoordeel_verwerkersmelding, beoordeel_verwerking,
+        catalogus, geimplementeerd, standaardmotor,
     },
 };
 
@@ -1121,4 +1122,243 @@ fn eer_07_zwijgt_bij_een_geldig_instrument() {
     assert!(
         !codes(&beoordeel_doorgifte(&motor, &d, UITZONDERINGSDREMPEL, nu())).contains(&"EER-07")
     );
+}
+
+// --- leveranciers en verwerkersovereenkomsten ---------------------------------
+
+/// De drempels die de leveranciersregels gebruiken. In het product komen ze uit
+/// het kennispakket; hier staan ze vast zodat de test de regel meet en niet de
+/// inhoud van het pakket.
+const MELDTERMIJNDREMPEL_UREN: u32 = 48;
+const SUBVERWERKERSDREMPEL_MAANDEN: i64 = 12;
+
+fn leverancier() -> Leverancier {
+    let mut l = Leverancier::nieuw("LEV-014", "Zorgdossier BV", "Nederland", "u1", nu());
+    l.leg_overeenkomst_vast("VWO-2026-014", nu() - Duration::days(400), None, Some(24), nu())
+        .unwrap();
+    for eis in Contracteis::alle() {
+        l.wijs_vindplaats_aan(eis, format!("artikel {}", eis.letter()), None, nu()).unwrap();
+    }
+    l.controleer_subverwerkers(nu() - Duration::days(30), nu()).unwrap();
+    l
+}
+
+/// Zonder overeenkomst is er niets om aan te toetsen. De regels zwijgen dan;
+/// dat de overeenkomst zelf ontbreekt, meldt het record al bij vaststellen.
+#[test]
+fn zonder_overeenkomst_zwijgen_de_leveranciersregels() {
+    let motor = standaardmotor();
+    let l = Leverancier::nieuw("LEV-001", "Nieuwkomer BV", "Nederland", "u1", nu());
+    let b = beoordeel_leverancier(
+        &motor,
+        &l,
+        MELDTERMIJNDREMPEL_UREN,
+        SUBVERWERKERSDREMPEL_MAANDEN,
+        nu(),
+    );
+    assert!(b.is_empty(), "zonder overeenkomst valt er niets te toetsen: {:?}", codes(&b));
+}
+
+#[test]
+fn een_volledige_overeenkomst_levert_geen_enkele_bevinding() {
+    let motor = standaardmotor();
+    let b = beoordeel_leverancier(
+        &motor,
+        &leverancier(),
+        MELDTERMIJNDREMPEL_UREN,
+        SUBVERWERKERSDREMPEL_MAANDEN,
+        nu(),
+    );
+    assert!(b.is_empty(), "onverwachte bevindingen: {:?}", codes(&b));
+}
+
+/// VWO-02 telt niet of iemand een vinkje heeft gezet, maar of er is aangewezen
+/// wáár het onderdeel staat. Dat is het verschil tussen een lijstje en een
+/// contract dat een uitvraag doorstaat.
+#[test]
+fn vwo_02_noemt_de_onderdelen_zonder_vindplaats_bij_letter() {
+    let motor = standaardmotor();
+    let mut l = leverancier();
+    let o = l.overeenkomst.as_mut().unwrap();
+    o.vindplaatsen.retain(|v| {
+        v.eis != Contracteis::Subverwerkers && v.eis != Contracteis::WissenOfTeruggeven
+    });
+
+    let b = beoordeel_leverancier(
+        &motor,
+        &l,
+        MELDTERMIJNDREMPEL_UREN,
+        SUBVERWERKERSDREMPEL_MAANDEN,
+        nu(),
+    );
+    let bev = b.iter().find(|x| x.regelcode == "VWO-02").expect("VWO-02 hoort aan te slaan");
+    // Signalerend, en niet blokkerend: het blokkeren gebeurt op de plaats waar
+    // het thuishoort, namelijk bij het vaststellen van de leverancier zelf. Een
+    // blokkerende bevinding die pas verdwijnt als het contract is uitgeplozen,
+    // zou maandenlang in ieder overzicht staan.
+    assert_eq!(bev.niveau, Niveau::Signalerend);
+    assert!(bev.toelichting.contains('d'), "de letter uit artikel 28 lid 3 hoort erin");
+    assert!(bev.toelichting.contains('g'));
+}
+
+/// De drempel komt van buiten de regel: een organisatie die haar eigen norm
+/// anders legt, verschuift het pakket en niet de code.
+#[test]
+fn vwo_04_meet_tegen_de_meegegeven_drempel() {
+    let motor = standaardmotor();
+    let l = leverancier(); // meldtermijn van 24 uur
+
+    assert!(!codes(&beoordeel_leverancier(&motor, &l, 48, SUBVERWERKERSDREMPEL_MAANDEN, nu()))
+        .contains(&"VWO-04"));
+    let strenger = beoordeel_leverancier(&motor, &l, 12, SUBVERWERKERSDREMPEL_MAANDEN, nu());
+    let bev = strenger.iter().find(|x| x.regelcode == "VWO-04").expect("VWO-04 hoort aan te slaan");
+    assert!(bev.toelichting.contains("24"));
+}
+
+/// Geen afspraak is erger dan een lange afspraak, maar VWO-04 zwijgt erover:
+/// het gemis blokkeert het vaststellen van de leverancier al. Twee meldingen
+/// over hetzelfde gat leren de gebruiker alleen maar wegklikken.
+#[test]
+fn vwo_04_zwijgt_zonder_afgesproken_termijn_omdat_vaststellen_dan_al_blokkeert() {
+    let motor = standaardmotor();
+    let mut l = leverancier();
+    l.overeenkomst.as_mut().unwrap().meldtermijn_uren = None;
+
+    let b = beoordeel_leverancier(
+        &motor,
+        &l,
+        MELDTERMIJNDREMPEL_UREN,
+        SUBVERWERKERSDREMPEL_MAANDEN,
+        nu(),
+    );
+    assert!(!codes(&b).contains(&"VWO-04"));
+
+    let blokkades: Vec<_> = l
+        .ontbrekende_onderdelen()
+        .into_iter()
+        .filter(|o| o.blokkeert_vaststelling)
+        .map(|o| o.veld)
+        .collect();
+    assert!(blokkades.contains(&"leverancier.meldtermijn".to_string()));
+}
+
+#[test]
+fn vwo_09_slaat_aan_wanneer_de_subverwerkerslijst_te_oud_is() {
+    let motor = standaardmotor();
+    let mut l = leverancier();
+    l.subverwerkers_gecontroleerd_op = Some(nu() - Duration::days(500));
+
+    let b = beoordeel_leverancier(
+        &motor,
+        &l,
+        MELDTERMIJNDREMPEL_UREN,
+        SUBVERWERKERSDREMPEL_MAANDEN,
+        nu(),
+    );
+    let bev = b.iter().find(|x| x.regelcode == "VWO-09").expect("VWO-09 hoort aan te slaan");
+    assert_eq!(bev.niveau, Niveau::Signalerend);
+}
+
+/// Nooit gecontroleerd is niet hetzelfde als recent gecontroleerd. Een lege
+/// datum die als "vandaag" wordt gelezen, is de stilste fout die er is — en de
+/// volledigheidscontrole meldt dit gemis alleen signalerend, dus een
+/// vastgestelde leverancier zou er zonder deze tak nooit meer op worden
+/// aangesproken.
+#[test]
+fn vwo_09_slaat_ook_aan_wanneer_de_lijst_nooit_is_nagelopen() {
+    let motor = standaardmotor();
+    let mut l = leverancier();
+    l.subverwerkers_gecontroleerd_op = None;
+
+    let b = beoordeel_leverancier(
+        &motor,
+        &l,
+        MELDTERMIJNDREMPEL_UREN,
+        SUBVERWERKERSDREMPEL_MAANDEN,
+        nu(),
+    );
+    let bev = b.iter().find(|x| x.regelcode == "VWO-09").expect("VWO-09 hoort aan te slaan");
+    assert!(bev.toelichting.contains("nooit"));
+}
+
+/// De periode tussen de eerste verwerking en de handtekening is niet gedekt.
+/// Dat is een feit dat blijft staan; de regel maakt het zichtbaar.
+#[test]
+fn vwo_13_slaat_aan_wanneer_de_overeenkomst_na_de_aanvang_is_getekend() {
+    let motor = standaardmotor();
+    let mut l = Leverancier::nieuw("LEV-002", "Laatkomer BV", "Nederland", "u1", nu());
+    l.leg_overeenkomst_vast(
+        "VWO-2026-002",
+        nu() - Duration::days(100),
+        Some(nu() - Duration::days(300)),
+        Some(24),
+        nu(),
+    )
+    .unwrap();
+    for eis in Contracteis::alle() {
+        l.wijs_vindplaats_aan(eis, "artikel 7", None, nu()).unwrap();
+    }
+    l.controleer_subverwerkers(nu(), nu()).unwrap();
+
+    let b = beoordeel_leverancier(
+        &motor,
+        &l,
+        MELDTERMIJNDREMPEL_UREN,
+        SUBVERWERKERSDREMPEL_MAANDEN,
+        nu(),
+    );
+    let bev = b.iter().find(|x| x.regelcode == "VWO-13").expect("VWO-13 hoort aan te slaan");
+    assert!(bev.toelichting.contains("200"), "het aantal ongedekte dagen hoort erin");
+}
+
+/// LEK-16 vergelijkt het contract met wat er feitelijk gebeurde. Zonder een van
+/// beide tijdstippen valt er niets te vergelijken en zwijgt de regel.
+#[test]
+fn lek_16_zwijgt_zonder_de_beide_tijdstippen() {
+    let motor = standaardmotor();
+    let l = leverancier();
+    let mut i = incident();
+    i.incident_bij_verwerker_op = Some(nu() - Duration::hours(60));
+    i.melding_verwerker_ontvangen_op = None;
+
+    assert!(beoordeel_verwerkersmelding(&motor, &i, &l, nu()).is_empty());
+}
+
+#[test]
+fn lek_16_slaat_aan_wanneer_de_verwerker_te_laat_meldde() {
+    let motor = standaardmotor();
+    let l = leverancier(); // 24 uur afgesproken
+    let mut i = incident();
+    i.incident_bij_verwerker_op = Some(nu() - Duration::hours(60));
+    i.melding_verwerker_ontvangen_op = Some(nu() - Duration::hours(10));
+
+    let b = beoordeel_verwerkersmelding(&motor, &i, &l, nu());
+    let bev = b.iter().find(|x| x.regelcode == "LEK-16").expect("LEK-16 hoort aan te slaan");
+    assert!(bev.toelichting.contains("50"), "de werkelijke duur hoort erin: {}", bev.toelichting);
+    assert!(bev.toelichting.contains("24"), "de afgesproken termijn hoort erin");
+}
+
+#[test]
+fn lek_16_zwijgt_wanneer_de_verwerker_op_tijd_meldde() {
+    let motor = standaardmotor();
+    let l = leverancier();
+    let mut i = incident();
+    i.incident_bij_verwerker_op = Some(nu() - Duration::hours(20));
+    i.melding_verwerker_ontvangen_op = Some(nu() - Duration::hours(4));
+
+    assert!(beoordeel_verwerkersmelding(&motor, &i, &l, nu()).is_empty());
+}
+
+/// Zonder afgesproken termijn is er geen maat om aan te toetsen. VWO-04 meldt
+/// dat gemis al; LEK-16 mag er geen tweede melding overheen leggen.
+#[test]
+fn lek_16_zwijgt_zonder_afgesproken_termijn() {
+    let motor = standaardmotor();
+    let mut l = leverancier();
+    l.overeenkomst.as_mut().unwrap().meldtermijn_uren = None;
+    let mut i = incident();
+    i.incident_bij_verwerker_op = Some(nu() - Duration::hours(200));
+    i.melding_verwerker_ontvangen_op = Some(nu());
+
+    assert!(beoordeel_verwerkersmelding(&motor, &i, &l, nu()).is_empty());
 }

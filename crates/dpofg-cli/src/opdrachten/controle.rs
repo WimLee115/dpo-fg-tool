@@ -4,14 +4,15 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::Args;
 use dpofg_audit::Handeling;
-use dpofg_domain::{doorgifte::Doorgifte, Dpia, Incident, Verwerking};
+use dpofg_domain::{doorgifte::Doorgifte, Dpia, Incident, Leverancier, Verwerking};
 use dpofg_rules::{
     budget::Waarschuwingsbudget,
     motor::{Niveau, Ontvangerrol},
     regels::{
         beoordeel_budget, beoordeel_doorgifte, beoordeel_dpia, beoordeel_incident,
-        beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
-        beoordeel_raadplegingstermijn, beoordeel_verwerking, standaardmotor,
+        beoordeel_leverancier, beoordeel_logboek, beoordeel_meldtermijn, beoordeel_oorzaakpatroon,
+        beoordeel_raadplegingstermijn, beoordeel_verwerkersmelding, beoordeel_verwerking,
+        standaardmotor,
     },
 };
 use std::path::PathBuf;
@@ -122,6 +123,25 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
         beoordeeld += 1;
     }
 
+    // De leveranciers worden eerst geladen: de incidentbeoordeling hieronder
+    // heeft ze nodig om na te rekenen of de verwerker binnen zijn contractuele
+    // termijn heeft gemeld.
+    let meldtermijndrempel = meldtermijndrempel(&pakket);
+    let subverwerkersdrempel = subverwerkersdrempel(&pakket);
+    let mut leveranciers: Vec<Leverancier> = Vec::new();
+    for k in kluis.lijst("leverancier")? {
+        let l: Leverancier = kluis.laad("leverancier", &k.id)?;
+        bevindingen.extend(beoordeel_leverancier(
+            &motor,
+            &l,
+            meldtermijndrempel,
+            subverwerkersdrempel,
+            nu,
+        ));
+        leveranciers.push(l);
+        beoordeeld += 1;
+    }
+
     let mut incidenten = Vec::new();
     for k in kluis.lijst("incident")? {
         let i: Incident = kluis.laad("incident", &k.id)?;
@@ -133,6 +153,11 @@ pub fn draai(o: Controleopties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) ->
             }
             Ok(None) => beoordeeld += 1,
             Err(fout) => onberekenbaar.push(format!("{}: {fout}", i.kenmerk)),
+        }
+        if let Some(verwerker_id) = i.verwerker_id {
+            if let Some(l) = leveranciers.iter().find(|l| l.id == verwerker_id) {
+                bevindingen.extend(beoordeel_verwerkersmelding(&motor, &i, l, nu));
+            }
         }
         incidenten.push(i);
     }
@@ -336,4 +361,25 @@ fn uitzonderingsdrempel(pakket: &dpofg_content::Pakketinhoud) -> u32 {
         .and_then(|v| v.as_u64())
         .and_then(|v| u32::try_from(v).ok())
         .unwrap_or(2)
+}
+
+/// Boven hoeveel uur de contractuele meldtermijn van een verwerker te lang is.
+fn meldtermijndrempel(pakket: &dpofg_content::Pakketinhoud) -> u32 {
+    pakket
+        .aanvullend
+        .get("verwerker_meldtermijndrempel")
+        .and_then(|v| v.get("drempel_uren"))
+        .and_then(|v| v.as_u64())
+        .and_then(|v| u32::try_from(v).ok())
+        .unwrap_or(48)
+}
+
+/// Na hoeveel maanden de subverwerkerslijst opnieuw moet worden nagelopen.
+fn subverwerkersdrempel(pakket: &dpofg_content::Pakketinhoud) -> i64 {
+    pakket
+        .termijn("INTERN-SUBVERWERKERSCONTROLE")
+        .ok()
+        .filter(|t| t.eenheid == dpofg_terms::Eenheid::Maanden)
+        .map(|t| i64::from(t.duur))
+        .unwrap_or(12)
 }

@@ -30,7 +30,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Volledigheidsmechanisme | werkt | Teller met grondslag; blokkerend onderscheiden van signalerend |
 | Incidentdossier | werkt | Vijf klokken op eigen ankers, meldbesluit met drie lagen |
 | Klokkenmotor | werkt | Leidt verplichtingen af; ankers vallen niet samen |
-| Controleregels | **deels** | 36 van de 55 regels in de catalogus hebben een evaluatiefunctie |
+| Controleregels | **deels** | 41 van de 55 regels in de catalogus hebben een evaluatiefunctie |
 | Kennispakketten | werkt | Ondertekend, met terugrolbescherming en consolidatiedatum |
 | Dossiers | werkt | Ondertekend manifest, weglatingen zichtbaar, voorbehoud meegetekend |
 | Verificatiebinary | werkt | Leest uitsluitend, geen wachtwoord, geen kluis nodig |
@@ -44,6 +44,7 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Veldmapping | werkt | Eén profiel per bronsysteem, verschilrapport in twee richtingen, genegeerde velden met reden |
 | Belangenafweging | werkt | Vier onderdelen vóór de uitkomst; waarborgen kantelen de uitslag maar vervangen de afweging niet |
 | Doorgiften buiten de EER | werkt | Instrument, doorgiftebeoordeling, artikel 49 met telling, controle tegen het kennispakket |
+| Leveranciersregister | werkt | De acht onderdelen van art. 28 lid 3 met vindplaats per onderdeel, contractuele meldtermijn, subverwerkerslijst met controledatum |
 
 ---
 
@@ -52,8 +53,8 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Onderdeel | Uit fase | Waarom het er nog niet is |
 |---|---|---|
 | Toestemming als eigen record | 2 | De verwijzing bestaat in het model; het record nog niet |
-| Leveranciers- en ketenregister | 3 | |
 | Zorgplichtcontrolset | 3 | Vereist de normenkaders in het kennispakket |
+| Ketenregister voorbij de eerste schil | 3 | De verwerker en zijn subverwerkers staan er; de laag daaronder nog niet |
 | Toezichtdossier en bestuursrechtelijk spoor | 4 | |
 | Vervalprognose | 3 | Vereist geldigheidsvensters op bewijsstukken |
 | Ketenbewijs tussen organisaties | 4 | |
@@ -114,9 +115,9 @@ Een code komt pas in de dekking te staan wanneer de gegevens waarop hij oordeelt
 
 | | |
 |---|---|
-| Rust-code | ~19.900 regels, zonder commentaar en lege regels |
-| Tests | 565 testfuncties, 569 uitgevoerde tests |
-| Documentatie | ~4.700 regels |
+| Rust-code | ~21.200 regels in `src`, zonder commentaar en lege regels |
+| Tests | 602 testfuncties, 603 uitgevoerde tests; ~5.200 regels in `tests` |
+| Documentatie | ~5.100 regels |
 | Crates | 10 |
 | Clippy | geen waarschuwingen met `-D warnings` |
 

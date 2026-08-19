@@ -68,7 +68,19 @@ pub fn draai(o: Dossieropties, kluispad: Option<PathBuf>, nu: DateTime<Utc>) -> 
     }
 
     let soorten: Vec<String> = if o.soort.is_empty() {
-        vec!["verwerking".into(), "dpia".into(), "incident".into(), "verzoek".into()]
+        vec![
+            "verwerking".into(),
+            "dpia".into(),
+            "incident".into(),
+            "verzoek".into(),
+            "woo".into(),
+            "wpg".into(),
+            "lia".into(),
+            "doorgifte".into(),
+            "leverancier".into(),
+            "mapping".into(),
+            "redactie".into(),
+        ]
     } else {
         o.soort.clone()
     };

@@ -68,6 +68,7 @@ pub mod dpia;
 mod error;
 pub mod incident;
 pub mod klokken;
+pub mod leverancier;
 pub mod mapping;
 pub mod redactie;
 pub mod verwerking;
@@ -88,6 +89,7 @@ pub use klokken::{
     verplichtingen_uit_incident, AfgeleideVerplichting, Ankertype, Verplichtingcode,
     Zorgplichtcontext,
 };
+pub use leverancier::{Contracteis, Kritikaliteit, Leverancier, Verwerkersovereenkomst};
 pub use mapping::{Mappingprofiel, Veldkoppeling, Verschilrapport};
 pub use redactie::{Controlesoort, Controleuitkomst, Redactiecategorie, Redactieopdracht};
 pub use verwerking::{Bewaartermijn, Ontvanger, Verwerking};

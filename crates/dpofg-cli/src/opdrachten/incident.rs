@@ -126,6 +126,24 @@ pub enum Incidentopdracht {
         #[arg(long = "verwerking", required = true)]
         verwerkingen: Vec<String>,
     },
+    /// Koppel het incident aan de verwerker bij wie het optrad.
+    ///
+    /// Het moment waarop de verwerker meldde is het anker van de eigen klok;
+    /// het moment waarop het incident bij hem optrad, is het begin van zijn
+    /// contractuele meldtermijn. Regel LEK-16 rekent het verschil na.
+    Verwerker {
+        /// Het kenmerk van het incident.
+        kenmerk: String,
+        /// Het kenmerk van de leverancier.
+        #[arg(long)]
+        leverancier: String,
+        /// Wanneer het incident bij de verwerker optrad.
+        #[arg(long)]
+        opgetreden: Option<String>,
+        /// Wanneer diens melding binnenkwam.
+        #[arg(long)]
+        gemeld: Option<String>,
+    },
     /// Rond het incident af: oorzaak, maatregelen en afhandelmoment.
     ///
     /// Zonder oorzaakcategorie is er geen patroon te zien over incidenten heen,
@@ -249,6 +267,14 @@ pub fn draai(o: Incidentopdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>) 
         Incidentopdracht::Ontkoppel { kenmerk, verwerkingen } => {
             koppel(&mut kluis, &kenmerk, &verwerkingen, false, nu)
         }
+        Incidentopdracht::Verwerker { kenmerk, leverancier, opgetreden, gemeld } => verwerker(
+            &mut kluis,
+            &kenmerk,
+            &leverancier,
+            opgetreden.as_deref(),
+            gemeld.as_deref(),
+            nu,
+        ),
         Incidentopdracht::Afronden { kenmerk, oorzaak, maatregelen, afgehandeld } => {
             afronden(&mut kluis, &kenmerk, &oorzaak, &maatregelen, afgehandeld.as_deref(), nu)
         }
@@ -259,6 +285,74 @@ pub fn draai(o: Incidentopdracht, kluispad: Option<PathBuf>, nu: DateTime<Utc>) 
 }
 
 /// Koppelt registerregels aan een incident, of maakt de koppeling ongedaan.
+fn verwerker(
+    kluis: &mut Kluis,
+    kenmerk: &str,
+    leverancierkenmerk: &str,
+    opgetreden: Option<&str>,
+    gemeld: Option<&str>,
+    nu: DateTime<Utc>,
+) -> Result<()> {
+    let mut i = zoek(kluis, kenmerk)?;
+    let kop_lev = kluis
+        .lijst("leverancier")?
+        .into_iter()
+        .find(|r| r.kenmerk.as_deref() == Some(leverancierkenmerk))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "geen leverancier met kenmerk '{leverancierkenmerk}'. Bekijk de lijst met \
+                 'dpofg leverancier lijst'"
+            )
+        })?;
+    let l: dpofg_domain::leverancier::Leverancier = kluis.laad("leverancier", &kop_lev.id)?;
+
+    let opgetreden = match opgetreden {
+        Some(t) => Some(lees_tijdstip(t)?),
+        None => None,
+    };
+    let gemeld = match gemeld {
+        Some(t) => Some(lees_tijdstip(t)?),
+        None => None,
+    };
+    i.leg_verwerkersmelding_vast(l.id, opgetreden, gemeld, nu)?;
+    bewaar(kluis, &i, Handeling::RecordGewijzigd, &format!("verwerker {} gekoppeld", l.naam), nu)?;
+
+    gelukt(&format!("{kenmerk} is gekoppeld aan {}", l.naam));
+    match l.overeenkomst.as_ref().and_then(|o| o.meldtermijn_uren) {
+        None => let_op(
+            "Er is met deze verwerker geen meldtermijn afgesproken. Dan is er niets waaraan \
+             zijn melding valt te toetsen; het vaststellen van de leverancier blokkeert daarop.",
+        ),
+        Some(termijn) => {
+            if let (Some(o), Some(g)) =
+                (i.incident_bij_verwerker_op, i.melding_verwerker_ontvangen_op)
+            {
+                let verstreken = (g - o).num_hours();
+                if verstreken > i64::from(termijn) {
+                    let_op(&format!(
+                        "de verwerker meldde na {verstreken} uur en had {termijn} uur; die \
+                         overschrijding komt in mindering op de eigen termijn van \
+                         tweeënzeventig uur"
+                    ));
+                } else {
+                    terzijde(&format!(
+                        "gemeld na {verstreken} uur, binnen de afgesproken {termijn} uur"
+                    ));
+                }
+            }
+        }
+    }
+    if i.kanaal == Herkomstkanaal::MeldingVanVerwerker {
+        if let Some(anker) = i.anker_meldklok() {
+            terzijde(&format!(
+                "de eigen klok van tweeënzeventig uur loopt vanaf {}",
+                anker.format("%d-%m-%Y %H:%M UTC")
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn koppel(
     kluis: &mut Kluis,
     kenmerk: &str,

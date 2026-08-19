@@ -27,8 +27,8 @@
 use chrono::{DateTime, Duration, Utc};
 use dpofg_audit::{Ankerstatus, Bevindingsoort, Verificatierapport};
 use dpofg_domain::{
-    avg::Grondslag, Bewaartermijn, Doorgifte, Dpia, Incident, Meldbesluit, Risiconiveau, Status,
-    Verwerking, Volledig, Voortoets,
+    avg::Grondslag, Bewaartermijn, Doorgifte, Dpia, Incident, Leverancier, Meldbesluit,
+    Risiconiveau, Status, Verwerking, Volledig, Voortoets,
 };
 use dpofg_terms::Deadline;
 
@@ -75,8 +75,8 @@ pub fn geimplementeerd() -> &'static [&'static str] {
         "REG-01", "REG-02", "REG-03", "REG-04", "REG-05", "GRO-01", "GRO-02", "GRO-03", "GRO-04",
         "GRO-05", "BEW-01", "BEW-02", "BEW-04", "VWO-01", "EER-01", "DPIA-01", "LEK-01", "LEK-02",
         "LEK-03", "LEK-04", "LEK-06", "LEK-07", "LEK-08", "LEK-09", "LEK-12", "LEK-13", "LEK-15",
-        "DPIA-03", "DPIA-06", "DPIA-07", "EER-03", "EER-06", "EER-07", "SYS-04", "SYS-06",
-        "SYS-10",
+        "DPIA-03", "DPIA-06", "DPIA-07", "EER-03", "EER-06", "EER-07", "VWO-02", "VWO-04",
+        "VWO-09", "VWO-13", "LEK-16", "SYS-04", "SYS-06", "SYS-10",
     ]
 }
 
@@ -1076,6 +1076,151 @@ pub fn beoordeel_doorgifte(
     }
 
     uit
+}
+
+/// Beoordeelt één leverancier (VWO-02, VWO-04, VWO-09 en VWO-13).
+///
+/// Beide drempels komen uit het kennispakket: hoeveel uur een verwerker mag
+/// nemen om te melden en hoe vaak de subverwerkerslijst moet worden nagelopen,
+/// zijn normen en horen niet in deze code te staan.
+pub fn beoordeel_leverancier(
+    motor: &Regelmotor,
+    l: &Leverancier,
+    meldtermijndrempel_uren: u32,
+    subverwerkersdrempel_maanden: i64,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let mut uit = Vec::new();
+    let kenmerk = Some(l.kenmerk.as_str());
+    let id = l.id.to_string();
+
+    let mut voeg = |code: &str, toelichting: String| {
+        if let Some(b) = motor.bevind(code, "leverancier", &id, kenmerk, toelichting, nu) {
+            uit.push(b);
+        }
+    };
+
+    let Some(overeenkomst) = &l.overeenkomst else {
+        // Zonder overeenkomst valt er niets aan het contract te toetsen; dat de
+        // overeenkomst ontbreekt, meldt de volledigheidscontrole al.
+        return uit;
+    };
+
+    // VWO-02: onderdelen van artikel 28 lid 3 zonder vindplaats.
+    let zonder = overeenkomst.eisen_zonder_vindplaats();
+    if !zonder.is_empty() {
+        voeg(
+            "VWO-02",
+            format!(
+                "{} van de acht onderdelen van artikel 28 lid 3 hebben geen vindplaats in het \
+                 contract: {}",
+                zonder.len(),
+                zonder.iter().map(|e| e.letter()).collect::<Vec<_>>().join(", ")
+            ),
+        );
+    }
+
+    // VWO-04: de contractuele meldtermijn is te lang.
+    //
+    // Is er in het geheel geen termijn afgesproken, dan zwijgt deze regel. Dat
+    // gat blokkeert het vaststellen van de leverancier al, en een tweede
+    // melding over hetzelfde gemis leert de gebruiker alleen maar wegklikken.
+    if l.meldtermijn_te_lang(meldtermijndrempel_uren) {
+        let uren = overeenkomst.meldtermijn_uren.unwrap_or_default();
+        voeg(
+            "VWO-04",
+            format!(
+                "de verwerker heeft {uren} uur om te melden; boven {meldtermijndrempel_uren} uur \
+                 blijft er van de eigen termijn van tweeënzeventig uur te weinig over"
+            ),
+        );
+    }
+
+    // VWO-09: de subverwerkerslijst is te lang geleden nagelopen — of nooit.
+    //
+    // Nooit nagelopen is geen mildere variant van te lang geleden; het is de
+    // ernstigere. De volledigheidscontrole meldt het gemis wel, maar alleen
+    // signalerend, zodat een leverancier zonder één controle toch kan worden
+    // vastgesteld. Zou deze regel dan zwijgen, dan verdween de enige plaats
+    // waar het daarna nog zichtbaar was.
+    match l.maanden_sinds_subverwerkerscontrole(nu) {
+        None => voeg(
+            "VWO-09",
+            "de subverwerkerslijst is nooit nagelopen; er is dus niet vastgesteld wie er \
+             achter deze verwerker meewerkt"
+                .to_string(),
+        ),
+        Some(maanden) if maanden >= subverwerkersdrempel_maanden => voeg(
+            "VWO-09",
+            format!("de subverwerkerslijst is {maanden} maanden geleden voor het laatst nagelopen"),
+        ),
+        Some(_) => {}
+    }
+
+    // VWO-13: het contract is getekend nadat de verwerking al liep.
+    if overeenkomst.getekend_na_aanvang() {
+        let start = overeenkomst
+            .verwerking_begon_op
+            .map(|d| d.format("%d-%m-%Y").to_string())
+            .unwrap_or_else(|| "onbekend".into());
+        let dagen = overeenkomst
+            .verwerking_begon_op
+            .map(|d| (overeenkomst.ondertekend_op - d).num_days())
+            .unwrap_or_default();
+        voeg(
+            "VWO-13",
+            format!(
+                "de verwerking begon op {start} en de overeenkomst is getekend op {}; die \
+                 {dagen} dagen zijn niet gedekt",
+                overeenkomst.ondertekend_op.format("%d-%m-%Y")
+            ),
+        );
+    }
+
+    uit
+}
+
+/// Beoordeelt of de verwerker binnen zijn contractuele termijn heeft gemeld
+/// (LEK-16).
+///
+/// De termijn komt van de leverancier waaraan het incident hangt; deze functie
+/// rekent alleen na. Is er geen termijn afgesproken, dan valt er niets te
+/// overschrijden — dat gat meldt de volledigheidscontrole van de leverancier.
+pub fn beoordeel_verwerkersmelding(
+    motor: &Regelmotor,
+    i: &Incident,
+    l: &Leverancier,
+    nu: DateTime<Utc>,
+) -> Vec<Bevinding> {
+    let Some(termijn) = l.overeenkomst.as_ref().and_then(|o| o.meldtermijn_uren) else {
+        return Vec::new();
+    };
+    let (Some(opgetreden), Some(ontvangen)) =
+        (i.incident_bij_verwerker_op, i.melding_verwerker_ontvangen_op)
+    else {
+        return Vec::new();
+    };
+
+    let verstreken = (ontvangen - opgetreden).num_hours();
+    if verstreken <= i64::from(termijn) {
+        return Vec::new();
+    }
+
+    motor
+        .bevind(
+            "LEK-16",
+            "incident",
+            &i.id.to_string(),
+            Some(&i.kenmerk),
+            format!(
+                "{} meldde na {verstreken} uur; de overeenkomst geeft {termijn} uur. Die \
+                 overschrijding komt in mindering op de eigen termijn van tweeënzeventig uur",
+                l.naam
+            ),
+            nu,
+        )
+        .into_iter()
+        .collect()
 }
 
 /// Beoordeelt de meldtermijn van één incident (LEK-02).

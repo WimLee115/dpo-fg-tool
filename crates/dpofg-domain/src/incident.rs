@@ -351,6 +351,58 @@ impl Incident {
         Ok(())
     }
 
+    /// Legt vast dat dit incident bij een verwerker optrad en wanneer diens
+    /// melding binnenkwam.
+    ///
+    /// Beide tijdstippen worden bewaard, maar ze doen verschillend werk. Het
+    /// moment waarop de verwerker meldde, is het anker van de eigen klok van
+    /// tweeënzeventig uur; het moment waarop het incident bij de verwerker
+    /// optrad, is het begin van de contractuele meldtermijn van die verwerker.
+    /// Regel LEK-16 rekent het verschil na.
+    pub fn leg_verwerkersmelding_vast(
+        &mut self,
+        verwerker: Id,
+        opgetreden_bij_verwerker: Option<DateTime<Utc>>,
+        melding_ontvangen: Option<DateTime<Utc>>,
+        nu: DateTime<Utc>,
+    ) -> Resultaat<()> {
+        for (veld, tijdstip) in [
+            ("incident_bij_verwerker_op", opgetreden_bij_verwerker),
+            ("melding_verwerker_ontvangen_op", melding_ontvangen),
+        ] {
+            if let Some(t) = tijdstip {
+                if t > nu {
+                    return Err(DomeinFout::OnmogelijkTijdstip {
+                        veld: veld.into(),
+                        reden: format!("{} ligt in de toekomst", t.to_rfc3339()),
+                    });
+                }
+            }
+        }
+        if let (Some(opgetreden), Some(ontvangen)) = (opgetreden_bij_verwerker, melding_ontvangen) {
+            if ontvangen < opgetreden {
+                return Err(DomeinFout::OnmogelijkTijdstip {
+                    veld: "melding_verwerker_ontvangen_op".into(),
+                    reden: format!(
+                        "de melding kwam binnen op {}, vóór het incident bij de verwerker \
+                         optrad op {}. Waarschijnlijk zijn beide velden verwisseld",
+                        ontvangen.to_rfc3339(),
+                        opgetreden.to_rfc3339()
+                    ),
+                });
+            }
+        }
+
+        self.verwerker_id = Some(verwerker);
+        if opgetreden_bij_verwerker.is_some() {
+            self.incident_bij_verwerker_op = opgetreden_bij_verwerker;
+        }
+        if melding_ontvangen.is_some() {
+            self.melding_verwerker_ontvangen_op = melding_ontvangen;
+        }
+        Ok(())
+    }
+
     /// Het anker van de 72-uursklok van artikel 33 AVG.
     ///
     /// Bij een melding van een verwerker is dat het moment waarop díe melding
