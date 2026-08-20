@@ -1,6 +1,6 @@
 # Stand van de bouw
 
-Bijgewerkt op 19 augustus 2026.
+Bijgewerkt op 20 augustus 2026.
 
 Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen liggen. Het is bewust nuchter: een overzicht dat meer suggereert dan er staat, kost bij de eerste inspectie meer dan het oplevert.
 
@@ -53,6 +53,8 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Werkbak | werkt | Eén lijst over alle regimes heen, met de grondslag en het anker per regel; een verplichting verdwijnt doordat het dossier verandert, nooit door een vinkje. Ook als JSON |
 | Correctieplicht | werkt | Per bevinding een besluit met eigenaar en einddatum: herstel of gemotiveerde afwijking; alleen een lopende afwijking onderdrukt de bevinding |
 | Persoonlijk dossier van de functionaris | werkt | Een tweede kluisbestand met een eigen wachtwoordzin; adviezen met comply-or-explain, onafhankelijkheidsincidenten, en een hash in de kluis van de organisatie waarmee het bestaan is aan te tonen zonder de inhoud |
+| Grafische schil | werkt | Svelte 5 en Vite in de webview van Tauri v2. Twee vensters met elk een eigen wachtwoordzin en een eigen brug: het slot, de werkbak, het dossiervenster, de controleronde en de prognose voor de organisatie, en het persoonlijke dossier met de spiegel apart |
+| Installatie | werkt | Eén beheerscript per platform dat bouwt, plaatst, bijwerkt, de stand toont en verwijdert; het raakt de gegevens nooit aan en weigert een schil te plaatsen die als ontwikkelbouw is uitgevallen |
 
 ---
 
@@ -70,8 +72,32 @@ Dit document zegt wat er **werkt**, wat er **niet werkt**, en waar de grenzen li
 | Certificaten, mandaten en mappingreviews in de prognose | 3 | Die records bestaan nog niet; de prognose meldt uitdrukkelijk wat zij niet overziet |
 | Ketenbewijs tussen organisaties | 4 | |
 | Overdrachtsdossier bij een wisseling van functionaris | 4 | De scheiding tussen het persoonlijke dossier en het adviesregister van de organisatie is er; de overdracht zelf nog niet |
-| Grafische schil | werkt | Svelte 5 en Vite in de webview van Tauri v2. Twee vensters met elk een eigen wachtwoordzin en een eigen brug: het slot, de werkbak, het dossiervenster, de controleronde en de prognose voor de organisatie, en het persoonlijke dossier met de spiegel apart |
 | Multi-entiteit | 5 | |
+
+---
+
+## Waar de draad ligt
+
+Wat als eerste aan de beurt is, en wat er bekend is over de plaats waar het is blijven liggen.
+
+**Er staat nog geen kluis.** De proefkluizen zijn opgeruimd. De schil opent alleen een bestaande kluis en verwijst voor het aanmaken naar de opdrachtregel; die vraagt de wachtwoordzin twee keer en er is geen herstelmogelijkheid. Beginnen gaat dus zo:
+
+```sh
+dpofg kluis nieuw     # vraagt de zin, maakt twee compartimenten aan
+dpofg-schil           # of start via het menu-item
+```
+
+**De bouwstraat is geblokkeerd, niet stuk.** GitHub weigert de banen te starten met de melding dat een betaling is mislukt of de bestedingslimiet omhoog moet. De laatste inhoudelijke uitvoering was groen op alles behalve de schilbaan, die op zijn tijdslimiet werd afgekapt; die limiet is daarna verruimd en er is een cache bij gekomen, maar dat is nog niet gedraaid. Zodra de facturering weer loopt, is dat het eerste om na te kijken.
+
+**De motortests op WebKit draaien niet op deze machine.** Playwright mist er systeembibliotheken voor en wil ze met `sudo` installeren:
+
+```sh
+sudo pnpm exec playwright install-deps
+```
+
+WebKit is de motor die er het meest toe doet — hij benadert zowel WKWebView op macOS als WebKitGTK op Linux — dus zolang dat niet is gebeurd, dekt alleen de bouwstraat die kant af. De schil draait wél op de echte WebKitGTK zodra `dpofg-schil` start; dat is een andere toets, maar geen niets.
+
+**Waar de functionaliteit ophoudt.** De controleregels zijn het duidelijkst af te bakenen stuk werk dat overblijft: 64 van de 78 regels in de catalogus hebben een evaluatiefunctie. `dpofg controle --dekking` noemt de veertien die er nog geen hebben.
 
 ---
 
