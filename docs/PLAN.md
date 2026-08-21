@@ -29,7 +29,7 @@ Bijlage C — Verwerking van de kritische review
 
 **Afzonderlijke ontwerphoofdstukken**
 
-- [FOUTBESTENDIGHEID.md](FOUTBESTENDIGHEID.md) — foutbestendig ontwerp: de ontwerpladder, foutbestendiging per werkproces, interactiepatronen, ingebouwde kennis, 123 continu draaiende controleregels en de meetnormen
+- [FOUTBESTENDIGHEID.md](FOUTBESTENDIGHEID.md) — foutbestendig ontwerp: de ontwerpladder, foutbestendiging per werkproces, interactiepatronen, ingebouwde kennis, 147 continu draaiende controleregels en de meetnormen
 - [PLATFORMONDERSTEUNING.md](PLATFORMONDERSTEUNING.md) — Linux, macOS en Windows: ondergrenzen, webviewverschillen, sleutelopslag, hardwaretokens, bestandslocaties, ondertekening, distributie en de testmatrix
 - [REVIEW.md](REVIEW.md) — de juridische en beveiligingstoetsing waarop deze herziening berust
 
@@ -1346,7 +1346,7 @@ Deze teksten staan letterlijk in de betreffende uitvoer en zijn niet door de geb
 
 ---
 
-## Bijlage B — Beslispunten met een vaste datum
+## Bijlage B — Beslispunten met een vast moment
 
 | Beslispunt | Moment | Criterium |
 |---|---|---|

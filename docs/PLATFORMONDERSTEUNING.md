@@ -216,7 +216,7 @@ De KDF-parameters worden bij het aanmaken van de kluis gekalibreerd op de machin
 
 ### 3.2 De abstractielaag
 
-Eén trait, vier implementaties, een expliciete beschrijving van wat elke implementatie waarmaakt.
+Eén trait, zeven implementaties, een expliciete beschrijving van wat elke implementatie waarmaakt.
 
 ```rust
 /// Vertrouwelijkheidsniveau van een backend. Bepaalt wat de gebruiker te zien krijgt.
@@ -616,7 +616,9 @@ assert_eq!(deadline_maand(local("2026-01-31T09:00:00", AMS), 1),
            local("2026-02-28T09:00:00", AMS));               // maandeindeklem
 assert_eq!(deadline_maand(local("2026-02-28T02:30:00", AMS), 1),
            local("2026-03-28T02:30:00", AMS));               // bestaat nog
-assert_eq!(deadline_maand(local("2026-02-29T02:30:00", AMS), 1),
+// 29-03-2026 is de zomertijdovergang; 02:30 bestaat daar niet. Het anker moet
+// dus twee maanden terug, want februari 2026 kent geen 29e.
+assert_eq!(deadline_maand(local("2026-01-29T02:30:00", AMS), 2),
            local("2026-03-29T03:00:00", AMS));               // 02:30 bestaat niet, vooruit
 ```
 

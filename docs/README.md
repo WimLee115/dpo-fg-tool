@@ -1,6 +1,6 @@
 # Documentatie
 
-Acht documenten. Twee daarvan leggen een besluit vast, vijf beschrijven het ontwerp, en één — [FORMAAT.md](FORMAAT.md) — is bedoeld voor iemand buiten de organisatie.
+Zeven documenten, deze index niet meegeteld. Vier beschrijven het ontwerp, twee leggen een besluit vast, en één — [FORMAAT.md](FORMAAT.md) — is bedoeld voor iemand buiten de organisatie.
 
 ## Wat er ligt
 
@@ -36,7 +36,7 @@ De stand van de bouw staat niet hier maar in [`../STAND.md`](../STAND.md): wat e
 4. **PLATFORMONDERSTEUNING.md** — wat de drie platforms concreet afdwingen.
 5. **PLAN.md** hoofdstuk 9 tot en met 12 — planning, kwaliteitsborging, risico's en afbakening.
 
-Wie alleen aan de schil werkt, leest **SCHIL.md** en daarna **RAAMWERK.md**; die twee staan los van de rest.
+Wie alleen aan de schil werkt, leest **SCHIL.md** en daarna **RAAMWERK.md**. Los van de rest staan ze niet: het raamwerkbesluit is getoetst tegen PLATFORMONDERSTEUNING.md §1 tot en met §11, en de schermeisen komen uit FOUTBESTENDIGHEID.md §0.3, §3.4 en §3.6. Houd die bij de hand.
 
 ## Status van de documenten
 
@@ -44,4 +44,4 @@ Wie alleen aan de schil werkt, leest **SCHIL.md** en daarna **RAAMWERK.md**; die
 
 De regelcatalogus in FOUTBESTENDIGHEID.md telt 147 regels; de gebouwde catalogus is kleiner en groeit ernaartoe. Vraag de werkelijke stand op met `dpofg controle --dekking` — het ontwerp zegt wat er zou moeten worden bewaakt, die opdracht wat er werkelijk wordt bewaakt.
 
-Waar een keuze nog openstaat, is dat als beslispunt met een datum vastgelegd in bijlage B van het plan. Wijzigingen lopen via een genummerde herziening met vermelding van datum en reden; de vorige versie blijft bewaard in de geschiedenis van de repository.
+Waar een keuze nog openstaat, is dat als beslispunt vastgelegd in bijlage B van het plan — met een vast beslismoment en een criterium, niet met een kalenderdatum. Het plan houdt vaste datums er bewust buiten (§3.2): één verschoven datum zou anders een uitgave afdwingen. Wijzigingen lopen via een genummerde herziening met vermelding van datum en reden; de vorige versie blijft bewaard in de geschiedenis van de repository.
