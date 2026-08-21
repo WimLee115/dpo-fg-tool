@@ -51,10 +51,18 @@ waarbij:
 |---|---|
 | `volgnummer_be64` | het volgnummer als 8 bytes, meest significante byte eerst |
 | `len_be32(x)` | de lengte van `x` in bytes als 4 bytes, meest significante byte eerst |
-| `gebeurtenis_json` | het `gebeurtenis`-object, geserialiseerd in de veldvolgorde zoals hierboven |
+| `gebeurtenis_json` | het `gebeurtenis`-object, geserialiseerd in de veldvolgorde zoals hierboven, **compact en in UTF-8** — zie hieronder |
 | `vorige_hash` van de eerste regel | 64 nullen: `0000…0000` |
 
 De hash wordt hexadecimaal in kleine letters weergegeven.
+
+**Hoe `gebeurtenis_json` er precies uitziet.** Drie dingen liggen vast, en alle drie veranderen de hash als u ze anders doet:
+
+* **Geen toegevoegde witruimte.** Geen spatie na een dubbele punt of een komma, geen regeleinden, geen inspringing. Dezelfde gebeurtenis met standaardopmaak is in de praktijk enkele tientallen bytes langer en levert dus een andere hash op.
+* **UTF-8, geen `\u`-escapes.** Een `é` staat als twee UTF-8-bytes in de reeks, niet als de zes tekens `\u00e9`. Alleen `"`, `\` en de stuurtekens onder U+0020 worden geëscapet. Dit is de valkuil die het langst verborgen blijft: een controle die wél escapet, rekent elke regel zónder bijzondere tekens goed uit en struikelt pas over de eerste omschrijving met een accent. In een Nederlandstalig dossier is dat een kwestie van tijd, en de uitkomst leest dan als een geknoeid dossier terwijl er niets mis is.
+* **Velden zonder waarde staan er als `null` in** en worden niet weggelaten. `"motivering": null` hoort in de reeks te staan.
+
+Hetzelfde geldt voor `manifest_json` in §3.
 
 **Waarom de lengteprefixen.** Zonder die prefixen zouden de waardenparen (`ab`, `c`) en (`a`, `bc`) dezelfde bytereeks opleveren, en daarmee dezelfde hash. Het volgnummer zit in de berekening zodat een regel niet naar een andere plaats in de keten kan worden verplaatst.
 
@@ -163,7 +171,7 @@ De handtekening is Ed25519 over:
 "dpo-fg-tool dossiermanifest v1" ‖ len_be64(manifest_json) ‖ manifest_json
 ```
 
-`manifest_json` is het `manifest`-object, geserialiseerd in de veldvolgorde zoals hierboven, zonder toegevoegde witruimte. Optionele velden die geen waarde hebben, worden als `null` geschreven en niet weggelaten: `"periode_van": null` hoort erin te staan.
+`manifest_json` is het `manifest`-object, geserialiseerd in de veldvolgorde zoals hierboven, zonder toegevoegde witruimte en in UTF-8 zonder `\u`-escapes — dezelfde drie regels als bij `gebeurtenis_json` in §1.2. Optionele velden die geen waarde hebben, worden als `null` geschreven en niet weggelaten: `"periode_van": null` hoort erin te staan.
 
 De hash van elk stuk is `BLAKE3` over de bytes zoals ze in de bundel staan, hexadecimaal in kleine letters.
 
