@@ -239,15 +239,34 @@ fn de_raadplegingstermijn_verwijst_naar_het_tweede_lid() {
 /// dekking, dan weigert de termijnenmotor te rekenen. Dat is juist gedrag, maar
 /// het mag niet gebeuren op het moment dat iemand een termijn van acht weken
 /// indient.
+///
+/// Deze test meet tegen de wandklok, en dat is hier uitdrukkelijk de bedoeling.
+/// Hij mat eerder het verschil tussen twee vaste getallen uit het pakket zelf —
+/// dekking_van en dekking_tot_en_met — en dat verschil verandert nooit. Daarmee
+/// bleef de test tot in lengte van jaren groen terwijl de dekking onder hem
+/// wegliep: in 2029 zou hij nog steeds "vier jaar dekking" melden over een
+/// kalender die het lopende jaar nauwelijks nog haalt. Een test die zwijgt op
+/// het moment dat hij zou moeten spreken, is erger dan geen test.
+///
+/// Wat hij nu doet, is een wekker zetten. Hij gaat af zodra de kalender minder
+/// dan drie jaar vooruit reikt — ruim vóór het moment waarop een termijn van
+/// acht weken tegen het jaareinde buiten de dekking valt, en met genoeg
+/// aanloop om er een nieuwe kalender bij te zoeken. Gaat hij af, dan is dat
+/// geen defect maar de melding waarvoor hij bestaat: het kennispakket moet
+/// worden bijgewerkt.
 #[test]
-fn de_kalender_dekt_meerdere_jaren_na_de_consolidatiedatum() {
+fn de_kalender_reikt_ver_genoeg_vooruit_vanaf_vandaag() {
+    use chrono::Datelike;
     let kalender = pakket().kalender("NL").unwrap().clone();
+    let dit_jaar = chrono::Utc::now().year();
     assert!(
-        kalender.dekking_tot_en_met - kalender.dekking_van >= 3,
-        "de kalender dekt {} tot en met {}; dat is te kort voor een termijn van acht weken \
-         die tegen het jaareinde wordt gestart",
+        kalender.dekking_tot_en_met >= dit_jaar + 3,
+        "de kalender dekt {} tot en met {}, en het is nu {}; dat is te kort voor een termijn \
+         van acht weken die tegen het jaareinde wordt gestart. Werk de feestdagen in het \
+         kennispakket bij",
         kalender.dekking_van,
-        kalender.dekking_tot_en_met
+        kalender.dekking_tot_en_met,
+        dit_jaar
     );
 }
 

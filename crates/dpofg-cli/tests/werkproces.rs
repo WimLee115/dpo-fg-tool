@@ -124,6 +124,35 @@ fn tijdstip_geleden(uren: i64) -> String {
     (chrono::Utc::now() - chrono::Duration::hours(uren)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
+/// Een tijdstip van zoveel dagen vooruit, als RFC 3339 in UTC.
+///
+/// Het spiegelbeeld van [`tijdstip_geleden`], en even hard nodig. Het domein
+/// weigert een einddatum die niet in de toekomst ligt — een correctie die
+/// vandaag al te laat is heet daar "geen afspraak maar een constatering", en
+/// een bewijsstuk dat nu al verlopen is wordt niet aangenomen. Een vaste datum
+/// in de toekomst is daarmee een lont: hij brandt precies zolang als er dagen
+/// tot die datum resten, en daarna faalt niet de code maar de opzet van de
+/// test.
+fn tijdstip_over_dagen(dagen: i64) -> String {
+    (chrono::Utc::now() + chrono::Duration::days(dagen)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+/// Dezelfde dag als [`tijdstip_over_dagen`], maar als kale datum.
+///
+/// Het verbeterplan van het Wpg-spoor leest `jjjj-mm-dd` en geen tijdstip.
+fn datum_over_dagen(dagen: i64) -> String {
+    (chrono::Utc::now() + chrono::Duration::days(dagen)).format("%Y-%m-%d").to_string()
+}
+
+/// Dezelfde dag, zoals het programma hem op het scherm zet: `dd-mm-jjjj`.
+///
+/// Nodig waar een test niet alleen wil dat er iets vervalt, maar ook dat de
+/// datum zelf in beeld komt — dat is bij de vervallijst en de prognose de hele
+/// belofte: een lijst met datums en geen cijfer.
+fn weergave_over_dagen(dagen: i64) -> String {
+    (chrono::Utc::now() + chrono::Duration::days(dagen)).format("%d-%m-%Y").to_string()
+}
+
 // --------------------------------------------------------------------------
 // De kluis
 // --------------------------------------------------------------------------
@@ -1179,7 +1208,11 @@ fn een_audit_met_bevindingen_vraagt_een_verbeterplan() {
     assert!(audit.contains("geen gevolg krijgt"));
     assert!(audit.contains("verbeterplan"));
 
-    p.moet("wpg verbeterplan WPG-2026 --door 'de directie' --maatregel 'logging aanzetten | de teamleider | 2027-01-31'");
+    let einddatum = datum_over_dagen(160);
+    p.moet(&format!(
+        "wpg verbeterplan WPG-2026 --door 'de directie' \
+         --maatregel 'logging aanzetten | de teamleider | {einddatum}'"
+    ));
     let toon = p.moet("wpg toon WPG-2026");
     assert!(toon.contains("alle verplichte onderdelen"), "kreeg:\n{toon}");
 }
@@ -2288,9 +2321,12 @@ fn inrichten_is_geen_bewijs() {
     assert!(uit.contains("zonder bewijs van de uitvoering"), "kreeg:\n{uit}");
 
     let bewijs = p.bestand("uitdraai.txt", "sleutelbeheer, uitdraai van 1 juli 2026");
+    // Ruim buiten de bewijshorizon van zestig dagen: anders gaat deze test
+    // ongemerkt ook over ZRP-05, die aanslaat zodra een stuk bijna verloopt.
+    let tot = tijdstip_over_dagen(365);
     let uit = p.moet(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
-         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2027-06-01T00:00:00Z"
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot {tot}"
     ));
     assert!(uit.contains("stand van CBB-13: aantoonbaar"), "kreeg:\n{uit}");
     assert!(!p.moet("controle").contains("ZRP-04"));
@@ -2303,16 +2339,17 @@ fn bewijs_is_een_bestand_en_geen_verwijzing() {
     let p = Proef::nieuw();
     controlset_opzetten(&p);
     let leeg = p.bestand("leeg.txt", "");
+    let tot = tijdstip_over_dagen(365);
     let uit = p.moet_falen(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {leeg} \
-         --omschrijving 'niets' --geldig-tot 2027-06-01T00:00:00Z"
+         --omschrijving 'niets' --geldig-tot {tot}"
     ));
     assert!(uit.contains("leeg bestand als bewijs"), "kreeg:\n{uit}");
 
-    let uit = p.moet_falen(
+    let uit = p.moet_falen(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering \
-         --bestand /bestaat/niet.pdf --omschrijving 'iets' --geldig-tot 2027-06-01T00:00:00Z",
-    );
+         --bestand /bestaat/niet.pdf --omschrijving 'iets' --geldig-tot {tot}"
+    ));
     assert!(uit.contains("niet lezen"), "kreeg:\n{uit}");
 }
 
@@ -2392,9 +2429,14 @@ fn de_vervallijst_toont_datums_en_geen_cijfer() {
     p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol 'de beheerder' --persoon 'J. Jansen'");
     p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
     let bewijs = p.bestand("sleutelbeheer.txt", "uitdraai van het sleutelbeheer");
+    // Eenenveertig dagen: buiten het venster van zeven en binnen dat van
+    // driehonderdvijfenzestig. Die twee vensters zijn wat de test bewijst — dat
+    // de lijst een venster kent en niet alles op één hoop gooit — en niet de
+    // kalenderdatum waarop het bewijsstuk toevallig verloopt.
+    let tot = tijdstip_over_dagen(41);
     p.moet(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
-         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2026-10-01T00:00:00Z"
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot {tot}"
     ));
 
     let uit = p.moet("zorgplicht vervalt ZRP-2026 --dagen 7");
@@ -2402,7 +2444,7 @@ fn de_vervallijst_toont_datums_en_geen_cijfer() {
 
     let uit = p.moet("zorgplicht vervalt ZRP-2026 --dagen 365");
     assert!(uit.contains("CBB-13"), "kreeg:\n{uit}");
-    assert!(uit.contains("01-10-2026"), "kreeg:\n{uit}");
+    assert!(uit.contains(&weergave_over_dagen(41)), "kreeg:\n{uit}");
     assert!(uit.contains("lijst met datums en geen prognose"), "kreeg:\n{uit}");
 }
 
@@ -2462,10 +2504,11 @@ fn de_controlset_is_met_het_meegeleverde_pakket_af_te_maken() {
     beoordeling_opzetten(&p);
     p.moet("zorgplicht risicobeoordeling ZRP-2026 --beoordeling RIS-2026");
     let besluit = p.bestand("besluit.txt", "besluit van het bestuur");
+    let tot = tijdstip_over_dagen(365);
     p.moet(&format!(
         "zorgplicht bestuursvaststelling ZRP-2026 --besluit 'het maatregelenpakket is \
          vastgesteld' --aanwezige 'de directie' --aanwezige 'de security officer' \
-         --bestand {besluit} --geldig-tot 2027-06-01T00:00:00Z"
+         --bestand {besluit} --geldig-tot {tot}"
     ));
 
     let uit = p.moet("zorgplicht vaststellen ZRP-2026");
@@ -2507,11 +2550,16 @@ fn het_aandeel_afwijkingen_meet_over_wat_afwijkbaar_is() {
 // --------------------------------------------------------------------------
 
 fn beoordeling_opzetten(p: &Proef) {
-    p.moet(
+    // Beide uiteinden vastzetten, niet alleen het einde: zonder --uitgevoerd-op
+    // vult de schil daar `nu` in, en een beoordeling die verloopt voordat zij is
+    // uitgevoerd wordt geweigerd.
+    let uitgevoerd = tijdstip_geleden(24);
+    let tot = tijdstip_over_dagen(365);
+    p.moet(&format!(
         "risico nieuw RIS-2026 --reikwijdte 'de netwerk- en informatiesystemen' \
          --methode scenarioanalyse --uitgevoerd-door 'de security officer' \
-         --geldig-tot 2027-06-01T00:00:00Z",
-    );
+         --uitgevoerd-op {uitgevoerd} --geldig-tot {tot}"
+    ));
     p.moet("risico bron RIS-2026 --aanduiding 'het dreigingsbeeld' --soort publicatie");
     p.moet(
         "risico onderken RIS-2026 --code R-01 --omschrijving 'uitval van het rekencentrum' \
@@ -2535,10 +2583,11 @@ fn beoordeling_opzetten(p: &Proef) {
 #[test]
 fn een_restrisico_verlagen_zonder_maatregel_kan_niet() {
     let p = Proef::nieuw();
-    p.moet(
+    let tot = tijdstip_over_dagen(365);
+    p.moet(&format!(
         "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
-         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
-    );
+         --uitgevoerd-door 'de security officer' --geldig-tot {tot}"
+    ));
     p.moet(
         "risico onderken RIS-2026 --code R-01 --omschrijving 'uitval' --oorzaak 'een storing' \
          --gevolg 'de dienstverlening ligt stil' --waarschijnlijkheid hoog --impact hoog",
@@ -2560,10 +2609,11 @@ fn een_restrisico_verlagen_zonder_maatregel_kan_niet() {
 #[test]
 fn een_hoog_restrisico_aanvaardt_het_bestuur() {
     let p = Proef::nieuw();
-    p.moet(
+    let tot = tijdstip_over_dagen(365);
+    p.moet(&format!(
         "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
-         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
-    );
+         --uitgevoerd-door 'de security officer' --geldig-tot {tot}"
+    ));
     p.moet(
         "risico onderken RIS-2026 --code R-02 --omschrijving gijzelsoftware \
          --oorzaak 'een besmetting via een bijlage' --gevolg 'de gegevens zijn versleuteld' \
@@ -2594,10 +2644,11 @@ fn een_hoog_restrisico_aanvaardt_het_bestuur() {
 fn de_controlset_steunt_op_een_vastgestelde_beoordeling() {
     let p = Proef::nieuw();
     controlset_opzetten(&p);
-    p.moet(
+    let tot = tijdstip_over_dagen(365);
+    p.moet(&format!(
         "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
-         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
-    );
+         --uitgevoerd-door 'de security officer' --geldig-tot {tot}"
+    ));
     let uit = p.moet("zorgplicht risicobeoordeling ZRP-2026 --beoordeling RIS-2026");
     assert!(uit.contains("nog niet vastgesteld"), "kreeg:\n{uit}");
 
@@ -2627,10 +2678,11 @@ fn de_beoordeling_levert_geen_score_op() {
 #[test]
 fn vaststellen_vergt_ten_minste_een_risico() {
     let p = Proef::nieuw();
-    p.moet(
+    let tot = tijdstip_over_dagen(365);
+    p.moet(&format!(
         "risico nieuw RIS-2026 --reikwijdte 'de hele organisatie' --methode scenarioanalyse \
-         --uitgevoerd-door 'de security officer' --geldig-tot 2027-06-01T00:00:00Z",
-    );
+         --uitgevoerd-door 'de security officer' --geldig-tot {tot}"
+    ));
     let uit = p.moet_falen("risico vaststellen RIS-2026");
     assert!(uit.contains("risico.risicos"), "kreeg:\n{uit}");
 }
@@ -2663,9 +2715,12 @@ fn de_prognose_toont_datums_en_geen_score() {
     p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
     p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
     let bewijs = p.bestand("sleutelbeheer.txt", "uitdraai van het sleutelbeheer");
+    // Vijfenvijftig dagen: bewust tussen de horizon van dertig en die van
+    // negentig, zodat het stuk in precies één van de drie vensters valt.
+    let tot = tijdstip_over_dagen(55);
     p.moet(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
-         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2026-10-15T00:00:00Z"
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot {tot}"
     ));
 
     let uit = p.moet("prognose");
@@ -2677,7 +2732,7 @@ fn de_prognose_toont_datums_en_geen_score() {
 
     let uit = p.moet("prognose --uitgebreid --dagen 120");
     assert!(uit.contains("CBB-13"), "kreeg:\n{uit}");
-    assert!(uit.contains("15-10-2026"), "kreeg:\n{uit}");
+    assert!(uit.contains(&weergave_over_dagen(55)), "kreeg:\n{uit}");
     assert!(uit.contains("beheerder (J. Jansen)"), "kreeg:\n{uit}");
 }
 
@@ -2715,9 +2770,10 @@ fn de_drie_factoren_leveren_drie_tellingen_op() {
     p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
     p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
     let beleid = p.bestand("beleid.txt", "cryptografiebeleid");
+    let tot = tijdstip_over_dagen(365);
     p.moet(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol vaststelling --bestand {beleid} \
-         --omschrijving 'het vastgestelde cryptografiebeleid' --geldig-tot 2027-06-01T00:00:00Z"
+         --omschrijving 'het vastgestelde cryptografiebeleid' --geldig-tot {tot}"
     ));
 
     let uit = p.moet("prognose --factoren");
@@ -2739,9 +2795,10 @@ fn bewijs_is_in_te_trekken_zonder_dat_het_verdwijnt() {
     p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
     p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
     let bewijs = p.bestand("uitdraai.txt", "uitdraai van het sleutelbeheer");
+    let tot = tijdstip_over_dagen(365);
     p.moet(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
-         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2027-06-01T00:00:00Z"
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot {tot}"
     ));
     assert!(p.moet("zorgplicht toon ZRP-2026").contains("aantoonbaar"));
 
@@ -2795,11 +2852,12 @@ fn een_blokkerende_bevinding_vraagt_een_besluit() {
     assert!(uit.contains("COR-02"), "kreeg:\n{uit}");
     assert!(uit.contains("dpofg correctie nieuw"), "kreeg:\n{uit}");
 
-    p.moet(
+    let uiterlijk = tijdstip_over_dagen(102);
+    p.moet(&format!(
         "correctie nieuw COR-001 --regel ZRP-02 --soort zorgplicht --record ZRP-2026 \
-         --rol 'de directie' --persoon 'P. de Boer' --uiterlijk 2026-12-01T00:00:00Z \
-         --motivering 'het eigenaarschap wordt bij de eerstvolgende directievergadering belegd'",
-    );
+         --rol 'de directie' --persoon 'P. de Boer' --uiterlijk {uiterlijk} \
+         --motivering 'het eigenaarschap wordt bij de eerstvolgende directievergadering belegd'"
+    ));
     assert!(!p.moet("controle").contains("COR-02"));
 }
 
@@ -2813,20 +2871,21 @@ fn herstel_onderdrukt_niets_en_een_afwijking_alleen_tijdelijk() {
     p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
     assert!(p.moet("controle").contains("ZRP-04"));
 
-    let uit = p.moet(
+    let uiterlijk = tijdstip_over_dagen(102);
+    let uit = p.moet(&format!(
         "correctie nieuw COR-001 --regel ZRP-04 --soort zorgplicht --record ZRP-2026 \
-         --rol 'de security officer' --persoon 'J. Jansen' --uiterlijk 2026-12-01T00:00:00Z \
-         --motivering 'de uitdraaien komen bij de kwartaalcontrole beschikbaar'",
-    );
+         --rol 'de security officer' --persoon 'J. Jansen' --uiterlijk {uiterlijk} \
+         --motivering 'de uitdraaien komen bij de kwartaalcontrole beschikbaar'"
+    ));
     assert!(uit.contains("onderdrukt de bevinding niet"), "kreeg:\n{uit}");
     assert!(p.moet("controle").contains("ZRP-04"), "herstel hoort niets te onderdrukken");
 
-    let uit = p.moet(
+    let uit = p.moet(&format!(
         "correctie nieuw COR-002 --regel ZRP-05 --soort zorgplicht --record ZRP-2026 \
          --aanpak afwijking --rol 'de security officer' --persoon 'J. Jansen' \
-         --uiterlijk 2026-12-01T00:00:00Z \
-         --motivering 'tot de kwartaalcontrole wordt dit signaal bewust genegeerd'",
-    );
+         --uiterlijk {uiterlijk} \
+         --motivering 'tot de kwartaalcontrole wordt dit signaal bewust genegeerd'"
+    ));
     assert!(uit.contains("Daarna staat zij er weer"), "kreeg:\n{uit}");
 }
 
@@ -2835,17 +2894,21 @@ fn herstel_onderdrukt_niets_en_een_afwijking_alleen_tijdelijk() {
 fn afwijken_kan_niet_bij_elke_regel() {
     let p = Proef::nieuw();
     controlset_opzetten(&p);
-    let uit = p.moet_falen(
+    // De datum moet in de toekomst liggen, anders faalt deze opdracht op de
+    // einddatum in plaats van op het verbod om bij deze regel af te wijken — en
+    // een moet_falen die op de verkeerde grond faalt, toetst niets.
+    let uiterlijk = tijdstip_over_dagen(102);
+    let uit = p.moet_falen(&format!(
         "correctie nieuw COR-001 --regel ZRP-01 --soort zorgplicht --record ZRP-2026 \
-         --aanpak afwijking --rol x --persoon y --uiterlijk 2026-12-01T00:00:00Z \
-         --motivering 'wij laten dit zo staan'",
-    );
+         --aanpak afwijking --rol x --persoon y --uiterlijk {uiterlijk} \
+         --motivering 'wij laten dit zo staan'"
+    ));
     assert!(uit.contains("mag niet gemotiveerd worden afgeweken"), "kreeg:\n{uit}");
 
-    let uit = p.moet_falen(
+    let uit = p.moet_falen(&format!(
         "correctie nieuw COR-001 --regel ZRP-99 --soort zorgplicht --record ZRP-2026 \
-         --rol x --persoon y --uiterlijk 2026-12-01T00:00:00Z --motivering 'wij pakken dit op'",
-    );
+         --rol x --persoon y --uiterlijk {uiterlijk} --motivering 'wij pakken dit op'"
+    ));
     assert!(uit.contains("staat niet in de regelcatalogus"), "kreeg:\n{uit}");
 }
 
@@ -2855,11 +2918,15 @@ fn afwijken_kan_niet_bij_elke_regel() {
 fn een_correctie_vraagt_een_eigenaar_en_een_datum_in_de_toekomst() {
     let p = Proef::nieuw();
     controlset_opzetten(&p);
-    let uit = p.moet_falen(
+    // Twee gevallen die elk één ding toetsen: hier de lege eigenaar, hieronder
+    // de verstreken datum. Stond hier ook een datum uit het verleden, dan zou
+    // dit geval op beide gronden kunnen falen en bewijst het geen van beide.
+    let uiterlijk = tijdstip_over_dagen(102);
+    let uit = p.moet_falen(&format!(
         "correctie nieuw COR-001 --regel ZRP-01 --soort zorgplicht --record ZRP-2026 \
-         --rol '  ' --persoon 'J. Jansen' --uiterlijk 2026-12-01T00:00:00Z \
-         --motivering 'wij pakken dit op bij de kwartaalronde'",
-    );
+         --rol '  ' --persoon 'J. Jansen' --uiterlijk {uiterlijk} \
+         --motivering 'wij pakken dit op bij de kwartaalronde'"
+    ));
     assert!(uit.contains("voornemen dat vanzelf verdwijnt"), "kreeg:\n{uit}");
 
     let uit = p.moet_falen(
@@ -2875,22 +2942,29 @@ fn een_correctie_vraagt_een_eigenaar_en_een_datum_in_de_toekomst() {
 fn verlengen_en_afronden_zijn_besluiten_met_een_motivering() {
     let p = Proef::nieuw();
     controlset_opzetten(&p);
-    p.moet(
+    // Drie datums met een vaste onderlinge verhouding: de afspraak, een poging
+    // die vóór de afspraak ligt (vervroegen, hoort te falen) en een die erna
+    // ligt (verlengen, hoort te slagen). Die verhouding is wat de test toetst,
+    // niet de kalender.
+    let uiterlijk = tijdstip_over_dagen(102);
+    let vervroegd = tijdstip_over_dagen(40);
+    let verlengd = tijdstip_over_dagen(190);
+    p.moet(&format!(
         "correctie nieuw COR-001 --regel ZRP-01 --soort zorgplicht --record ZRP-2026 \
-         --rol beheerder --persoon 'J. Jansen' --uiterlijk 2026-12-01T00:00:00Z \
-         --motivering 'de eigenaars worden bij de kwartaalronde belegd'",
-    );
+         --rol beheerder --persoon 'J. Jansen' --uiterlijk {uiterlijk} \
+         --motivering 'de eigenaars worden bij de kwartaalronde belegd'"
+    ));
 
-    let uit = p.moet_falen(
-        "correctie verlengen COR-001 --uiterlijk 2026-10-01T00:00:00Z \
-         --motivering 'het gaat toch sneller'",
-    );
+    let uit = p.moet_falen(&format!(
+        "correctie verlengen COR-001 --uiterlijk {vervroegd} \
+         --motivering 'het gaat toch sneller'"
+    ));
     assert!(uit.contains("verlengen is iets anders dan vervroegen"), "kreeg:\n{uit}");
 
-    let uit = p.moet(
-        "correctie verlengen COR-001 --uiterlijk 2027-03-01T00:00:00Z \
-         --motivering 'de reorganisatie schuift het beleggen van rollen een kwartaal op'",
-    );
+    let uit = p.moet(&format!(
+        "correctie verlengen COR-001 --uiterlijk {verlengd} \
+         --motivering 'de reorganisatie schuift het beleggen van rollen een kwartaal op'"
+    ));
     assert!(uit.contains("Uitstel is een besluit"), "kreeg:\n{uit}");
 
     let uit =
@@ -2911,9 +2985,13 @@ fn het_bestuursstuk_is_met_de_losse_binary_te_controleren() {
     p.moet("zorgplicht eigenaar ZRP-2026 --maatregel CBB-13 --rol beheerder --persoon 'J. Jansen'");
     p.moet("zorgplicht inrichten ZRP-2026 --maatregel CBB-13");
     let bewijs = p.bestand("uitdraai.txt", "uitdraai van het sleutelbeheer");
+    // Dezelfde afstand als de prognosetest: het stuk moet in het venster van
+    // negentig dagen vallen, want daaruit komt de regel die het bestuursstuk
+    // hieronder moet dragen.
+    let tot = tijdstip_over_dagen(55);
     p.moet(&format!(
         "zorgplicht bewijs ZRP-2026 --maatregel CBB-13 --rol uitvoering --bestand {bewijs} \
-         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot 2026-10-15T00:00:00Z"
+         --omschrijving 'uitdraai van het sleutelbeheer' --geldig-tot {tot}"
     ));
 
     let map = p.kluis.parent().unwrap().join("bestuursstuk");
@@ -2927,7 +3005,7 @@ fn het_bestuursstuk_is_met_de_losse_binary_te_controleren() {
     // Het leesbare stuk staat er, met de datum en de eigenaar erin.
     let tekst = std::fs::read_to_string(map.join("vervalprognose.md")).unwrap();
     assert!(tekst.contains("CBB-13"), "kreeg:\n{tekst}");
-    assert!(tekst.contains("15-10-2026"), "kreeg:\n{tekst}");
+    assert!(tekst.contains(&weergave_over_dagen(55)), "kreeg:\n{tekst}");
     assert!(tekst.contains("beheerder (J. Jansen)"), "kreeg:\n{tekst}");
     assert!(tekst.contains("Wat deze prognose niet overziet"), "kreeg:\n{tekst}");
 
@@ -3260,8 +3338,13 @@ fn de_werkbak_noemt_wat_er_niet_in_staat() {
 #[test]
 fn de_werkbak_is_ook_als_json_te_lezen() {
     let p = Proef::nieuw();
-    p.moet("incident nieuw 2026-0041 'iets' --signaal 2026-08-19T06:00:00Z");
-    p.moet("incident kennisname 2026-0041 2026-08-19T06:00:00Z");
+    // Dezelfde ankers als bij de buurtest hieronder. Deze test overleeft een
+    // vaste datum toevallig — de meldklok staat in elke band vooraan — maar
+    // "overleeft toevallig" is geen eigenschap om op te bouwen.
+    let signaal = tijdstip_geleden(3);
+    let kennisname = tijdstip_geleden(2);
+    p.moet(&format!("incident nieuw 2026-0041 'iets' --signaal {signaal}"));
+    p.moet(&format!("incident kennisname 2026-0041 {kennisname}"));
 
     // Alleen wat naar de standaarduitvoer gaat: de waarschuwing over het
     // wachtwoord uit de omgeving hoort op de foutuitvoer en mag de JSON niet
