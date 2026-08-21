@@ -49,7 +49,7 @@ Het werkproces van de functionaris en de security officer, met de termijnen erbi
 | Regime | Wat er wordt bewaakt |
 |---|---|
 | **AVG art. 30** | Verwerkingsregister, voor verwerkingsverantwoordelijke én verwerker, met de verplichtingen die uit de antwoorden volgen |
-| **AVG art. 33–34** | Datalekdossier met vijf klokken op eigen ankers, en een meldbesluit in drie lagen |
+| **AVG art. 33–34** | Datalekdossier met drie klokken op eigen ankers — melding, mededeling en interne vastlegging — en een meldbesluit in drie lagen |
 | **AVG art. 35–36** | Effectbeoordeling met de voortoets, de vier inhoudseisen en de raadplegingsklok |
 | **AVG art. 15–22** | Betrokkenenverzoeken met de maandtermijn, beide lezingen van het aanvangsmoment, en de kennisgeving van art. 19 |
 | **AVG art. 28** | Leveranciersregister met de acht onderdelen van lid 3, elk met een vindplaats |
@@ -76,7 +76,7 @@ Daarnaast, dwars door de regimes heen: een **werkbak** met alles wat openstaat, 
 
 ### Installeren
 
-Er is één beheerscript per platform dat bouwt, plaatst, bijwerkt, de stand toont en verwijdert. Het raakt de gegevens nooit aan: de kluis staat buiten de programmamap en blijft bij het verwijderen staan, tenzij het woord `WISSEN` wordt overgetypt.
+Er is één beheerscript per platform dat bouwt, plaatst, bijwerkt, de stand toont en verwijdert. De kluis staat buiten de programmamap en blijft bij het verwijderen staan; wissen gebeurt alleen wanneer u dat apart bevestigt door het woord `WISSEN` over te typen.
 
 ```sh
 ./installatie/dpofg-beheer.sh              # menu
@@ -193,7 +193,7 @@ flowchart LR
 | `dpofg-audit` | ketenlogboek, ankers, verificatie |
 | `dpofg-terms` | getypeerde termijnen, kalenderrekenkunde, opschorting, maandeindeklem |
 | `dpofg-domain` | domeinmodel: registers, incidenten, volledigheid, afgeleide verplichtingen |
-| `dpofg-store` | versleutelde opslag, versiegeschiedenis, inhoudsgeadresseerde bijlagen |
+| `dpofg-store` | versleutelde opslag, inhoudsgeadresseerde bijlagen, versiegeschiedenis in de kluis |
 | `dpofg-content` | kennispakketten met de juridische inhoud, ondertekend en met voorbehoud |
 | `dpofg-rules` | controleregels, controleronde en waarschuwingsbudget |
 | `dpofg-report` | werkbak, vervalprognose, dossiers samenstellen en ondertekenen |

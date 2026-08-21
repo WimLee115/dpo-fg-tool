@@ -68,12 +68,12 @@ Let op de volgorde die het project zichzelf oplegt: een code komt pas in de dekk
 | Sleutelafleiding | werkt | Argon2id, parameters in de kluis zodat verzwaren later mogelijk blijft |
 | Envelopversleuteling | werkt | XChaCha20-Poly1305, elke envelop gebonden aan veld, record en compartiment |
 | Sleutelhiërarchie | werkt | Drie lagen; wachtwoord wijzigen herversleutelt niets |
-| Compartimenten | werkt | Cryptografisch gescheiden, met rotatie per compartiment |
+| Compartimenten | **deels** | Cryptografisch gescheiden, met een eigen sleutel per compartiment. Rotatie bestaat als cryptografische functie, maar heeft geen route door de opslaglaag en geen opdracht die haar aanroept |
 | Blinde index | werkt | Zoeken in versleutelde velden; weigert velden met lage variatie |
 | Ketenlogboek | werkt | Hashketen, append-only tot in de database via triggers |
 | Ankers | werkt | Ed25519; het enige middel tegen afkappen aan het einde |
 | Termijnenmotor | werkt | Getypeerde termijnen, maandeindeklem, opschorting in kalenderdagen |
-| Versleutelde opslag | werkt | Versiegeschiedenis, bijlagen inhoudsgeadresseerd |
+| Versleutelde opslag | **deels** | Bijlagen inhoudsgeadresseerd en ontdubbeld. Elke wijziging bewaart de vorige versie in de kluis, maar geen opdracht en geen scherm kan die teruglezen of terugzetten |
 
 ### Fase 1 — Register, incident en aantoonbaarheid
 
@@ -83,7 +83,7 @@ Let op de volgorde die het project zichzelf oplegt: een code komt pas in de dekk
 |---|---|---|
 | Verwerkingsregister | werkt | Artikel 30 AVG, beide schema's, met afgeleide verplichtingen |
 | Effectbeoordeling | werkt | Voortoets, de vier onderdelen van art. 35 lid 7, restrisico met weging, raadplegingsklok |
-| Incidentdossier | werkt | Vijf klokken op eigen ankers, meldbesluit met drie lagen |
+| Incidentdossier | **deels** | Drie AVG-klokken op eigen ankers, en een meldbesluit met drie lagen. Het model kent daarnaast vier zorgplichtklokken, maar elke aanroeper zet de zorgplichtcontext op 'niet van toepassing', zodat die vier nergens in het product verschijnen |
 | Betrokkenenverzoeken | werkt | Maandtermijn met beide lezingen, vindplaatsen uit het register, art. 19-kennisgeving, art. 12 lid 4-bericht |
 | Woo-spoor | werkt | Eigen beslistermijn van vier weken, weigeringsgronden gescheiden in absoluut en relatief, zienswijze van derden |
 | Wpg-spoor | werkt | Toepasselijkheid met motivering, jaarlijkse controle en vierjaarlijkse audit, verbeterplan met eigenaar per maatregel |
@@ -129,7 +129,7 @@ Let op de volgorde die het project zichzelf oplegt: een code komt pas in de dekk
 |---|---|---|
 | Bedieningsschil | werkt | Volledig werkproces via de opdrachtregel |
 | Grafische schil | werkt | Svelte 5 en Vite in de webview van Tauri v2; de controleronde draait er dezelfde veertien beoordelingen als op de opdrachtregel, uit dezelfde functie. Twee vensters met elk een eigen wachtwoordzin en een eigen brug: het slot, de werkbak, het dossiervenster, de controleronde en de prognose voor de organisatie, en het persoonlijke dossier met de spiegel apart |
-| Installatie | werkt | Eén beheerscript per platform dat bouwt, plaatst, bijwerkt, de stand toont en verwijdert; het raakt de gegevens nooit aan en weigert een schil te plaatsen die als ontwikkelbouw is uitgevallen |
+| Installatie | werkt | Eén beheerscript per platform dat bouwt, plaatst, bijwerkt, de stand toont en verwijdert; het laat de gegevens bij het verwijderen staan en wist ze alleen wanneer u dat apart bevestigt door het woord WISSEN over te typen, en het weigert een schil te plaatsen die als ontwikkelbouw is uitgevallen |
 
 ---
 
@@ -137,13 +137,13 @@ Let op de volgorde die het project zichzelf oplegt: een code komt pas in de dekk
 
 | Onderdeel | Uit fase | Waarom het er nog niet is |
 |---|---|---|
-| Toestemming als eigen record | 2 | De verwijzing bestaat in het model; het record nog niet |
+| Toestemming als eigen record | 1 | De verwijzing bestaat in het model; het record nog niet |
 | Ketenregister voorbij de eerste schil | 3 | De verwerker en zijn subverwerkers staan er; de laag daaronder nog niet |
 | Toezichtdossier en bestuursrechtelijk spoor | 4 | |
 | Raamwerkvariant B en C | 3 | Het mechanisme staat er; de kaders zelf ontbreken in het kennispakket |
 | Driefactorscore als één gewogen getal | 3 | De drie factoren worden geteld; een gewogen score vergt een schaal en een weging die het plan niet geeft |
 | Volwassenheidsniveau | 3 | Komt in het plan één keer voor als veldnaam, zonder definitie |
-| Crosswalk naar informatiebeveiligingsnormen | 3 | Vereist een mappinggraaf met reviewhoudbaarheid per rand |
+| Crosswalk naar informatiebeveiligingsnormen | −1 / 1 | Vereist een mappinggraaf met reviewhoudbaarheid per rand |
 | Certificaten en mandaten in de prognose | 3 | Die records bestaan nog niet. Het mappingprofiel bestaat wél (`dpofg mapping`), maar de geldigheid van een mappingreview wordt nog niet in de prognose meegenomen; de prognose meldt uitdrukkelijk wat zij niet overziet |
 | Ketenbewijs tussen organisaties | 4 | |
 | Overdrachtsdossier bij een wisseling van functionaris | 5 | De scheiding tussen het persoonlijke dossier en het adviesregister van de organisatie is er; de overdracht zelf nog niet |
