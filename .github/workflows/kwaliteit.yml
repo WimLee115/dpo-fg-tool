@@ -4,6 +4,20 @@
 # binnen een minuut en besparen de rest van de tijd. De platformmatrix draait
 # als laatste, omdat die het duurst is.
 #
+# En duur is hier geen manier van spreken. Deze repository is besloten, dus
+# elke minuut telt tegen het maandbudget van de rekening, en niet elke minuut
+# telt even zwaar: een minuut op macOS telt voor tien, een minuut op Windows
+# voor twee. Over de eerste tweeëndertig uitvoeringen kostte macOS 590 van die
+# minuten voor 59 minuten rekentijd, en Windows 306 voor 153. Samen was dat
+# meer dan de helft van het budget, waarna GitHub de banen weigerde te starten.
+#
+# Daarom draait de platformmatrix niet meer bij elke duw. Op een duw en op een
+# samenvoegverzoek draait alleen Linux; macOS en Windows draaien wekelijks en
+# op afroep. Dat is een echte concessie en geen opruiming: een fout die alleen
+# op Windows optreedt, komt nu tot een week later aan het licht in plaats van
+# binnen een minuut. Vóór een uitgave hoort de matrix dus met de hand te worden
+# gestart, en de rookproef op alle drie de platforms blijft staan.
+#
 # Er is geen publicatiestap. Releases worden handmatig vrijgegeven na een
 # rookproef op alle drie de platforms; een pijplijn die zonder menselijke
 # tussenkomst een binary bij klanten kan krijgen, introduceert precies het
@@ -16,6 +30,13 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Maandagochtend, en niet op het hele uur: op het hele uur is de wachtrij bij
+  # GitHub het langst. Dit is de enige aanleiding waarbij macOS en Windows
+  # vanzelf meedraaien, dus zij is geen luxe — zonder haar wordt de dekking op
+  # die twee platforms alleen nog met de hand gehaald, en wat met de hand moet,
+  # gebeurt uiteindelijk niet.
+  schedule:
+    - cron: "17 5 * * 1"
 
 env:
   CARGO_TERM_COLOR: always
@@ -67,7 +88,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Welke platforms meedraaien hangt af van de aanleiding. Linux draait
+        # altijd: dat is de goedkoopste uitvoeromgeving en de enige waarop de
+        # grafische schil hier volledig wordt nagelopen. macOS en Windows komen
+        # erbij zodra de uitvoering wekelijks of met de hand wordt gestart.
+        #
+        # De haakjes om de twee vergelijkingen zijn niet overbodig: in de
+        # expressietaal van GitHub bindt && sterker dan ||, en zonder haakjes
+        # leest deze regel als iets heel anders dan er staat.
+        os: >-
+          ${{ fromJSON(
+          (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+          && '["ubuntu-latest", "macos-latest", "windows-latest"]'
+          || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
