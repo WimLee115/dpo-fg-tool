@@ -62,12 +62,12 @@ De bepalende factoren op Linux zijn drie: de glibc-versie (die de ondergrens van
 | Debian | 12 Bookworm | 2.36 | ja | Ondersteund |
 | Debian | 11 Bullseye | 2.31 | nee (alleen 4.0) | Niet ondersteund |
 | Fedora | 40 en nieuwer | 2.39+ | ja | Ondersteund |
-| RHEL / Rocky / AlmaLinux | 9.4 en nieuwer | 2.34 | ja (`webkit2gtk4.1`) | Eigen bouw nodig — zie noot |
+| RHEL / Rocky / AlmaLinux | 9.4 en nieuwer | 2.34 | ja (`webkit2gtk4.1`) | Ondersteund via de `.rpm` |
 | openSUSE Leap | 15.6 | 2.38 | ja | Best effort |
 | Arch, Manjaro, EndeavourOS | rolling | actueel | ja | Best effort |
 | Alpine | alle | musl | n.v.t. | Niet ondersteund |
 
-> **RHEL 9.4 en de bouwbasis.** glibc is voorwaarts compatibel en niet achterwaarts: een binair bestand gebouwd tegen 2.35 start niet op 2.34. RHEL 9.4 en zijn afgeleiden kunnen de uitgeleverde Linux-bouw dus niet draaien, ook al is WebKitGTK 4.1 er beschikbaar. Wie deze distributies wil bedienen, bouwt tegen een oudere basis of levert een tweede bouw uit. Dat is een openstaand beslispunt en geen vastgestelde ondersteuning; de tabel zei eerder "Ondersteund" en sprak daarmee de eisentabel hierboven tegen.
+> **Waarom RHEL 9.4 hier lager staat dan de ondergrens.** glibc is voorwaarts compatibel en niet achterwaarts: een binair bestand gebouwd tegen 2.35 start niet op 2.34. Deze distributies draaien de AppImage dus niet, en zijn toch ondersteund — via de `.rpm` uit een eigen container, zoals hieronder en in §7.3 en §10.1 staat beschreven. De ondergrens van 2.35 geldt voor de bouwbasis van de AppImage, niet voor elk uitgeleverd pakket.
 
 **Waarom de bouwbasis Ubuntu 22.04 is.** Een binair bestand gebouwd tegen glibc 2.35 draait op elke distributie met glibc 2.35 of hoger; andersom niet. De AppImage en de tarball worden daarom gebouwd in een container op basis van Ubuntu 22.04, ook wanneer de bouwstraat zelf op een nieuwere runner draait. De `.deb` wordt gebouwd op 22.04, de `.rpm` in een Rocky 9-container, zodat de afhankelijkheidsnamen per pakketfamilie kloppen.
 

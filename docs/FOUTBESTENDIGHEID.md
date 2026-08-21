@@ -1222,7 +1222,7 @@ De kennisbank is zelf een latente conditie en wordt dienovereenkomstig behandeld
 
 ### 5.2 Waar deze catalogus en de gebouwde catalogus uiteenlopen
 
-De regels hieronder zijn het ontwerp. De gebouwde catalogus in `crates/dpofg-rules/src/regels.rs` is kleiner — dat is te verwachten en op zichzelf geen probleem. Wat wél een probleem is: bij **veertien codes vult de gebouwde catalogus dezelfde code anders in dan dit document**. Wie hier `REG-02` opzoekt en `dpofg controle` draait, krijgt bij die code twee verschillende antwoorden.
+De regels hieronder zijn het ontwerp. De gebouwde catalogus in `crates/dpofg-rules/src/regels.rs` is kleiner — dat is te verwachten en op zichzelf geen probleem. Wat wél een probleem is: bij **zestien codes vult de gebouwde catalogus dezelfde code anders in dan dit document**. Wie hier `REG-02` opzoekt en `dpofg controle` draait, krijgt bij die code twee verschillende antwoorden.
 
 Dat is zo gegroeid en niet zo bedoeld. Het ontwerp gaf elk onderdeel van artikel 30 een eigen code; de bouw vatte die samen in één regel "Registerregel onvolledig" en gebruikte de vrijgekomen codes voor controles die er tijdens het bouwen bij kwamen. Hetzelfde gebeurde bij GRO en BEW.
 
@@ -1243,11 +1243,15 @@ Dat is zo gegroeid en niet zo bedoeld. Het ontwerp gaf elk onderdeel van artikel
 | `BEW-01` | Startgebeurtenis ontbreekt | Bewaartermijn ontbreekt |
 | `BEW-02` | Termijn zonder uitvoering | Uitstelafspraak verlopen |
 | `BEW-04` | Termijn boven de richtwaarde | Bewaartermijn zonder grondslag |
+| `REG-06` | Opslaglocatie ontbreekt — een registerregel zonder gekoppeld systeem | Systeem zonder registerregel — een systeem dat in geen enkele registerregel voorkomt |
+| `LEK-08` | Inconsistente exfiltratieconclusie — exfiltratie "niet uit te sluiten" maar weging op geen risico | Besluit spreekt de weging tegen — een risico vastgesteld en toch besloten niet te melden |
 | `DPIA-01` | Verplichte DPIA ontbreekt — verwerking op de AP-lijst | Criteria bereikt zonder beoordeling — twee of meer criteria geraakt |
 
 De onderwerpen uit de linkerkolom zijn niet verdwenen: de onderdelen van artikel 30 worden in de bouw geteld door `REG-01` en door de volledigheidsteller op het record zelf. Zij hebben alleen geen eigen code meer.
 
-Vijf andere codes dragen in de twee bronnen een andere formulering maar dezelfde controle: `DPIA-03`, `EER-03`, `EER-06`, `GRO-01` en `LEK-08`. Die staan hier niet, want daar valt niets te verwarren.
+`REG-06` verdient daarbij aparte aandacht: daar is niet alleen de controle anders, de *richting* is omgekeerd. Het ontwerp kijkt vanuit de registerregel naar een ontbrekend systeem; de bouw kijkt vanuit het systeem naar een ontbrekende registerregel. Wie de twee door elkaar haalt, zoekt de bevinding aan de verkeerde kant.
+
+Vier andere codes dragen in de twee bronnen een andere formulering maar dezelfde controle: `DPIA-03`, `EER-03`, `EER-06` en `GRO-01`. Die staan hier niet, want daar valt niets te verwarren.
 
 `dpofg controle --dekking` toont welke codes werkelijk draaien en wat zij controleren. Bij twijfel is die opdracht de bron, niet dit hoofdstuk.
 

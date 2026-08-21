@@ -51,6 +51,8 @@ waarbij:
 |---|---|
 | `volgnummer_be64` | het volgnummer als 8 bytes, meest significante byte eerst |
 | `len_be32(x)` | de lengte van `x` in bytes als 4 bytes, meest significante byte eerst |
+| `len_be64(x)` | de lengte van `x` in bytes als 8 bytes, meest significante byte eerst |
+| `‖` | achter elkaar zetten, zonder scheidingsteken |
 | `gebeurtenis_json` | het `gebeurtenis`-object, geserialiseerd in de veldvolgorde zoals hierboven, **compact en in UTF-8** — zie hieronder |
 | `vorige_hash` van de eerste regel | 64 nullen: `0000…0000` |
 
