@@ -62,10 +62,12 @@ De bepalende factoren op Linux zijn drie: de glibc-versie (die de ondergrens van
 | Debian | 12 Bookworm | 2.36 | ja | Ondersteund |
 | Debian | 11 Bullseye | 2.31 | nee (alleen 4.0) | Niet ondersteund |
 | Fedora | 40 en nieuwer | 2.39+ | ja | Ondersteund |
-| RHEL / Rocky / AlmaLinux | 9.4 en nieuwer | 2.34 | ja (`webkit2gtk4.1`) | Ondersteund |
+| RHEL / Rocky / AlmaLinux | 9.4 en nieuwer | 2.34 | ja (`webkit2gtk4.1`) | Eigen bouw nodig — zie noot |
 | openSUSE Leap | 15.6 | 2.38 | ja | Best effort |
 | Arch, Manjaro, EndeavourOS | rolling | actueel | ja | Best effort |
 | Alpine | alle | musl | n.v.t. | Niet ondersteund |
+
+> **RHEL 9.4 en de bouwbasis.** glibc is voorwaarts compatibel en niet achterwaarts: een binair bestand gebouwd tegen 2.35 start niet op 2.34. RHEL 9.4 en zijn afgeleiden kunnen de uitgeleverde Linux-bouw dus niet draaien, ook al is WebKitGTK 4.1 er beschikbaar. Wie deze distributies wil bedienen, bouwt tegen een oudere basis of levert een tweede bouw uit. Dat is een openstaand beslispunt en geen vastgestelde ondersteuning; de tabel zei eerder "Ondersteund" en sprak daarmee de eisentabel hierboven tegen.
 
 **Waarom de bouwbasis Ubuntu 22.04 is.** Een binair bestand gebouwd tegen glibc 2.35 draait op elke distributie met glibc 2.35 of hoger; andersom niet. De AppImage en de tarball worden daarom gebouwd in een container op basis van Ubuntu 22.04, ook wanneer de bouwstraat zelf op een nieuwere runner draait. De `.deb` wordt gebouwd op 22.04, de `.rpm` in een Rocky 9-container, zodat de afhankelijkheidsnamen per pakketfamilie kloppen.
 
@@ -122,7 +124,7 @@ Het asymmetrische risico is Windows: daar kan de interface stukgaan door een upd
 | `<dialog>` | Ja | Vanaf Safari 15.4 | Wisselend, oudere builds onvolledig | Eigen modale component, geen `<dialog>` |
 | Container queries | Ja | Vanaf macOS 13 | Vanaf 2.38 | Niet gebruiken; media queries en grid |
 | `:has()` | Ja | Vanaf 15.4 | Vanaf 2.38 | Alleen met PostCSS-uitwijk |
-| `structuredClone` | Ja | Vanaf 15.4 | Vanaf 2.34 | Toegestaan, met functiedetectie |
+| `structuredClone` | Ja | Vanaf 15.4 | Vanaf 2.34 | **Niet toegestaan**: de baan "de bundel nalopen" breekt de bouw af zodra het woord in `dist/assets/*.js` staat |
 | `Intl.DurationFormat` | Recent | Recent | Nee | Niet gebruiken; termijnteksten in Rust opmaken |
 | `crypto.subtle` | Alleen in secure context | Idem | Idem | Geen cryptografie in de webview, punt |
 | Bestandskiezer (`showOpenFilePicker`) | Ja | Nee | Nee | Altijd de Tauri-dialoogplug-in |
@@ -831,7 +833,7 @@ Onder **Help → Over** staan de huidige versie, het bouwnummer, de commit-hash,
 
 | Maatregel | Uitwerking |
 |---|---|
-| Geen netwerkbibliotheek in de afhankelijkheidsboom van de kernbuild | `deny.toml` met een `[bans]`-lijst voor `reqwest`, `hyper`, `ureq`, `curl`, `isahc`, `tokio-tungstenite`, `native-tls`, `openssl` (met de uitzonderingen die SQLCipher nodig heeft, expliciet benoemd) |
+| Geen netwerkbibliotheek in de afhankelijkheidsboom van de kern | Nagerekend op 21-08-2026: `dpofg-cli`, `dpofg-crypto`, `dpofg-store`, `dpofg-audit`, `dpofg-domain`, `dpofg-rules`, `dpofg-report` en `dpofg-verify` bevatten er geen. `dpofg-schil` wél: Tauri brengt `reqwest` en `hyper` mee, en die zijn er niet uit te halen zonder Tauri te verlaten. De `[bans]`-lijst in `deny.toml` die dit zou afdwingen bestaat nog niet — daar staat alleen `openssl`, dat toch al niet in de graaf zit. Zolang die lijst er niet is, rust deze maatregel op de netwerkstiltetest en niet op de afhankelijkhedencontrole |
 | Geen Tauri-plug-ins met netwerkfuncties | De `http`-plug-in wordt niet meegecompileerd; de updater alleen achter een feature-vlag |
 | Strikte capabilities | Tauri v2-capability-bestanden geven alleen de commando's vrij die daadwerkelijk gebruikt worden; geen jokertekens |
 | CSP met `connect-src 'none'` | Blokkeert `fetch`, `XMLHttpRequest`, WebSocket en `EventSource` binnen de webview |
@@ -1024,7 +1026,7 @@ Een beperking die alleen in de projectdocumentatie staat, bestaat voor de gebrui
 | Kanaal | Moment | Inhoud |
 |---|---|---|
 | **Systeemcontrole bij de eerste start** | Vóór het aanmaken van een kluis | Het volledige `PlatformReport` met per onderdeel een oordeel: goed, aandachtspunt, of blokkerend. Blokkerende punten kunnen niet worden overgeslagen. |
-| **Help → Platformstatus** | Altijd bereikbaar | Hetzelfde rapport, plus de actieve sleutelbos-backend, de webview-versie, het bestandssysteem van de gegevensmap, de tzdb-versie en of draagbare modus actief is. Exporteerbaar als tekstbestand voor een ondersteuningsvraag. |
+| **Help → Systeemcontrole** | Altijd bereikbaar | Hetzelfde rapport, plus de actieve sleutelbos-backend, de webview-versie, het bestandssysteem van de gegevensmap, de tzdb-versie en of draagbare modus actief is. Exporteerbaar als tekstbestand voor een ondersteuningsvraag. |
 | **Contextuele melding** | Op het moment dat het ertoe doet | Bij het inschakelen van "snel openen" op een systeem zonder sleutelbos, bij het kiezen van een netwerkpad, bij het activeren van draagbare modus. Kort, ter plekke, en met de reden erbij. |
 | **`BEKENDE-BEPERKINGEN.md`** | Meegeleverd in elk pakket en op de downloadpagina | Bovenstaande tabel, aangevuld per release. Genummerd, zodat een ondersteuningsvraag naar een nummer kan verwijzen. |
 

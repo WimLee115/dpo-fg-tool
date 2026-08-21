@@ -1120,7 +1120,7 @@ Dit onderdeel is in herziening 1.0 fout gegaan op de kern van het product en is 
 | T-21 | Inzageverzoek ontvangen 15 januari; maandtermijn | Deadline 15 februari; valt die op zaterdag, zondag of feestdag, dan de eerstvolgende werkdag |
 | T-22 | Inzageverzoek ontvangen 31 januari | Deadline 28 februari, respectievelijk 29 februari in een schrikkeljaar |
 | T-23 | Registratiewijziging waarvan de tweewekentermijn eindigt op een algemeen erkende feestdag | Verlengd tot de eerstvolgende werkdag; de 24- en 72-uurstermijnen worden níet verlengd |
-| T-24 | Twee incidenten, dezelfde grondoorzaak, binnen zes maanden, ja| T-24 | Twee incidenten, dezelfde grondoorzaak, binnen zes maanden, jaaromzet 4 miljoen euro, schade tweemaal 120.000 euro | De drempel is het percentage van de omzet (200.000 euro), niet het absolute bedrag; aggregatiegroep bereikt de drempel en slaat alarm |
+| T-24 | Twee incidenten, dezelfde grondoorzaak, binnen zes maanden, jaaromzet 4 miljoen euro, schade tweemaal 120.000 euro | De drempel is het percentage van de omzet (200.000 euro), niet het absolute bedrag; aggregatiegroep bereikt de drempel en slaat alarm |
 | T-25 | Entiteitstype met verkorte meldtermijn, kennisname 10:00 | Vroegtijdige waarschuwing én melding vallen samen op 24 uur; de tool toont één klok met twee verplichtingen en waarschuwt tegen dubbeltelling |
 | T-26 | Datalek bij een verwerker, contractueel 24 uur | De klok naar de verwerkingsverantwoordelijke start bij kennisname van de verwerker, onafhankelijk van de 72-uursklok van de verantwoordelijke |
 | T-27 | Art. 36-raadpleging ingediend, aanvullende informatie opgevraagd op dag 20 | Termijn van acht weken opgeschort tot ontvangst; de verlenging met zes weken is apart zichtbaar en apart te motiveren |

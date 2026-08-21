@@ -790,7 +790,7 @@ Het patroon: **een antwoord is een gebeurtenis; een gebeurtenis maakt een verpli
 | DPIA geopend | adviesverzoek aan de FG met teruggerekende deadline | werkvoorraad FG |
 | DPIA met hoog restrisico | voorafgaande raadpleging AP (art. 36) | taak, blokkeert afronding |
 | Land buiten de EER | waarborg + transfer impact assessment | registerregel + leveranciersdossier |
-| Verwerker gekoppeld | verwerkersovereen| Verwerker gekoppeld | verwerkersovereenkomst met volledige art. 28(3)-mapping | leveranciersdossier, blokkeert vaststelling registerregel |
+| Verwerker gekoppeld | verwerkersovereenkomst met volledige art. 28(3)-mapping | leveranciersdossier, blokkeert vaststelling registerregel |
 | Grondslag = toestemming | intrekkingsroute + bewijsbewaring + informatieplicht | registerregel |
 | Grondslag = gerechtvaardigd belang | drietrapstoets | registerregel |
 | Geautomatiseerde besluitvorming | art. 22-grond + logica-uitleg + menselijke tussenkomst + DPIA | registerregel + DPIA |
