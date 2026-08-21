@@ -205,7 +205,7 @@ flowchart LR
 
 De kern staat en is bruikbaar, via de opdrachtregel én het venster. De opdrachtregel is bewust eerst gebouwd: dat dwingt af dat de logica in de lagen eronder zit en niet in een scherm.
 
-Wat er werkt, wat er niet werkt en waar de grenzen liggen staat in **[`STAND.md`](STAND.md)** — inclusief de bevindingen die het testen zelf heeft opgeleverd, want die laten zien waar het misging.
+Wat er werkt, wat er niet werkt en waar de grenzen liggen staat in **[`STAND.md`](STAND.md)** — inclusief de bevindingen die het nalopen heeft opgeleverd, want die laten zien waar het misging.
 
 Twee dingen zijn hier de moeite van het vermelden waard, omdat ze bepalen hoe dit overzicht gelezen hoort te worden:
 
