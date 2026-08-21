@@ -8,7 +8,6 @@ use dpofg_report::werkbak::{
     werkbak, Band, Bronnen, Kalendercontext, Termijnbron, Termijnkenmerk, Werkbakregel,
     NIET_IN_DE_LIJST,
 };
-use dpofg_store::Kluis;
 use std::path::PathBuf;
 
 use crate::uitvoer::{blokkade, gelukt, kop, let_op, tabel, terzijde};
@@ -81,10 +80,10 @@ pub fn draai(o: Werkbakargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>)
     let kluis = super::open_kluis(&pad, nu)?;
     let pakket = dpofg_content::startpakket(nu.date_naive());
 
-    let incidenten: Vec<Incident> = laad(&kluis, "incident")?;
-    let verzoeken: Vec<Betrokkenenverzoek> = laad(&kluis, "verzoek")?;
-    let wooverzoeken: Vec<Wooverzoek> = laad(&kluis, "woo")?;
-    let correcties: Vec<Correctie> = laad(&kluis, "correctie")?;
+    let incidenten: Vec<Incident> = super::laad(&kluis, "incident")?;
+    let verzoeken: Vec<Betrokkenenverzoek> = super::laad(&kluis, "verzoek")?;
+    let wooverzoeken: Vec<Wooverzoek> = super::laad(&kluis, "woo")?;
+    let correcties: Vec<Correctie> = super::laad(&kluis, "correctie")?;
 
     let bronnen = Bronnen {
         incidenten: &incidenten,
@@ -194,12 +193,4 @@ fn toon_banden(regels: &[Werkbakregel], nu: DateTime<Utc>) {
         "De volgorde ligt vast en is niet om te draaien: onherstelbaar gaat vóór herstelbaar, \
          en verstreken vóór aanstaand.",
     );
-}
-
-fn laad<T: serde::de::DeserializeOwned>(kluis: &Kluis, soort: &str) -> Result<Vec<T>> {
-    let mut uit = Vec::new();
-    for k in kluis.lijst(soort)? {
-        uit.push(kluis.laad(soort, &k.id)?);
-    }
-    Ok(uit)
 }

@@ -132,6 +132,19 @@ export interface Werkvoorraad {
   regels: Werkbakregel[];
 }
 
+/**
+ * De uitkomst van één controleronde.
+ *
+ * Niet alleen de bevindingen, ook wat er niet is nagekeken. Een scherm dat
+ * enkel een lijst toont, wordt gelezen als "dit is alles".
+ */
+export interface Controleronde {
+  peilmoment: string;
+  bevindingen: Bevinding[];
+  beoordeeld: number;
+  niet_beoordeeld: string[];
+}
+
 /** Wat er niet in de werkbak staat, en waar het dan wel staat. */
 export interface Buitenbeeld {
   wat: string;

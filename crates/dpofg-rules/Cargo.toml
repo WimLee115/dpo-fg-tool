@@ -11,6 +11,9 @@ description = "Continu draaiende controleregels over de gegevensverzameling"
 
 [dependencies]
 dpofg-domain.workspace = true
+# Voor de drempels van een controleronde: die staan in het kennispakket en niet
+# in de code, zodat een jurist ze kan bijstellen zonder de programmacode te raken.
+dpofg-content.workspace = true
 dpofg-terms.workspace = true
 # Voor SYS-04 en SYS-10: die regels beoordelen het ketenlogboek zelf, en de
 # uitkomst daarvan is een Verificatierapport uit dpofg-audit. Geen cyclus —

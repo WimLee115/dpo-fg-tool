@@ -33,9 +33,11 @@
 pub mod budget;
 pub mod motor;
 pub mod regels;
+pub mod ronde;
 
 pub use budget::{Budgetstand, Waarschuwingsbudget};
 pub use motor::{Bevinding, Niveau, Ontvangerrol, Regel, Regelmotor, Regelrapport};
+pub use ronde::{beoordeel_ronde, Drempels, Ronde, Uitslag};
 
 /// Versie van deze crate.
 pub const VERSIE: &str = env!("CARGO_PKG_VERSION");

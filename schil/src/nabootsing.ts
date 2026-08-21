@@ -151,6 +151,13 @@ export function nabootsing(nu = new Date('2026-08-19T09:00:00Z')): Nabootsing {
     },
   };
 
+  // Eén onberekenbare termijn hoort in de nabootsing te zitten. Dit is precies
+  // het geval dat het makkelijkst stilzwijgend wegvalt, en een scherm dat het
+  // niet toont ziet er compleet uit terwijl het dat niet is.
+  const nietBeoordeeld: string[] = [
+    '2026-0041 — de termijn is met dit kennispakket niet te berekenen',
+  ];
+
   const bevindingen: Bevinding[] = [
     {
       regelcode: 'ZRP-02',
@@ -234,7 +241,12 @@ export function nabootsing(nu = new Date('2026-08-19T09:00:00Z')): Nabootsing {
     },
     async controle() {
       aanroepen.push('controle');
-      return bevindingen;
+      return {
+        peilmoment: nu.toISOString(),
+        bevindingen,
+        beoordeeld: 7,
+        niet_beoordeeld: nietBeoordeeld,
+      };
     },
     async prognose(dagen) {
       aanroepen.push(`prognose:${dagen}`);

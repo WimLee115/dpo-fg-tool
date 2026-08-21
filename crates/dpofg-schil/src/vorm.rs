@@ -82,6 +82,22 @@ pub struct Bevinding {
     pub afwijking_tot: Option<DateTime<Utc>>,
 }
 
+/// De uitkomst van één controleronde.
+///
+/// Niet alleen de bevindingen: ook wat er *niet* is nagekeken. Een scherm dat
+/// enkel een lijst toont, wordt gelezen als "dit is alles" — en juist een
+/// termijn die niet te berekenen viel, is iets anders dan een termijn die in
+/// orde is.
+#[derive(Debug, Clone, Serialize)]
+pub struct Controleronde {
+    pub peilmoment: DateTime<Utc>,
+    pub bevindingen: Vec<Bevinding>,
+    /// Hoeveel dossiers er zijn nagekeken.
+    pub beoordeeld: usize,
+    /// Wat deze ronde niet heeft kunnen beoordelen, met de reden erbij.
+    pub niet_beoordeeld: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Vervalpunt {
     pub eis: String,

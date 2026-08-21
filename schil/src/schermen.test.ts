@@ -190,6 +190,30 @@ describe('de controleronde', () => {
     await gebruiker.click(screen.getByRole('button', { name: 'Controle' }));
     expect(await screen.findByText(/er loopt een vastgelegde afwijking/)).toBeTruthy();
   });
+
+  // Dit venster draaide ooit twee van de veertien beoordelingen en zei daar
+  // niets over. Een lijst die zwijgt over wat zij niet heeft nagekeken, wordt
+  // gelezen als het volledige beeld.
+  it('meldt wat er niet is beoordeeld, en boven de bevindingen', async () => {
+    const gebruiker = await ontgrendel();
+    await gebruiker.click(screen.getByRole('button', { name: 'Controle' }));
+
+    const kop = await screen.findByRole('heading', { name: /niet beoordeeld/i });
+    expect(kop).toBeTruthy();
+    expect(screen.getByText(/niet te berekenen/)).toBeTruthy();
+    expect(screen.getByText(/als in orde geldt/i)).toBeTruthy();
+
+    // De waarschuwing hoort vóór de eerste bevinding te staan: wie eerst de
+    // lijst leest en daarna pas het voorbehoud, heeft de lijst al geloofd.
+    const eerste = screen.getByRole('heading', { name: /voor de directie/i });
+    expect(kop.compareDocumentPosition(eerste) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('noemt hoeveel dossiers er zijn nagekeken', async () => {
+    const gebruiker = await ontgrendel();
+    await gebruiker.click(screen.getByRole('button', { name: 'Controle' }));
+    expect(await screen.findByText(/nagekeken: 7 dossiers/i)).toBeTruthy();
+  });
 });
 
 describe('de prognose', () => {

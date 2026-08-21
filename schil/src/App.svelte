@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import { brug } from './brug';
-  import type { Bevinding, Buitenbeeld, Dossier, Kluisstand, Vervalpunt, Werkbakregel } from './soorten';
+  import type { Buitenbeeld, Controleronde, Dossier, Kluisstand, Vervalpunt, Werkbakregel } from './soorten';
   import Slot from './onderdelen/Slot.svelte';
   import Werkbak from './onderdelen/Werkbak.svelte';
   import DossierScherm from './onderdelen/Dossier.svelte';
@@ -32,7 +32,7 @@
 
   let regels = $state<Werkbakregel[]>([]);
   let buitenbeeld = $state<Buitenbeeld[]>([]);
-  let bevindingen = $state<Bevinding[]>([]);
+  let ronde = $state<Controleronde | null>(null);
   let vervalpunten = $state<Vervalpunt[]>([]);
   let horizon = $state(90);
   let dossier = $state<Dossier | null>(null);
@@ -56,7 +56,7 @@
     await brug().vergrendel();
     stand = null;
     regels = [];
-    bevindingen = [];
+    ronde = null;
     vervalpunten = [];
     dossier = null;
     scherm = 'werkbak';
@@ -75,7 +75,7 @@
     fout = null;
     try {
       if (naar === 'werkbak') await haalWerkbak();
-      if (naar === 'controle') bevindingen = await brug().controle();
+      if (naar === 'controle') ronde = await brug().controle();
       if (naar === 'prognose') vervalpunten = await brug().prognose(horizon);
     } catch (e) {
       fout = melding(e);
@@ -145,7 +145,9 @@
       {:else if scherm === 'werkbak'}
         <Werkbak {regels} {buitenbeeld} nu={peilmoment} open={openDossier} />
       {:else if scherm === 'controle'}
-        <Controle {bevindingen} />
+        {#if ronde}
+          <Controle {ronde} />
+        {/if}
       {:else}
         <Prognose punten={vervalpunten} dagen={horizon} kies={kiesHorizon} nu={peilmoment} />
       {/if}

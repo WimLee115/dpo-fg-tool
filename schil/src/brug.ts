@@ -9,8 +9,8 @@
 // schermen zonder Rust te draaien toetsbaar maakt.
 
 import type {
-  Bevinding,
   Buitenbeeld,
+  Controleronde,
   Dossier,
   Kluisstand,
   Vervalpunt,
@@ -25,7 +25,7 @@ export interface Brug {
   werkbak(): Promise<Werkvoorraad>;
   buitenbeeld(): Promise<Buitenbeeld[]>;
   dossier(soort: string, kenmerk: string): Promise<Dossier>;
-  controle(): Promise<Bevinding[]>;
+  controle(): Promise<Controleronde>;
   prognose(dagen: number): Promise<Vervalpunt[]>;
   /**
    * Opent het venster van het persoonlijke dossier.

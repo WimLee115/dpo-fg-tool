@@ -386,54 +386,101 @@ fn volledigheid_van(soort: &str, waarde: &serde_json::Value) -> Result<vorm::Vol
 }
 
 #[tauri::command]
-pub fn controle(sessie: State<'_, Sessie>) -> Result<Vec<vorm::Bevinding>, String> {
+pub fn controle(sessie: State<'_, Sessie>) -> Result<vorm::Controleronde, String> {
     sessie.met_kluis(|kluis| {
         let nu = Utc::now();
         let motor = dpofg_rules::regels::standaardmotor();
-        let mut uit = Vec::new();
 
-        for k in kluis.lijst("verwerking").map_err(fout)? {
-            let v: dpofg_domain::Verwerking = kluis.laad("verwerking", &k.id).map_err(fout)?;
-            uit.extend(dpofg_rules::regels::beoordeel_verwerking(&motor, &v, nu));
-        }
-        for k in kluis.lijst("zorgplicht").map_err(fout)? {
-            let d: dpofg_domain::zorgplicht::Zorgplichtdossier =
-                kluis.laad("zorgplicht", &k.id).map_err(fout)?;
-            let beoordelingen: Vec<dpofg_domain::risico::Risicobeoordeling> =
-                laad(kluis, "risico")?;
-            uit.extend(dpofg_rules::regels::beoordeel_zorgplicht(
-                &motor,
-                &d,
-                &beoordelingen,
-                dpofg_rules::regels::Zorgplichtdrempels {
-                    beoordelingstermijn_dagen: 30,
-                    bewijshorizon_dagen: 60,
-                    frequentiedrempel_maanden: 12,
-                    bestuursvaststelling_maanden: 12,
-                    afwijkingsaandeel_procent: 50,
-                },
-                nu,
-            ));
+        // Dezelfde ronde als de opdrachtregel draait, uit dezelfde functie. Dit
+        // venster draaide er ooit twee van de veertien, met drempels die hier
+        // in de code stonden in plaats van in het kennispakket. Aan het scherm
+        // was dat niet te zien: het zag er compleet uit.
+        let pakket = dpofg_content::startpakket(nu.date_naive());
+        let drempels = dpofg_rules::ronde::Drempels::uit_pakket(&pakket);
+
+        let verwerkingen: Vec<dpofg_domain::Verwerking> = laad(kluis, "verwerking")?;
+        let effectbeoordelingen: Vec<dpofg_domain::Dpia> = laad(kluis, "dpia")?;
+        let doorgiften: Vec<dpofg_domain::doorgifte::Doorgifte> = laad(kluis, "doorgifte")?;
+        let risicobeoordelingen: Vec<dpofg_domain::risico::Risicobeoordeling> =
+            laad(kluis, "risico")?;
+        let zorgplichtdossiers: Vec<dpofg_domain::zorgplicht::Zorgplichtdossier> =
+            laad(kluis, "zorgplicht")?;
+        let leveranciers: Vec<dpofg_domain::leverancier::Leverancier> = laad(kluis, "leverancier")?;
+        let incidenten: Vec<dpofg_domain::Incident> = laad(kluis, "incident")?;
+        let correcties: Vec<dpofg_domain::correctie::Correctie> = laad(kluis, "correctie")?;
+
+        let verificatie = kluis.verifieer_logboek().map_err(fout)?;
+
+        // Zoals bij de opdrachtregel: het budget komt uit het logboek en niet
+        // uit deze ronde. Een onderbreking is een moment waarop de gebruiker is
+        // tegengehouden, geen regel in een rapport.
+        let mut budget = dpofg_rules::budget::Waarschuwingsbudget::nieuw();
+        let weekgrens = dpofg_rules::ronde::budgetvenster(nu);
+        for regel in kluis.logboek().map_err(fout)? {
+            let g = &regel.gebeurtenis;
+            if g.handeling == dpofg_audit::Handeling::ControleGeblokkeerd && g.tijdstip > weekgrens
+            {
+                budget.onderbreking(&g.actor.id, g.tijdstip);
+            }
         }
 
-        Ok(uit
-            .into_iter()
-            .map(|b| vorm::Bevinding {
-                regelcode: b.regelcode,
-                niveau: match b.niveau {
-                    dpofg_rules::motor::Niveau::Blokkerend => "blokkerend",
-                    dpofg_rules::motor::Niveau::Signalerend => "signalerend",
-                    dpofg_rules::motor::Niveau::Rapporterend => "rapporterend",
-                }
-                .to_string(),
-                ontvanger: b.ontvanger.omschrijving().to_string(),
-                record_soort: b.record_soort,
-                record_kenmerk: b.record_kenmerk,
-                toelichting: b.toelichting,
-                grondslag: b.grondslag,
-                afwijking_tot: b.afwijking.and_then(|a| a.geldig_tot),
-            })
-            .collect())
+        let uitslag = dpofg_rules::ronde::beoordeel_ronde(
+            &motor,
+            &dpofg_rules::ronde::Ronde {
+                verwerkingen: &verwerkingen,
+                effectbeoordelingen: &effectbeoordelingen,
+                doorgiften: &doorgiften,
+                risicobeoordelingen: &risicobeoordelingen,
+                zorgplichtdossiers: &zorgplichtdossiers,
+                leveranciers: &leveranciers,
+                incidenten: &incidenten,
+                correcties: &correcties,
+                logboek: Some(&verificatie),
+                laatste_anker: kluis.ketenstand().tijdstip,
+                budget: Some(&budget),
+            },
+            &pakket,
+            &drempels,
+            nu,
+        );
+
+        // Onberekenbare termijnen en niet-aangeleverde onderdelen staan hier
+        // naast elkaar, want voor de lezer zijn ze hetzelfde: dit is niet
+        // nagekeken. Ze verzwijgen zou betekenen dat een onberekenbare termijn
+        // als in orde geldt.
+        let mut niet_beoordeeld: Vec<String> = uitslag
+            .onberekenbaar
+            .iter()
+            .map(|r| format!("{r} — de termijn is met dit kennispakket niet te berekenen"))
+            .collect();
+        niet_beoordeeld.extend(
+            uitslag.niet_nagekeken.iter().map(|w| format!("{w} — niet aangeleverd aan deze ronde")),
+        );
+
+        Ok(vorm::Controleronde {
+            peilmoment: nu,
+            beoordeeld: uitslag.beoordeeld,
+            niet_beoordeeld,
+            bevindingen: uitslag
+                .bevindingen
+                .into_iter()
+                .map(|b| vorm::Bevinding {
+                    regelcode: b.regelcode,
+                    niveau: match b.niveau {
+                        dpofg_rules::motor::Niveau::Blokkerend => "blokkerend",
+                        dpofg_rules::motor::Niveau::Signalerend => "signalerend",
+                        dpofg_rules::motor::Niveau::Rapporterend => "rapporterend",
+                    }
+                    .to_string(),
+                    ontvanger: b.ontvanger.omschrijving().to_string(),
+                    record_soort: b.record_soort,
+                    record_kenmerk: b.record_kenmerk,
+                    toelichting: b.toelichting,
+                    grondslag: b.grondslag,
+                    afwijking_tot: b.afwijking.and_then(|a| a.geldig_tot),
+                })
+                .collect(),
+        })
     })
 }
 

@@ -46,15 +46,15 @@ pub fn draai(o: Prognoseargumenten, kluispad: Option<PathBuf>, nu: DateTime<Utc>
     let pad = super::kluispad(kluispad)?;
     let mut kluis = super::open_kluis(&pad, nu)?;
 
-    let zorgplicht: Vec<Zorgplichtdossier> = laad(&kluis, "zorgplicht")?;
+    let zorgplicht: Vec<Zorgplichtdossier> = super::laad(&kluis, "zorgplicht")?;
     if o.factoren {
         return toon_factoren(&zorgplicht, nu);
     }
 
-    let beoordelingen: Vec<Risicobeoordeling> = laad(&kluis, "risico")?;
-    let leveranciers: Vec<Leverancier> = laad(&kluis, "leverancier")?;
-    let effectbeoordelingen: Vec<Dpia> = laad(&kluis, "dpia")?;
-    let wpgsporen: Vec<Wpgspoor> = laad(&kluis, "wpg")?;
+    let beoordelingen: Vec<Risicobeoordeling> = super::laad(&kluis, "risico")?;
+    let leveranciers: Vec<Leverancier> = super::laad(&kluis, "leverancier")?;
+    let effectbeoordelingen: Vec<Dpia> = super::laad(&kluis, "dpia")?;
+    let wpgsporen: Vec<Wpgspoor> = super::laad(&kluis, "wpg")?;
 
     let bronnen = Bronnen {
         zorgplicht: &zorgplicht,
@@ -190,7 +190,7 @@ fn exporteer(
     std::fs::create_dir_all(map)?;
     let ketenrapport = kluis.verifieer_logboek()?;
     let pakket = dpofg_content::startpakket(nu.date_naive());
-    let correcties: Vec<Correctie> = laad(kluis, "correctie")?;
+    let correcties: Vec<Correctie> = super::laad(kluis, "correctie")?;
     let lopend: Vec<&Correctie> = correcties.iter().filter(|c| !c.is_afgerond()).collect();
 
     let verstreken = prognose(bronnen, termijnen, nu);
@@ -325,14 +325,6 @@ fn tel_concepten(kluis: &Kluis) -> Result<usize> {
     let mut uit = 0;
     for soort in ["zorgplicht", "risico", "leverancier", "dpia", "wpg"] {
         uit += kluis.lijst(soort)?.iter().filter(|k| k.status == "concept").count();
-    }
-    Ok(uit)
-}
-
-fn laad<T: serde::de::DeserializeOwned>(kluis: &Kluis, soort: &str) -> Result<Vec<T>> {
-    let mut uit = Vec::new();
-    for k in kluis.lijst(soort)? {
-        uit.push(kluis.laad(soort, &k.id)?);
     }
     Ok(uit)
 }

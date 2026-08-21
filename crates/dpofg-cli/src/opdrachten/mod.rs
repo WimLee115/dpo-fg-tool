@@ -101,3 +101,19 @@ pub fn actor() -> dpofg_audit::Actor {
         .unwrap_or_else(|_| "onbekend".into());
     dpofg_audit::Actor::nieuw(naam.clone(), naam, "gebruiker")
 }
+
+/// Laadt alle records van één soort uit de kluis.
+///
+/// Stond drie keer in deze map en één keer in de brug van de grafische schil.
+/// Vier kopieën van vijf regels is op zichzelf te overzien; het punt is dat de
+/// vierde de andere drie niet volgde toen er een soort bij kwam.
+pub(crate) fn laad<T: serde::de::DeserializeOwned>(
+    kluis: &dpofg_store::Kluis,
+    soort: &str,
+) -> anyhow::Result<Vec<T>> {
+    let mut uit = Vec::new();
+    for k in kluis.lijst(soort)? {
+        uit.push(kluis.laad(soort, &k.id)?);
+    }
+    Ok(uit)
+}
