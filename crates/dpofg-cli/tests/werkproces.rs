@@ -109,6 +109,21 @@ fn shell_woorden(s: &str) -> Vec<String> {
     uit
 }
 
+/// Een tijdstip van zoveel uur geleden, als RFC 3339 in UTC.
+///
+/// Voor alles wat de tool tegen *nu* afzet — de banden van de werkbak, het
+/// aantal dagen tot een termijn, de venstergrenzen van de prognose — is een
+/// vaste datum in de test een tijdbom: hij is groen op de dag dat hij wordt
+/// geschreven en valt om zodra de kalender ver genoeg is doorgelopen. Zulke
+/// tests rekenen hun tijdstippen daarom vanaf nu terug.
+///
+/// Waar de datum zelf de toets is — de maandeindeklem, een feestdag, een
+/// zomertijdovergang — hoort juist wél een vaste datum te staan; die gevallen
+/// hangen niet aan de wandklok maar aan de kalender.
+fn tijdstip_geleden(uren: i64) -> String {
+    (chrono::Utc::now() - chrono::Duration::hours(uren)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
 // --------------------------------------------------------------------------
 // De kluis
 // --------------------------------------------------------------------------
@@ -3262,11 +3277,20 @@ fn de_werkbak_is_ook_als_json_te_lezen() {
 }
 
 /// De volgorde ligt vast: onherstelbaar gaat vóór herstelbaar.
+///
+/// De kennisname ligt hier twee uur terug en niet op een vaste datum. De band
+/// wordt namelijk uit het verschil met *nu* bepaald, en een vaste datum
+/// schuift daar elke dag verder vandaan: dezelfde test die vandaag "deze week"
+/// oplevert, levert over twee dagen "vandaag" op en over een week
+/// "verstreken". Twee uur terug houdt de meldtermijn van tweeënzeventig uur
+/// op zeventig uur, ruim binnen de week en ruim buiten de dag.
 #[test]
 fn de_werkbak_zet_het_onherstelbare_bovenaan() {
     let p = Proef::nieuw();
-    p.moet("incident nieuw 2026-0041 'iets' --signaal 2026-08-19T06:00:00Z");
-    p.moet("incident kennisname 2026-0041 2026-08-19T06:00:00Z");
+    let signaal = tijdstip_geleden(3);
+    let kennisname = tijdstip_geleden(2);
+    p.moet(&format!("incident nieuw 2026-0041 'iets' --signaal {signaal}"));
+    p.moet(&format!("incident kennisname 2026-0041 {kennisname}"));
 
     let uit = String::from_utf8(p.draai("werkbak --json").stdout).unwrap();
     let lijst: serde_json::Value = serde_json::from_str(uit.trim()).unwrap();
