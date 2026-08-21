@@ -24,7 +24,7 @@ Vervangt herziening 1.0 van 18 augustus 2026. Reden van herziening: verwerking v
 12. Wat de tool niet doet
 
 Bijlage A — Vaste waarschuwingsteksten
-Bijlage B — Beslispunten met een vaste datum
+Bijlage B — Beslispunten met een vast moment
 Bijlage C — Verwerking van de kritische review
 
 **Afzonderlijke ontwerphoofdstukken**
@@ -901,6 +901,8 @@ Het onderscheidend vermogen zit in de contentpacks. Die in fase 4 maken, nadat d
 
 **Duur: 13-16 weken** · *Resultaat: een lege kluis die je kunt openen, sluiten, back-uppen, herstellen, verankeren en verifiëren.*
 
+> De werkpakketten hieronder tellen op tot 17,5 weken en dus 1,5 week boven deze bovengrens. Dat is alleen te rijmen wanneer een deel parallel loopt; welk deel dat is, staat er niet bij. Zolang dat niet is uitgewerkt, is 13-16 een doelstelling en geen optelsom.
+
 | Werkpakket | Weken |
 |---|---|
 | **Spike (weken 1-3): CTAP2 `hmac-secret`, versleutelde opslag en hashketen op drie platforms** — hierna het stackbeslispunt | 3,0 |
@@ -920,7 +922,7 @@ Het onderscheidend vermogen zit in de contentpacks. Die in fase 4 maken, nadat d
 
 ### 9.4 Fase 1 — MVP "Bewijs & Klok"
 
-**Duur: 26-32 weken** · *Resultaat: verkoopbaar aan de eerste drie klanten.*
+**Duur: 26-32 weken** *(de werkpakketten hieronder tellen op tot 37,5 weken — zie de noot bij fase 0; hier is het verschil 5,5 week)* · *Resultaat: verkoopbaar aan de eerste drie klanten.*
 
 Het bestuurdersregister en de registratieplicht zijn uit fase 3 naar voren gehaald: dat zijn verplichtingen die vanaf **[RF-CBW-IWT]** lopen, waarvan er één op **[RF-BEST-BACKSTOP]** afloopt, en de bestuurdersopleiding is de eerste verplichting waarop naar verwachting wordt gehandhaafd.
 
