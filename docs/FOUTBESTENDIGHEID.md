@@ -1220,7 +1220,38 @@ De kennisbank is zelf een latente conditie en wordt dienovereenkomstig behandeld
 - **Snoeien:** regels die in een kwartaal in meer dan 80% van de gevallen genegeerd worden, gaan in de review op de schop (SYS-05).
 - **Gemotiveerde acceptatie:** elk S-signaal kan gemotiveerd worden geaccepteerd, met eigenaar en herbeoordelingsdatum. De acceptatie is zichtbaar en telbaar; zij verdwijnt niet.
 
-### 5.2 De controleregels
+### 5.2 Waar deze catalogus en de gebouwde catalogus uiteenlopen
+
+De regels hieronder zijn het ontwerp. De gebouwde catalogus in `crates/dpofg-rules/src/regels.rs` is kleiner — dat is te verwachten en op zichzelf geen probleem. Wat wél een probleem is: bij **veertien codes vult de gebouwde catalogus dezelfde code anders in dan dit document**. Wie hier `REG-02` opzoekt en `dpofg controle` draait, krijgt bij die code twee verschillende antwoorden.
+
+Dat is zo gegroeid en niet zo bedoeld. Het ontwerp gaf elk onderdeel van artikel 30 een eigen code; de bouw vatte die samen in één regel "Registerregel onvolledig" en gebruikte de vrijgekomen codes voor controles die er tijdens het bouwen bij kwamen. Hetzelfde gebeurde bij GRO en BEW.
+
+**De code wint.** Regelcodes staan in opgeslagen bevindingen, in vastgelegde correctiebesluiten en in uitgeleverde dossiers; hernummeren zou die stukken onleesbaar maken. Dit document blijft daarom staan zoals het is bedoeld, met deze tabel ernaast.
+
+| Code | In dit ontwerp | In de gebouwde catalogus |
+|---|---|---|
+| `REG-01` | Doel ontbreekt | Registerregel onvolledig — mist een van de onderdelen van artikel 30 |
+| `REG-02` | Doel zonder grondslag | Register niet herzien — langer dan twaalf maanden onaangeraakt |
+| `REG-03` | Categorie betrokkenen ontbreekt | Geërfd en niet geverifieerd |
+| `REG-04` | Categorie gegevens ontbreekt | Concept blijft liggen — langer dan negentig dagen |
+| `REG-05` | Bewaartermijn ontbreekt | Registerregel zonder eigenaar |
+| `REG-07` | Ontvangers onbepaald | Doel te ruim omschreven |
+| `GRO-02` | Gerechtvaardigd belang bij publieke taak | Toestemming zonder bewijs |
+| `GRO-03` | Toestemming zonder intrekkingsroute | Bijzondere gegevens zonder uitzondering |
+| `GRO-04` | Toestemming zonder bewijsvoering | Wettelijke grondslag niet aangewezen |
+| `GRO-05` | Toestemming in een gezagsverhouding | Burgerservicenummer zonder grondslag |
+| `BEW-01` | Startgebeurtenis ontbreekt | Bewaartermijn ontbreekt |
+| `BEW-02` | Termijn zonder uitvoering | Uitstelafspraak verlopen |
+| `BEW-04` | Termijn boven de richtwaarde | Bewaartermijn zonder grondslag |
+| `DPIA-01` | Verplichte DPIA ontbreekt — verwerking op de AP-lijst | Criteria bereikt zonder beoordeling — twee of meer criteria geraakt |
+
+De onderwerpen uit de linkerkolom zijn niet verdwenen: de onderdelen van artikel 30 worden in de bouw geteld door `REG-01` en door de volledigheidsteller op het record zelf. Zij hebben alleen geen eigen code meer.
+
+Vijf andere codes dragen in de twee bronnen een andere formulering maar dezelfde controle: `DPIA-03`, `EER-03`, `EER-06`, `GRO-01` en `LEK-08`. Die staan hier niet, want daar valt niets te verwarren.
+
+`dpofg controle --dekking` toont welke codes werkelijk draaien en wat zij controleren. Bij twijfel is die opdracht de bron, niet dit hoofdstuk.
+
+### 5.3 De controleregels
 
 #### Verwerkingsregister (REG)
 
@@ -1449,7 +1480,9 @@ Wat er met een bevinding gebeurt nadat zij is gezien. Deze regels kijken niet na
 
 **Totaal: 147 controleregels** — 17 REG, 12 GRO, 8 BEW, 9 DPIA, 13 VWO, 8 EER, 16 LEK, 12 BTR, 7 NIS, 13 ZRP, 6 RIS, 4 COR, 12 ORG, 10 SYS.
 
-> De eerdere opgave van 123 klopte niet met de opsomming eronder: die telde 124 regels. Met de dertien regels van de zorgplichtcontrolset erbij zijn het er 137.
+> **Hoe dit getal is gelopen.** De oorspronkelijke opgave van 123 klopte niet met de opsomming eronder: die telde er 124. Met de dertien regels van de zorgplichtcontrolset erbij werden het er 137, en met de tien regels van de groep SYS erbij 147. Alleen het getal boven deze noot is de actuele opgave; de rest staat er om de herkomst te kunnen volgen.
+>
+> Het aantal regels in dít document zegt niets over wat er wordt bewaakt — het zegt wat er bewaakt zóu moeten worden. `dpofg controle --dekking` toont welke regels werkelijk draaien.
 
 ---
 
