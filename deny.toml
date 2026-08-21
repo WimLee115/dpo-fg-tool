@@ -10,9 +10,21 @@ all-features = true
 [advisories]
 # Bekende kwetsbaarheden en niet meer onderhouden crates zijn fouten.
 yanked = "deny"
-# Zestien meldingen uit de afhankelijkheden van Tauri v2, alle van het type
-# `unmaintained` en geen enkele een kwetsbaarheid. Zij staan hier stuk voor
-# stuk met naam, want een uitzondering die niet is opgeschreven is over een
+# Meldingen over onbetrouwbare code (`unsound`) tellen mee uit de hele graaf en
+# niet alleen uit de rechtstreekse afhankelijkheden.
+#
+# Dat is geen aanscherping maar een reparatie. De standaardwaarde is
+# "workspace", en die kijkt uitsluitend naar wat een crate uit deze workspace
+# zelf binnenhaalt. Alles wat Tauri meebrengt valt daarbuiten — en dat is nu
+# juist het deel van de graaf dat wij niet kiezen en niet lezen.
+#
+# Het gat was echt en niet theoretisch: RUSTSEC-2024-0429 over `glib` bleef op
+# de standaardinstelling volledig stil. GitHub meldde hem wel, deze bouwstraat
+# niet. Een controle die de melding mist waar zij voor is opgetuigd, is erger
+# dan geen controle: het lege vakje vraagt om werk, het gevulde vakje sust.
+unsound = "all"
+# Zeventien meldingen uit de afhankelijkheden van Tauri v2. Zij staan hier stuk
+# voor stuk met naam, want een uitzondering die niet is opgeschreven is over een
 # jaar niet meer te onderscheiden van een vergissing.
 #
 # De GTK3-bindingen komen mee doordat Tauri v2 op Linux `webkit2gtk-4.1`
@@ -42,6 +54,19 @@ ignore = [
     "RUSTSEC-2025-0081",
     "RUSTSEC-2025-0098",
     "RUSTSEC-2025-0100",
+    # Onbetrouwbare code in `glib::VariantStrIter`, via dezelfde GTK3-keten.
+    #
+    # De enige melding in deze lijst die geen `unmaintained` is. Zij is in
+    # glib 0.20.0 hersteld, maar 0.18.5 is de versie die gtk 0.18 vastlegt en
+    # die keten ligt vast zolang Tauri op GTK3 zit: hem hier optillen kan niet
+    # zonder de GTK4-overgang die hierboven al wordt afgewacht.
+    #
+    # Wat het risico begrenst: de fout zit in het doorlopen van een GVariant
+    # met tekstwaarden, en dit programma raakt die route niet — het roept geen
+    # enkele glib-functie rechtstreeks aan. Blijft over wat GTK zelf intern
+    # doet. Dat is een aanvaard restrisico en geen vrijbrief; bij de overgang
+    # naar GTK4 hoort deze regel als eerste te verdwijnen.
+    "RUSTSEC-2024-0429",
 ]
 
 [licenses]
